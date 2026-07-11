@@ -37,6 +37,22 @@ export function semitoneToHz(semitone, refHz) {
     return refHz * Math.pow(2, semitone / 12);
 }
 
+/**
+ * Frequenz in ein Oktavband [low, 2·low) falten (statt ±Oktave-Verschiebung):
+ * multipliziert/halbiert mit 2, bis sie im Band liegt. So wählt ein Regler direkt
+ * das Register als Hz-Bereich (z.B. low=30 → Band 30–60 Hz), egal welche Quell-Frequenz.
+ * @param {number} freq
+ * @param {number} low  – untere Bandgrenze in Hz (> 0)
+ * @returns {number} gefaltete Frequenz in [low, 2·low)
+ */
+export function foldToBand(freq, low) {
+    if (!(freq > 0) || !(low > 0)) return freq;
+    let f = freq;
+    while (f >= 2 * low) f /= 2;
+    while (f < low) f *= 2;
+    return f;
+}
+
 /** Frequenz auf nächstes ganzzahliges Vielfaches von baseHz ziehen (n>=1). */
 export function harmonicSnap(hz, baseHz) {
     if (baseHz <= 0) return hz;

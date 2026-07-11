@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { triggerInterval, DIVISIONS } from '../js/core/TriggerDivider.js';
 import { ScaleModel, rotateMask } from '../js/pitch/ScaleModel.js';
-import { quantizeToScale, activeMidis, semitoneToHz, harmonicSnap, freqToMidi, midiToFreq, midiToName } from '../js/pitch/Scaler.js';
+import { quantizeToScale, activeMidis, semitoneToHz, harmonicSnap, freqToMidi, midiToFreq, midiToName, foldToBand } from '../js/pitch/Scaler.js';
 import { PitchOsc, PITCH_WAVEFORMS } from '../js/pitch/PitchOsc.js';
 import { GateOsc } from '../js/core/GateOsc.js';
 import { pulseCoefficients, harmonicsForFreq, phaseWarp, warpedCoefficients, fmCoefficients } from '../js/audio/pulseWave.js';
@@ -78,6 +78,12 @@ console.log('Scaler – Helfer');
 t('semitoneToHz: +12 = Oktave', () => assert.ok(approx(semitoneToHz(12, 100), 200)));
 t('harmonicSnap zieht auf n·base', () => assert.equal(harmonicSnap(317, 100), 300));
 t('harmonicSnap min n=1', () => assert.equal(harmonicSnap(20, 100), 100));
+t('foldToBand: hohe Freq halbiert ins Band', () => assert.ok(approx(foldToBand(440, 30), 55)));   // 440→220→110→55 ∈ [30,60)
+t('foldToBand: tiefe Freq verdoppelt ins Band', () => assert.ok(approx(foldToBand(10, 30), 40))); // 10→20→40 ∈ [30,60)
+t('foldToBand: schon im Band bleibt', () => assert.equal(foldToBand(45, 30), 45));
+t('foldToBand: Untergrenze inklusiv', () => assert.equal(foldToBand(30, 30), 30));
+t('foldToBand: 2·low fällt in nächstes → zurück ins Band', () => assert.ok(approx(foldToBand(60, 30), 30)));
+t('foldToBand: ungültige Eingabe = unverändert', () => assert.equal(foldToBand(100, 0), 100));
 t('freqToMidi: 440 = 69 (A4)', () => assert.ok(approx(freqToMidi(440), 69, 1e-9)));
 t('freqToMidi: 55 = 33 (A1)', () => assert.ok(approx(freqToMidi(55), 33, 1e-9)));
 t('midiToFreq invertiert freqToMidi', () => assert.ok(approx(midiToFreq(freqToMidi(123.4)), 123.4, 1e-6)));

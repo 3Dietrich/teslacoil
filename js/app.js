@@ -41,7 +41,7 @@ const KNOBS = {
     rateDenMax:   { label: 'l max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
     pitchRandSeed:{ label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
     baseHz:       { label: 'Base-Frq', min: 1, max: 500, curve: 'log', unit: 'Hz', decimals: 1 },
-    baseOctave:   { label: 'Oktave', min: -6, max: 6, step: 1, curve: 'linear', unit: 'oct', decimals: 0 },
+    baseBand:     { label: 'Band', min: 4, max: 8000, step: 1, curve: 'log', unit: 'Hz', decimals: 0, formatValue: (v) => `${Math.round(v)}–${Math.round(v * 2)}` },
     harmonizeMix: { label: 'Harmonize', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     baseTestLevel:{ label: 'Test-Vol', min: 0, max: 0.6, curve: 'linear', unit: '', decimals: 2 },
     duty:         { label: 'PW', min: 0.01, max: 0.99, curve: 'linear', unit: '', decimals: 2 },
@@ -78,7 +78,7 @@ const KNOBS = {
     metroLevel:   { label: 'Level', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     metroMorph:   { label: 'LP↔HP', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     metroCutoff:  { label: 'Cutoff', min: 50, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
-    metroCutoffOct: { label: 'Oktaver', min: -2, max: 6, step: 1, curve: 'linear', unit: 'oct', decimals: 0 },
+    metroCutBand: { label: 'Band', min: 20, max: 9000, step: 1, curve: 'log', unit: 'Hz', decimals: 0, formatValue: (v) => `${Math.round(v)}–${Math.round(v * 2)}` },
     metroReso:    { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
 };
 
@@ -118,11 +118,11 @@ const GROUPS = [
     // (Gruppe 'Gate' entfernt – ersatzlos, @dpa. gateEnabled bleibt als State-Default
     //  false → Gate immer offen, ohne UI. Kein Sound-Effekt.)
     // Metronom: eigener getakteter Klick mit Vadim-SVF-Morph-Filter (LP↔HP).
-    { name: 'Metronom', selects: ['metroDivision', 'metroRoute'], toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroLevel', 'metroMorph', 'metroCutoff', 'metroCutoffOct', 'metroReso'], metro: true },
+    { name: 'Metronom', selects: ['metroDivision', 'metroRoute'], toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroLevel', 'metroMorph', 'metroCutoff', 'metroCutBand', 'metroReso'], metro: true },
     // Seed sitzt inline neben dem Pitch-Wave-Select (nur bei 'random' sichtbar).
     { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
     // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
-    { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseOctave', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
+    { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
     // Lowpass auf dem OSC: Cutoff (+ Reso ab 2p) mit Decay-Env (Takt×Gate).
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
@@ -329,7 +329,7 @@ function boot() {
         state.set('pitchRate', quantRate(engine.baseFreq, state.get('pitchRate')));
     }
     // Keys, die das Rate↔Base-Verhältnis beeinflussen → Nachrasten auslösen.
-    const RATE_QUANT_KEYS = new Set(['pitchRate', 'rateQuant', 'rateNumMax', 'rateDenMax', 'baseSrc', 'baseHz', 'baseNote', 'baseOctave', 'bpm']);
+    const RATE_QUANT_KEYS = new Set(['pitchRate', 'rateQuant', 'rateNumMax', 'rateDenMax', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm']);
     // Keys, deren Umschalten Controls ein-/ausblendet → Gruppenhöhe ändert sich.
     const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn']);
     function makeRateReadout() {
@@ -956,7 +956,7 @@ function boot() {
         const src = state.get('baseSrc');
         setVis('baseHz', src === 'Freq');     // Freq: Grundfrequenz wichtig
         setVis('baseNote', src === 'Ton');    // Ton: Tonklasse
-        // baseOctave ist der EINE Oktave-Regler für ALLE Quellen (immer sichtbar).
+        // baseBand ist der Register-/Band-Regler für ALLE Quellen (immer sichtbar).
         setVis('baseTestLevel', state.get('baseTestOn')); // Test-Vol nur wenn Test-Ton an
         baseSpeed.style.display = src === 'Freq' ? '' : 'none';  // BpM/Hz/P nur im Freq-Modus
     }
@@ -983,7 +983,7 @@ function boot() {
         const quant = state.get('metroCutoffQuant');
         ['metroLevel', 'metroMorph', 'metroReso'].forEach((k) => setVis(k, on));
         setVis('metroCutoff', on && !quant);
-        setVis('metroCutoffOct', on && quant);
+        setVis('metroCutBand', on && quant);
     }
     // Skaler: Seed-Regler nur bei 'random'-Wellenform sichtbar.
     function updatePitchWaveVis() { setVis('pitchRandSeed', state.get('pitchWave') === 'random'); }
@@ -1175,13 +1175,13 @@ function boot() {
             e.preventDefault(); setArranging(!arranging); return;
         }
 
-        // BaseFrq-Fernsteuerung (ein einziger Oktave-Regler für ALLE Quellen):
-        //   ↑/↓ = baseOctave (−6..+6) in JEDEM Modus.
+        // BaseFrq-Fernsteuerung (Band-Regler für ALLE Quellen):
+        //   ↑/↓ = Band oktavweise (×2 / ÷2) verschieben, in JEDEM Modus.
         //   ←/→ = Tonklasse (nur im Ton-Modus).
         if (onBody && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
             e.preventDefault();
-            const d = e.key === 'ArrowUp' ? 1 : -1;
-            state.set('baseOctave', Math.max(-6, Math.min(6, state.get('baseOctave') + d)));
+            const f = e.key === 'ArrowUp' ? 2 : 0.5;
+            state.set('baseBand', Math.max(4, Math.min(8000, Math.round(state.get('baseBand') * f))));
             return;
         }
         if (state.get('baseSrc') === 'Ton' && onBody) {

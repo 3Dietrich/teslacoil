@@ -42,11 +42,13 @@ export const DEFAULTS = Object.freeze({
     baseSrc: 'Freq',     // 'Freq' | 'Tempo' | 'Ton'
     baseHz: 55,          // Quelle 'Freq': freie Grundfrequenz (wird auf <= von begrenzt)
     baseNote: 'C',       // Quelle 'Ton': Tonklasse (C…B)
-    baseOct: 0,          // DEPRECATED (nur noch für Migration → baseOctave): Ton-Oktave
-    tempoOct: 0,         // DEPRECATED (nur noch für Migration → baseOctave): Tempo-Oktave
-    // DER Oktave-Regler: transponiert die effektive BaseFrq QUELLENÜBERGREIFEND (für ALLE
-    // baseSrc) mit ·2^baseOctave. Ersetzt die früheren per-Modus baseOct/tempoOct.
-    baseOctave: 0,
+    baseOct: 0,          // DEPRECATED (nur Migration): Ton-Oktave
+    tempoOct: 0,         // DEPRECATED (nur Migration): Tempo-Oktave
+    baseOctave: 0,       // DEPRECATED (ersetzt durch baseBand-Faltung): ±Oktave-Verschiebung
+    // Register-Wahl als Frequenzband statt ±Oktave (@dpa 20260711_125802): die effektive
+    // BaseFrq (aus der Quelle) wird in [baseBand, 2·baseBand) gefaltet. Der Regler zeigt
+    // „L–2L" und wählt so direkt den Hz-Bereich (z.B. 30 → 30–60 Hz), egal welche Quelle.
+    baseBand: 55,
     harmonizeMix: 0,     // 0 = rein temperiert, 1 = voll auf n·baseHz
     // Test-Ton: reiner Sinus auf der effektiven BaseFrq, TROCKEN am Master (umgeht die
     // FX-Kette). Zum Vergleichs-Hören der Grundfrequenz zuschaltbar (Wunsch @dpa).
@@ -125,8 +127,9 @@ export const DEFAULTS = Object.freeze({
     metroLevel: 0.5,       // Ausgangspegel
     metroMorph: 0.5,       // Filter: 0=LP · 0.5=Bypass · 1=HP
     metroCutoff: 2000,     // Vadim-SVF-Cutoff (Hz)
-    metroCutoffQuant: false, // AN: Cutoff wird durch metroCutoffOct ersetzt (an BaseFrq gerastet)
-    metroCutoffOct: 0,     // Oktaver −2..+6: cutoff = BaseFrq · 2^oct (nur bei metroCutoffQuant)
+    metroCutoffQuant: false, // AN: Cutoff wird durch metroCutBand ersetzt (an BaseFrq gefaltet)
+    metroCutoffOct: 0,     // DEPRECATED (ersetzt durch metroCutBand-Faltung): Oktaver
+    metroCutBand: 2000,    // Band-Regler: cutoff = BaseFrq in [L,2L) gefaltet (nur bei metroCutoffQuant)
     metroReso: 2,          // Vadim-SVF-Resonanz (Q)
     metroRoute: 'Parallel',// 'Parallel' (am Master, umgeht FX) | 'Vor Dist' (in die FX-Kette vor Distortion)
     // Amp-Sequenzer: pro Takt-Step Gate (>0) + Velocity (0..1) auf die Note.

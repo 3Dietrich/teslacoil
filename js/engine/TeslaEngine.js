@@ -18,7 +18,7 @@ import { triggerInterval } from '../core/TriggerDivider.js';
 import { PitchOsc } from '../pitch/PitchOsc.js';
 import { GateOsc } from '../core/GateOsc.js';
 import { ScaleModel, NOTE_NAMES } from '../pitch/ScaleModel.js';
-import { quantizeToScale, freqToMidi, midiToFreq } from '../pitch/Scaler.js';
+import { quantizeToScale, freqToMidi, midiToFreq, foldToBand } from '../pitch/Scaler.js';
 import { seqAdvance } from '../dsp/stepSeq.js';
 import { keytrackCutoff, envPeakMult } from '../dsp/filterMod.js';
 
@@ -110,14 +110,14 @@ export class TeslaEngine {
         else if (['revDensity', 'revAttack', 'revRelease', 'revSeed', 'revLenPct', 'bpm', 'division'].includes(key)) this._rebuildReverb();
         // Metronom: Pegel ohne Rebuild; Klang-Parameter rendern den Buffer neu.
         if (key === 'metroLevel' || key === '*') this.metro.setLevel(s.get('metroLevel'));
-        if (['metroMorph', 'metroCutoff', 'metroCutoffQuant', 'metroCutoffOct', 'metroReso', '*'].includes(key)) this._rebuildMetro();
+        if (['metroMorph', 'metroCutoff', 'metroCutoffQuant', 'metroCutBand', 'metroReso', '*'].includes(key)) this._rebuildMetro();
         if (key === 'metroRoute' || key === '*') this._applyMetroRoute();
         // Test-Ton: an/aus/Pegel + Frequenz an die BaseFrq nachführen (BaseFrq hängt von
         // baseSrc/baseHz/baseNote/baseOct/tempoOct/bpm ab → bei all diesen aktualisieren).
-        if (['baseTestOn', 'baseTestLevel', 'baseSrc', 'baseHz', 'baseNote', 'baseOctave', 'bpm', '*'].includes(key)) this._applyTestOsc();
+        if (['baseTestOn', 'baseTestLevel', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm', '*'].includes(key)) this._applyTestOsc();
         // Metronom-Quant: bei aktivem metroCutoffQuant hängt der Klick-Cutoff an der
         // BaseFrq → bei jeder BaseFrq-Änderung den Klick-Buffer neu rendern.
-        if (['baseSrc', 'baseHz', 'baseNote', 'baseOctave', 'bpm'].includes(key) && s.get('metroCutoffQuant')) this._rebuildMetro();
+        if (['baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm'].includes(key) && s.get('metroCutoffQuant')) this._rebuildMetro();
         // Pitch/Gate-Parameter werden ohnehin pro Trigger frisch gelesen (s. _syncOscs)
     }
 
@@ -153,7 +153,7 @@ export class TeslaEngine {
     _rebuildMetro() {
         const s = this.state;
         const cutoff = s.get('metroCutoffQuant')
-            ? Math.max(20, Math.min(18000, this.baseFreq * Math.pow(2, s.get('metroCutoffOct'))))
+            ? Math.max(20, Math.min(18000, foldToBand(this.baseFreq, s.get('metroCutBand'))))
             : s.get('metroCutoff');
         this.metro.rebuild({ morph: s.get('metroMorph'), cutoff, reso: s.get('metroReso') });
     }
@@ -411,7 +411,7 @@ export class TeslaEngine {
     get filterEffCutoff() { return this._lastEffCutoff; }
 
     /** Effektive BaseFrq aus der gewählten Quelle (Freq / Tempo / Ton), zusätzlich
-     *  quellenübergreifend mit `baseOctave` transponiert (·2^oct, Fernsteuerung). */
+     *  quellenübergreifend in das Band [baseBand, 2·baseBand) gefaltet (Register-Wahl). */
     get baseFreq() {
         const s = this.state;
         let f;
@@ -424,7 +424,7 @@ export class TeslaEngine {
             }
             default: f = s.get('baseHz');
         }
-        // EIN Oktave-Regler für alle Quellen (ersetzt die früheren per-Modus baseOct/tempoOct).
-        return f * Math.pow(2, s.get('baseOctave'));
+        // Register-Wahl per Faltung ins Frequenzband (ersetzt die ±Oktave-Verschiebung).
+        return foldToBand(f, s.get('baseBand'));
     }
 }
