@@ -94,7 +94,7 @@ export class PresetManager {
      * Vollständigkeit: JEDER rein optische State-Key MUSS hier stehen, sonst wandert
      * er unbeabsichtigt in den Sound-Snapshot. */
     static LAYOUT_KEYS = [
-        'groupOrder', 'groupStyles', 'groupStylePresets', 'controlOrder',
+        'groupOrder', 'groupPos', 'groupStyles', 'groupStylePresets', 'controlOrder',
         'knobMeta', 'knobColorPresets',
         'reflW', 'reflH', 'reflColL', 'reflColR',
         'scopeOn', 'specOn', 'scopeSync', 'scopeRange', 'specGain',

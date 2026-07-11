@@ -173,7 +173,8 @@ export const DEFAULTS = Object.freeze({
     // zuletzt geladenen/gespeicherten Snapshot steht (statt auf dem Platzhalter).
     groupSnapSel: {},
     // Panel-Gruppen: Reihenfolge, Stil (Name/Farben/Collapse), Farb-Combos.
-    groupOrder: [],          // leer = Default-Reihenfolge
+    groupOrder: [],          // leer = Default-Reihenfolge (nur noch fürs initiale Einfließen)
+    groupPos: {},            // name → { x, y } feste Panel-Position (Optik); leer = autoFlow
     groupStyles: {},         // name → { name, bg, headColor, collapsed }
     groupStylePresets: [],   // [{ name, bg, headColor }] – wiederverwendbare Combos
     // Reihenfolge der Controls INNERHALB einer Gruppe (experimenteller Arrange-Modus).

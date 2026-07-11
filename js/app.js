@@ -645,38 +645,32 @@ function boot() {
         // Klappen / Settings
         collapseBtn.addEventListener('click', () => setGroupCollapsed(grp.name, !groupCollapsed(grp.name)));
         setBtn.addEventListener('click', () => openGroupSettings(grp.name, setBtn));
-        // Verschieben per Drag an der Titelleiste. Ein Drag, der auf einem Button
-        // (⚙ Settings / ▾ Klappen) beginnt, wird NICHT als Gruppen-Drag gestartet –
-        // sonst „verschluckt" die draggable Leiste den Klick (Settings gingen nicht,
-        // v.a. im e-Mode). So bleibt der Button-Klick immer erreichbar.
-        bar.draggable = true;
-        bar.addEventListener('dragstart', (e) => {
-            if (e.target.closest('button')) { e.preventDefault(); return; }
-            dragName = grp.name; g.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
-            try { e.dataTransfer.setData('text/plain', grp.name); } catch { /* noop */ }
-        });
-        bar.addEventListener('dragend', () => { g.classList.remove('dragging'); clearDropMarks(); persistGroupOrder(); });
-        g.addEventListener('dragover', (e) => {
+        // Verschieben per Pointer-Drag an der Titelleiste → FESTE x/y-Position (Optik).
+        // Ein Drag, der auf einem Button (⚙/▾) beginnt, wird NICHT gestartet, damit der
+        // Button-Klick (auch im e-Mode) erreichbar bleibt.
+        bar.addEventListener('mousedown', (e) => {
+            if (e.target.closest('button')) return;
             e.preventDefault();
-            if (!dragName || dragName === grp.name) return;
-            // Ghost-Anzeige: farbige Kante zeigt, wo die Gruppe beim Loslassen landet.
-            const rect = g.getBoundingClientRect();
-            const after = e.clientY > rect.top + rect.height / 2;
-            clearDropMarks();
-            g.classList.add(after ? 'drop-after' : 'drop-before');
-        });
-        g.addEventListener('dragleave', (e) => { if (!g.contains(e.relatedTarget)) g.classList.remove('drop-before', 'drop-after'); });
-        g.addEventListener('drop', (e) => {
-            e.preventDefault();
-            clearDropMarks();
-            if (!dragName || dragName === grp.name) return;
-            const dragged = groupEls.get(dragName); if (!dragged) return;
-            const rect = g.getBoundingClientRect();
-            // Spalten-Layout: Gruppen stapeln vertikal → Einfüge-Position an der
-            // senkrechten Mitte der Zielgruppe entscheiden (davor/danach).
-            const after = e.clientY > rect.top + rect.height / 2;
-            panel.insertBefore(dragged.g, after ? g.nextSibling : g);
-            persistGroupOrder();
+            const pr = panel.getBoundingClientRect();
+            const gr = g.getBoundingClientRect();
+            const ox = e.clientX - gr.left, oy = e.clientY - gr.top;   // Greifpunkt-Offset
+            g.classList.add('dragging');
+            const onMove = (ev) => {
+                const nx = Math.max(0, ev.clientX - pr.left - ox + panel.scrollLeft);
+                const ny = Math.max(0, ev.clientY - pr.top - oy + panel.scrollTop);
+                g.style.left = nx + 'px'; g.style.top = ny + 'px';
+            };
+            const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                g.classList.remove('dragging');
+                const pos = { ...state.get('groupPos') };
+                pos[grp.name] = { x: parseFloat(g.style.left) || 0, y: parseFloat(g.style.top) || 0 };
+                state.set('groupPos', pos);   // Optik: Position bleibt fest
+                sizePanel();
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
         });
 
         groupEls.set(grp.name, { g, body, title: h, collapseBtn });
@@ -690,16 +684,39 @@ function boot() {
     }
     root.appendChild(panel);
 
-    // ── Gruppen: Reihenfolge / Klappen / Farben (im State persistiert) ──
-    function persistGroupOrder() {
-        state.set('groupOrder', [...panel.children].map((el) => el.dataset.group).filter(Boolean));
+    // ── Gruppen: FESTE Positionen / Klappen / Farben (im State persistiert) ──
+    const GROUP_GAP = 12;
+    // Gruppen OHNE gespeicherte Position einmal ins Raster fließen (Shelf-Pack): links→
+    // rechts, bei Panelbreite umbrechen. Neue Gruppen landen unter den bestehenden.
+    function autoFlow(pos, names) {
+        const panelW = panel.clientWidth || (window.innerWidth - 80);
+        let startY = 0;
+        for (const [n, e] of groupEls) if (pos[n]) startY = Math.max(startY, (pos[n].y || 0) + e.g.offsetHeight + GROUP_GAP);
+        let x = 0, y = Object.keys(pos).length ? startY : 0, rowH = 0;
+        for (const name of names) {
+            const e = groupEls.get(name); if (!e) continue;
+            const w = e.g.offsetWidth, h = e.g.offsetHeight;
+            if (x > 0 && x + w > panelW) { x = 0; y += rowH + GROUP_GAP; rowH = 0; }
+            pos[name] = { x, y };
+            x += w + GROUP_GAP; rowH = Math.max(rowH, h);
+        }
+        return pos;
     }
-    // Ghost-Drop-Markierungen an allen Gruppen zurücksetzen.
-    function clearDropMarks() { for (const { g } of groupEls.values()) g.classList.remove('drop-before', 'drop-after'); }
-    function applyGroupOrder(order) {
-        (order || []).forEach((name) => { const e = groupEls.get(name); if (e) panel.appendChild(e.g); });
-        sizePanel();   // Reihenfolge geändert → Spalten-Umbruch neu berechnen
+    // Jede Gruppe an ihre feste x/y-Position setzen. Fehlende Positionen einmal einfließen
+    // lassen und persistieren. Ein-/Ausblenden von Controls verschiebt danach NICHTS mehr.
+    function applyGroupPositions() {
+        const pos = { ...state.get('groupPos') };
+        // Reihenfolge fürs initiale Fließen (groupOrder, sonst Einbau-Reihenfolge).
+        const stored = state.get('groupOrder') || [];
+        const order = [...groupEls.keys()].sort((a, b) => ((stored.indexOf(a) + 1 || 99) - (stored.indexOf(b) + 1 || 99)));
+        const missing = order.filter((n) => !pos[n]);
+        if (missing.length) autoFlow(pos, missing);
+        for (const name of order) { const e = groupEls.get(name), p = pos[name]; if (e && p) { e.g.style.left = p.x + 'px'; e.g.style.top = p.y + 'px'; } }
+        if (missing.length) state.set('groupPos', pos);   // neu geflossene Positionen festhalten
+        sizePanel();
     }
+    // Alias: der Recall/Init ruft weiterhin applyGroupOrder – jetzt = Positionen anwenden.
+    function applyGroupOrder() { applyGroupPositions(); }
     function groupCollapsed(name) { const st = state.get('groupStyles')[name]; return !!(st && st.collapsed); }
     function setGroupStyle(name, patch) {
         const styles = { ...state.get('groupStyles') };
@@ -728,25 +745,25 @@ function boot() {
         }
         sizePanel();   // Klappen ändert Gruppenhöhen → Spalten-Umbruch neu berechnen
     }
-    // Container-Höhe für das `column wrap`-Layout setzen: ohne definierte Höhe würde
-    // Flexbox NICHT in Spalten umbrechen (alles in einer langen Spalte). Höhe =
-    // verfügbarer Viewport-Rest, aber mind. so hoch wie die höchste Einzelgruppe
-    // (sonst würde diese über den Container hinausragen). Läuft NUR bei Layout-
-    // Ereignissen (Mount/Resize/Klappen/Umsortieren), nie pro Frame.
+    // Absolutes Layout: der Container braucht eine explizite Höhe/Breite, um die
+    // absolut positionierten Gruppen zu umschließen (Scroll bei Bedarf). Höhe/Breite =
+    // unterster/rechtester Gruppenrand. Läuft debounced per rAF, nie pro Frame.
     let _sizeRaf = null;
     function sizePanel() {
         cancelAnimationFrame(_sizeRaf);
         _sizeRaf = requestAnimationFrame(() => {
-            const top = panel.getBoundingClientRect().top;
-            const avail = Math.max(400, window.innerHeight - top - 16);
-            let tallest = 0;
-            for (const { g } of groupEls.values()) tallest = Math.max(tallest, g.offsetHeight);
-            panel.style.height = Math.max(avail, tallest) + 'px';
+            let maxB = 0, maxR = 0;
+            for (const { g } of groupEls.values()) {
+                maxB = Math.max(maxB, g.offsetTop + g.offsetHeight);
+                maxR = Math.max(maxR, g.offsetLeft + g.offsetWidth);
+            }
+            panel.style.height = (maxB + 24) + 'px';
+            panel.style.minWidth = (maxR + 8) + 'px';
         });
     }
-    applyGroupOrder(state.get('groupOrder'));
+    // Erst Stile (Breiten setzen die Gruppengröße), DANN Positionen einfließen lassen.
     applyGroupStyles(state.toJSON());
-    sizePanel();
+    applyGroupPositions();
     window.addEventListener('resize', sizePanel);
 
     // ── Arrange-Modus: ALLE Elemente innerhalb einer Gruppe per Drag umsortieren ──
@@ -1088,13 +1105,13 @@ function boot() {
             updateMetroVisibility();
             updatePitchWaveVis();
             applyReflSize();
-            applyGroupOrder(data.groupOrder);
             applyGroupStyles(data);
+            applyGroupPositions();
             applyControlOrder(data);
         } else if (key === 'groupStyles') {
             applyGroupStyles(data);
-        } else if (key === 'groupOrder') {
-            applyGroupOrder(data.groupOrder);
+        } else if (key === 'groupOrder' || key === 'groupPos') {
+            applyGroupPositions();
         } else if (key === 'controlOrder') {
             applyControlOrder(data);
         } else if (key === 'baseSrc' || key === 'baseTestOn') {

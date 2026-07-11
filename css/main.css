@@ -81,23 +81,20 @@ body {
 .toggle-field { flex-direction: row; align-items: center; gap: 6px; }
 
 /* ── Panel / Groups / Knobs ── */
-/* Vertikales Packen per Flexbox-Spalten (NICHT CSS `columns` – multicol erzwingt
-   bei jedem Canvas-Repaint im Render-Loop eine globale Spalten-Neubalancierung
-   → ~1 FPS. `column wrap` ist normales Flex-Layout: 60 FPS.). Gruppen stapeln
-   sich senkrecht und füllen leeren Platz; `align-items: flex-start` lässt jede
-   Gruppe ihre NATÜRLICHE (schmale) Breite behalten statt auf Spaltenbreite zu
-   strecken. Container-Höhe wird per JS gesetzt (sizePanel), damit umgebrochen wird. */
-.panel {
-  display: flex; flex-flow: column wrap;
-  align-items: flex-start; align-content: flex-start;
-  gap: 12px; overflow-x: auto;
-}
+/* FESTE POSITIONEN (@dpa): jede Gruppe steht absolut an ihrer gespeicherten x/y-
+   Stelle (Optik-Ebene). Ein-/Ausblenden von Controls verschiebt so NICHTS mehr –
+   nur die Gruppe selbst wächst/schrumpft an Ort und Stelle. Bewegen per Header-
+   Drag oder im e-Mode. Beim ersten Laden fließen die Gruppen einmal ins Raster
+   (autoFlow). Container-Höhe/-Breite setzt JS (sizePanel = max unterer/rechter Rand). */
+.panel { position: relative; overflow: auto; }
 .group {
+  position: absolute; top: 0; left: 0;
   background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 10px 12px 12px; display: flex; flex-direction: column;
-  /* Nur so breit wie der Inhalt (nicht die Spalte füllen), gedeckelt. */
+  /* Nur so breit wie der Inhalt (nicht strecken), gedeckelt. */
   width: max-content; max-width: 380px;
 }
+.group.dragging { opacity: .85; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
 /* Titelleiste: Klapp-Button + ziehbarer Name + Settings */
 .group-title-bar { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; cursor: grab; }
 .group-title-bar:active { cursor: grabbing; }
