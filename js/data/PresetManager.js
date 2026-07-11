@@ -20,6 +20,7 @@ export class PresetManager {
         this.scaleKey = 'teslacoil_scales';
         this.layoutKey = 'teslacoil_layouts';
         this.groupSnapKey = 'teslacoil_group_snaps';   // { Gruppenname: [ {name, values} ] }
+        this.p2Key = 'teslacoil_p2';                   // P2-Bündel: [ {name, slots:[12]} ]
     }
 
     /* ── Gruppen-Snapshots (nur die Sound-Parameter EINER Gruppe) ──
@@ -97,8 +98,9 @@ export class PresetManager {
         'knobMeta', 'knobColorPresets',
         'reflW', 'reflH', 'reflColL', 'reflColR',
         'scopeOn', 'specOn', 'scopeSync', 'scopeRange', 'specGain',
-        'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'knobColorSel', 'groupSnapSel',
+        'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'knobColorSel', 'groupSnapSel', 'p2Sel',
         'seqStyles',
+        'skal2On', 'skal2Active', 'skal2Slots',
         'debugName', 'debugPrompt',
     ];
 
@@ -277,6 +279,37 @@ export class PresetManager {
         list[index] = { ...list[index], mask: this.state.get('scaleMask').slice() };
         this._write(this.scaleKey, list);
         return true;
+    }
+
+    /* ── P2 = die 12 skal2-Slots als benanntes Bündel (wie Skalen-Presets, nur der
+     *    ganze Satz auf einmal). Reine Optik-Preset-Ebene, im localStorage. ── */
+    _cloneSlots(s) { return JSON.parse(JSON.stringify(s || [])); }
+    listP2() { return this._read(this.p2Key); }
+    saveP2(name) {
+        const list = this._read(this.p2Key);
+        list.push({ name: name || `P2 ${list.length + 1}`, slots: this._cloneSlots(this.state.get('skal2Slots')) });
+        this._write(this.p2Key, list);
+        return list;
+    }
+    recallP2(index) {
+        const list = this._read(this.p2Key);
+        const it = list[index];
+        if (!it) return false;
+        this.state.set('skal2Slots', this._cloneSlots(it.slots));
+        return true;
+    }
+    updateP2(index) {
+        const list = this._read(this.p2Key);
+        if (!list[index]) return false;
+        list[index] = { ...list[index], slots: this._cloneSlots(this.state.get('skal2Slots')) };
+        this._write(this.p2Key, list);
+        return true;
+    }
+    deleteP2(index) {
+        const list = this._read(this.p2Key);
+        list.splice(index, 1);
+        this._write(this.p2Key, list);
+        return list;
     }
 
     /* ── Storage ── */

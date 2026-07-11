@@ -7,6 +7,21 @@
  * (dort wurde nur die Engine, nie die UI aktualisiert).
  */
 import { makeSeqSteps } from '../dsp/stepSeq.js';
+import { SCALE_PRESETS } from '../pitch/ScaleModel.js';
+
+/** Default für die 12 skal2-Slots: ein paar musikalische Skalen vorbelegt, Rest chromatisch.
+ *  Jeder Slot: { name (1–2 Zeichen), mask (12 bool), root (Versatz-Anker 0..11) }. */
+function defaultSkal2Slots() {
+    const seed = [
+        ['Chr', SCALE_PRESETS.chromatic], ['Dur', SCALE_PRESETS.major], ['Mol', SCALE_PRESETS.minor],
+        ['Pt5', SCALE_PRESETS.pentaMin], ['Oct', SCALE_PRESETS.octaves],
+    ];
+    return Array.from({ length: 12 }, (_, i) => ({
+        name: seed[i] ? seed[i][0] : String(i + 1),
+        mask: (seed[i] ? seed[i][1] : SCALE_PRESETS.chromatic).slice(),
+        root: 0,
+    }));
+}
 
 export const DEFAULTS = Object.freeze({
     // Takt
@@ -129,6 +144,13 @@ export const DEFAULTS = Object.freeze({
     // Lage der Skala auf der Frequenzachse (Transponier-Anker, 0 = C). Nur Position,
     // nicht das Intervallmuster – s. Transponier-Modus im Keyboard.
     scaleRoot: 0,
+    // skal2 (Optik-Ebene): die 12 Keyboard-Tasten werden zu 12 abrufbaren Skala-Slots.
+    // skal2On schaltet den Modus, skal2Active = geladener Slot, skal2Slots = die 12
+    // Slot-Definitionen. Ein Slot laden setzt scaleMask+scaleRoot; Ton-Toggle/Versatz
+    // schreiben in den aktiven Slot zurück. Die 12 zusammen = ein „P2" (speicher-/ladbar).
+    skal2On: false,
+    skal2Active: 0,
+    skal2Slots: defaultSkal2Slots(),
     // Anzeige-Option: Frequenz-/Tonhöhen-Anzeigen als Vielfaches der Base-Frq;
     // true = auf ganze Zahlen gerundet.
     intMultiples: false,
@@ -142,7 +164,7 @@ export const DEFAULTS = Object.freeze({
     scopeOn: true, specOn: true, scopeSync: true, scopeRange: 0.35, specGain: 1,
     // Gemerkte Menü-Auswahlen (Optik): Name der zuletzt gewählten Einträge je Liste,
     // damit die Dropdowns nach Reset/Recall nicht auf dem Platzhalter stehen.
-    scaleSel: '', snapSel: '', layoutSel: '', comboSel: '', knobColorSel: '',
+    scaleSel: '', snapSel: '', layoutSel: '', comboSel: '', knobColorSel: '', p2Sel: '',
     // Gemerkte Gruppen-Snapshot-Auswahl je Gruppe (Optik): { Gruppenname: SnapName }.
     // Damit das Snapshot-Menü in den Gruppen-Settings beim nächsten Öffnen auf dem
     // zuletzt geladenen/gespeicherten Snapshot steht (statt auf dem Platzhalter).

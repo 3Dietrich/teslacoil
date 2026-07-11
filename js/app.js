@@ -346,6 +346,8 @@ function boot() {
     // deklariert (vor makeLayoutBar-Aufruf) – sonst TDZ ('let' vor Initialisierung).
     let scaleRefresh = () => {};
     let layoutRefresh = () => {};
+    let p2Refresh = () => {};
+    let p2Bar = null;   // Referenz für Sichtbarkeit (nur im skal2-Modus zeigen)
 
     // Skala-Presets (laden/sichern) – gehören in die Skaler-Gruppe.
     // Die getroffene Auswahl wird in der Optik gemerkt (state.scaleSel) → Recall/Reset-fest.
@@ -372,6 +374,34 @@ function boot() {
             ['🗑', 'Ausgewählte Skala löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('Skala „' + sel.value + '" löschen?')) { presets.deleteScale(i); state.set('scaleSel', ''); refresh(); } }, 'del'],
         ]);
         bar.classList.add('group-extra');
+        return bar;
+    }
+
+    // P2 = die 12 skal2-Slots als benanntes Bündel (speichern/laden wie eine Skala,
+    // nur der ganze Satz auf einmal). Nur im skal2-Modus sichtbar. Auswahl gemerkt (p2Sel).
+    function makeP2Bar() {
+        const sel = document.createElement('select'); sel.className = 'pb-select';
+        const refresh = () => {
+            sel.innerHTML = '';
+            const ph = document.createElement('option'); ph.textContent = '— P2 —'; sel.appendChild(ph);
+            presets.listP2().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
+            const want = state.get('p2Sel');
+            if (want && [...sel.options].some((o) => o.textContent === want)) sel.value = want;
+        };
+        p2Refresh = refresh; refresh();
+        sel.addEventListener('change', () => {
+            const i = sel.selectedIndex - 1;
+            state.set('p2Sel', i >= 0 ? sel.value : '');
+            if (i >= 0) presets.recallP2(i);
+        });
+        const bar = presetCluster('P2', sel, [
+            ['✎', 'Ausgewähltes P2 mit den 12 aktuellen Slots überschreiben (Update)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.updateP2(i); }, 'save'],
+            ['＋', 'Die 12 Slots als neues P2 speichern', () => { const name = prompt('P2-Name?', ''); if (name !== null) { presets.saveP2(name); refresh(); if (name) state.set('p2Sel', name); } }, 'new'],
+            ['🗑', 'Ausgewähltes P2 löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('P2 „' + sel.value + '" löschen?')) { presets.deleteP2(i); state.set('p2Sel', ''); refresh(); } }, 'del'],
+        ]);
+        bar.classList.add('group-extra');
+        bar.style.display = state.get('skal2On') ? '' : 'none';
+        p2Bar = bar;
         return bar;
     }
 
@@ -584,7 +614,7 @@ function boot() {
 
         if (grp.scale) {
             body.appendChild(makeRateReadout());
-            keyboard.mount(body); body.appendChild(makeScaleBar());
+            keyboard.mount(body); body.appendChild(makeScaleBar()); body.appendChild(makeP2Bar());
         }
         if (grp.baseFrq) {
             baseReadout.className = 'group-extra base-readout';
@@ -1112,6 +1142,9 @@ function boot() {
         // Menü-Auswahlen nachziehen (Recall).
         if (key === '*' || key === 'scaleSel') scaleRefresh();
         if (key === '*' || key === 'layoutSel') layoutRefresh();
+        if (key === '*' || key === 'p2Sel') p2Refresh();
+        // skal2-Modus: P2-Leiste nur dann zeigen; Höhenänderung → Layout nachrechnen.
+        if (key === '*' || key === 'skal2On') { if (p2Bar) p2Bar.style.display = state.get('skal2On') ? '' : 'none'; sizePanel(); }
         // Sichtbarkeits-Umschalter (aktiv-Haken, Modus-Selects) ändern Gruppenhöhen
         // → Spalten-Umbruch des column-wrap-Layouts neu berechnen. '*'/order/styles
         // rufen sizePanel bereits selbst, daher hier nur die Einzel-Toggles.

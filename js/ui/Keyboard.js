@@ -5,10 +5,15 @@
  * parentes Orange (0.4) markiert – die Tastenfarbe bleibt sichtbar. Darüber
  * surft die aktuell klingende Note/Frequenz smooth durch.
  *
- * Transponier-Modus: Klick auf die Frequenzanzeige schaltet um. Dann leuchtet
- * der Skala-Anker (zunächst C); ein Klick auf einen Tonnamen VERSCHIEBT die
- * ganze Skala auf der Frequenzachse dorthin (mask rotieren, Muster bleibt).
- * Erneuter Klick auf die Anzeige → zurück zur normalen Ansicht (neue Position).
+ * Transponier-Modus („Anker"): Klick auf die Frequenzanzeige schaltet um. Dann
+ * leuchtet der Skala-Anker; Klick auf einen Tonnamen VERSCHIEBT die ganze Skala
+ * auf der Frequenzachse dorthin (Maske rotieren, Muster bleibt).
+ *
+ * skal2-Modus (rechts, bleibt auch im Anker-Modus an): dieselben 12 Tasten werden
+ * zu 12 abrufbaren Skala-Slots. Unten (Name) = Slot laden (aktiver hervorgehoben,
+ * Doppelklick = umbenennen). Oben (IO) = Ton an/aus wie immer (schreibt in den
+ * aktiven Slot zurück). Der Versatz (Anker) wandert mit in den Slot. Die 12 Slots
+ * zusammen = ein „P2" (über die Skaler-Gruppe speicher-/ladbar).
  */
 import { NOTE_NAMES, rotateMask } from '../pitch/ScaleModel.js';
 import { freqToMidi, midiToName } from '../pitch/Scaler.js';
@@ -31,17 +36,31 @@ export class Keyboard {
         this._lastPc = -1;
         this._transpose = false;
         this._build();
-        state.subscribe((k) => { if (k === 'scaleMask' || k === 'scaleRoot' || k === '*') this._refresh(); });
+        state.subscribe((k) => {
+            if (['scaleMask', 'scaleRoot', 'skal2On', 'skal2Active', 'skal2Slots', '*'].includes(k)) this._refresh();
+        });
     }
 
+    _skal2() { return !!this.state.get('skal2On'); }
+
     _build() {
-        // Frequenzanzeige = Schaltfläche für den Transponier-Modus (MouseOver-Hint).
+        // Kopfzeile: links die Frequenzanzeige (= Anker-Umschalter), rechts der skal2-Schalter.
+        const head = document.createElement('div');
+        head.className = 'kb-head';
         this._readout = document.createElement('div');
         this._readout.className = 'kb-readout kb-readout-hint';
-        this._readout.title = 'Klick: Skala auf der Frequenzachse verschieben';
+        this._readout.title = 'Klick: Skala auf der Frequenzachse verschieben (Anker)';
         this._readout.textContent = '–';
         this._readout.addEventListener('click', () => this._toggleTranspose());
-        this.element.appendChild(this._readout);
+        head.appendChild(this._readout);
+
+        this._skBtn = document.createElement('button');
+        this._skBtn.className = 'pb-btn kb-skal2-btn';
+        this._skBtn.textContent = 'skal2';
+        this._skBtn.title = 'skal2: die 12 Tasten als abrufbare Skala-Slots (P2). Bleibt auch im Anker-Modus aktiv.';
+        this._skBtn.addEventListener('click', () => this.state.set('skal2On', !this._skal2()));
+        head.appendChild(this._skBtn);
+        this.element.appendChild(head);
 
         const row = document.createElement('div');
         row.className = 'kb-keys';
@@ -51,15 +70,17 @@ export class Keyboard {
             const key = document.createElement('button');
             key.className = 'kb-key ' + (BLACK.has(i) ? 'kb-black' : 'kb-white');
             key.dataset.index = String(i);
-            // oben: Orange-Zustandsanzeige (aus/an) · unten: s/w-Tastenidentität + Note
+            // oben: Orange-Zustandsanzeige (aus/an) · unten: s/w-Tastenidentität + Note/Slot-Name
             key.innerHTML = `<span class="kb-ind"></span><span class="kb-id">${name}</span>`;
             key.title = name;
             key.classList.toggle('kb-on', !!mask[i]);
-            key.addEventListener('click', () => this._onKey(i));
+            key.addEventListener('click', (e) => this._onKey(i, e));
+            key.addEventListener('dblclick', (e) => this._onDblKey(i, e));
             row.appendChild(key);
             this._keys.push(key);
         });
         this.element.appendChild(row);
+        this._refresh();
     }
 
     _toggleTranspose() {
@@ -72,32 +93,82 @@ export class Keyboard {
         this._refresh();
     }
 
-    /** Klick auf eine Taste: normal = An/Aus, im Transponier-Modus = Skala versetzen. */
-    _onKey(i) {
-        if (this._transpose) this._transposeTo(i);
-        else this._toggle(i);
+    /** Klick auf eine Taste. Verhalten hängt von Modus (Anker/skal2) und Klickzone ab. */
+    _onKey(i, e) {
+        if (this._transpose) { this._transposeTo(i); return; }   // Anker gilt in BEIDEN Modi
+        if (this._skal2()) {
+            // skal2 (kein Anker): oben (IO) = Ton toggeln, unten (Name) = Slot i laden.
+            if (e && e.target.closest('.kb-ind')) this._toggle(i);
+            else this._loadSlot(i);
+            return;
+        }
+        this._toggle(i);
+    }
+
+    /** Doppelklick: im skal2-Modus den Slot-Namen umbenennen (1–2 Zeichen/Icon). */
+    _onDblKey(i, e) {
+        if (!this._skal2() || this._transpose) return;
+        e.preventDefault(); e.stopPropagation();
+        const slots = this.state.get('skal2Slots');
+        const cur = (slots[i] && slots[i].name) || String(i + 1);
+        const name = prompt('Slot-Name (kurz):', cur);
+        if (name === null) return;
+        const next = slots.map((s) => ({ ...s, mask: s.mask.slice() }));
+        next[i] = { ...next[i], name: name.slice(0, 4) || String(i + 1) };
+        this.state.set('skal2Slots', next);
     }
 
     _toggle(i) {
         const mask = this.state.get('scaleMask').slice();
         mask[i] = mask[i] ? 0 : 1;
         this.state.set('scaleMask', mask);
+        if (this._skal2()) this._writeActiveSlot({ mask: mask.slice() });   // Edit in den Slot zurück
+    }
+
+    /** Slot i laden: Maske + Versatz aus dem Slot in den Live-Zustand. */
+    _loadSlot(i) {
+        const slots = this.state.get('skal2Slots');
+        const s = slots[i];
+        if (!s) return;
+        this.state.set('skal2Active', i);
+        this.state.set('scaleMask', s.mask.slice());
+        this.state.set('scaleRoot', s.root | 0);
     }
 
     /** Skala so verschieben, dass der bisherige Anker auf Tonklasse i landet. */
     _transposeTo(i) {
         const root = this.state.get('scaleRoot') | 0;
         const delta = ((i - root) % 12 + 12) % 12;
-        if (delta) this.state.set('scaleMask', rotateMask(this.state.get('scaleMask'), delta));
+        let mask = this.state.get('scaleMask');
+        if (delta) { mask = rotateMask(mask, delta); this.state.set('scaleMask', mask); }
         this.state.set('scaleRoot', i);
+        if (this._skal2()) this._writeActiveSlot({ mask: mask.slice(), root: i });  // Versatz in den Slot
+    }
+
+    /** Patch in den aktuell aktiven skal2-Slot schreiben (unveränderliche Kopie). */
+    _writeActiveSlot(patch) {
+        const a = this.state.get('skal2Active') | 0;
+        const slots = this.state.get('skal2Slots').map((s) => ({ ...s, mask: s.mask.slice() }));
+        if (!slots[a]) return;
+        slots[a] = { ...slots[a], ...patch };
+        this.state.set('skal2Slots', slots);
     }
 
     _refresh() {
         const mask = this.state.get('scaleMask');
         const root = this.state.get('scaleRoot') | 0;
+        const sk = this._skal2();
+        const active = this.state.get('skal2Active') | 0;
+        const slots = this.state.get('skal2Slots') || [];
+        this.element.classList.toggle('kb-skal2', sk);
+        if (this._skBtn) this._skBtn.classList.toggle('pb-active', sk);
         this._keys.forEach((k, i) => {
-            k.classList.toggle('kb-on', !!mask[i]);
+            k.classList.toggle('kb-on', !!mask[i]);                    // IO = Live-Töne (beide Modi)
             k.classList.toggle('kb-anchor', this._transpose && i === root);
+            k.classList.toggle('kb-slot-active', sk && i === active);  // aktiver Slot hervorgehoben
+            const id = k.querySelector('.kb-id');
+            if (id) id.textContent = sk ? ((slots[i] && slots[i].name) || String(i + 1)) : NOTE_NAMES[i];
+            k.title = sk ? `Slot ${i + 1}: ${(slots[i] && slots[i].name) || i + 1} (Doppelklick = umbenennen)` : NOTE_NAMES[i];
         });
     }
 
