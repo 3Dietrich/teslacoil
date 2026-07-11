@@ -41,7 +41,7 @@ const KNOBS = {
     rateDenMax:   { label: 'l max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
     pitchRandSeed:{ label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
     baseHz:       { label: 'Base-Frq', min: 1, max: 500, curve: 'log', unit: 'Hz', decimals: 1 },
-    baseBand:     { label: 'Band', min: 4, max: 8000, step: 1, curve: 'log', unit: 'Hz', decimals: 0, formatValue: (v) => `${Math.round(v)}–${Math.round(v * 2)}` },
+    baseBand:     { label: 'Band', min: 0.05, max: 8000, curve: 'log', unit: 'Hz', decimals: 2, formatValue: (v) => { const d = v < 20 ? 2 : 0; return `${v.toFixed(d)}–${(v * 2).toFixed(d)}`; } },
     harmonizeMix: { label: 'Harmonize', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     baseTestLevel:{ label: 'Test-Vol', min: 0, max: 0.6, curve: 'linear', unit: '', decimals: 2 },
     duty:         { label: 'PW', min: 0.01, max: 0.99, curve: 'linear', unit: '', decimals: 2 },
@@ -78,7 +78,7 @@ const KNOBS = {
     metroLevel:   { label: 'Level', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     metroMorph:   { label: 'LP↔HP', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     metroCutoff:  { label: 'Cutoff', min: 50, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
-    metroCutBand: { label: 'Band', min: 20, max: 9000, step: 1, curve: 'log', unit: 'Hz', decimals: 0, formatValue: (v) => `${Math.round(v)}–${Math.round(v * 2)}` },
+    metroCutBand: { label: 'Band', min: 20, max: 9000, curve: 'log', unit: 'Hz', decimals: 0, formatValue: (v) => `${Math.round(v)}–${Math.round(v) * 2}` },
     metroReso:    { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
 };
 
@@ -1181,7 +1181,7 @@ function boot() {
         if (onBody && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
             e.preventDefault();
             const f = e.key === 'ArrowUp' ? 2 : 0.5;
-            state.set('baseBand', Math.max(4, Math.min(8000, Math.round(state.get('baseBand') * f))));
+            state.set('baseBand', Math.max(0.05, Math.min(8000, state.get('baseBand') * f)));
             return;
         }
         if (state.get('baseSrc') === 'Ton' && onBody) {

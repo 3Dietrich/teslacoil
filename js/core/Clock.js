@@ -40,7 +40,11 @@ export class Clock {
         let guard = 0;
         while (this._next < horizon && guard++ < 256) {
             const interval = Math.max(0.02, this.intervalFn());
-            this.onTrigger(this._next, interval);
+            // Wirft onTrigger, darf das NIE den Scheduler stallen: sonst bliebe _next
+            // stehen, _schedule feuerte alle 25 ms neu → „Sequenzer drehen durch" + Ton-
+            // Chaos. Fehler loggen, _next trotzdem weiterschalten (Takt läuft sauber weiter).
+            try { this.onTrigger(this._next, interval); }
+            catch (e) { console.error('Clock.onTrigger error:', e); }
             this._next += interval;
         }
     }

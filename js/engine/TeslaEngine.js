@@ -307,6 +307,7 @@ export class TeslaEngine {
         // freq === null → KEIN Ton aktiv (ganze Skala aus) → Pause.
         // ampGate 0 (Amp-Sequenzer-Step off) → ebenfalls keine Note.
         const wantNote = open && freq != null && ampGate > 0;
+        let noteOn = false;   // true = frischer Anschlag (KEIN Hold-Suspend) – von der Filter-Sektion genutzt
         if (wantNote) {
             // Pitch → Env-Länge: zwischen lo (u=0) und hi (u=1) interpolierter %-Faktor.
             // KEIN Deckel auf ein Trigger-Intervall mehr: envPercent > 100 % macht Töne
@@ -339,6 +340,7 @@ export class TeslaEngine {
                     polyMax: s.get('polyMax'),
                 });
                 this._ampHoldUntil = time + envLen;   // Merke Len-Ende (ohne Release) – für hold
+                noteOn = true;                        // frischer Anschlag (für Filter-Keytrack/-Env)
             }
         }
 
