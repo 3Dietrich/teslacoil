@@ -100,6 +100,9 @@ export const DEFAULTS = Object.freeze({
     filterSeqEnabled: false,
     filterSeqLen: 8,
     filterSeqSteps: makeSeqSteps('first'),
+    // FX-Ketten-Reihenfolge (Sound): frei umsteckbare Reihenfolge der drei Bus-FX.
+    // voiceBus → fx[0] → … → Master. Live umsteckbar zum Ausprobieren (kein Speichern nötig).
+    fxOrder: ['Filter', 'Distortion', 'Reverb'],
     // Distortion (Effekt-Slot vor dem Reverb)
     distEnabled: false,  // 'aktiv'-Haken (aus = Bypass)
     distMode: 'Saturation', // 'Saturation' | 'Hard Clip' | 'Foldback'

@@ -31,15 +31,15 @@ export class TeslaEngine {
         this.master.setVolume(state.get('masterVol'));
         this.master.setDcBlock(state.get('dcBlock'));
 
-        // Bus-Kette: Voices → Ladder → Distortion → Gate-Reverb → Master (Ladder-Worklet lazy).
+        // Bus-Kette: Voices → voiceBus → [FX in state.fxOrder] → Master. Die FX-Reihenfolge
+        // (Filter/Distortion/Reverb) ist LIVE umsteckbar (_rewireFX) – zum freien Ausprobieren.
         this.ladder = new LadderFilter(this.ctx);
         this.dist = new DistortionFx(this.ctx);
         this.reverb = new GateReverb(this.ctx);
-        this.ladder.output.connect(this.dist.input);
-        this.dist.output.connect(this.reverb.input);
-        this.reverb.output.connect(this.master.input);
+        this.voiceBus = this.ctx.createGain();   // fester Sammelpunkt der Voices (Ketten-Anfang)
         this._fxReady = false;
-        this.square = new SquareOsc(this.ctx, this.ladder.input);
+        this.square = new SquareOsc(this.ctx, this.voiceBus);
+        this._rewireFX();
         this._applyDistortion();
         this._applyReverbLevels();
         this._rebuildReverb();
@@ -112,6 +112,7 @@ export class TeslaEngine {
         if (key === 'metroLevel' || key === '*') this.metro.setLevel(s.get('metroLevel'));
         if (['metroMorph', 'metroCutoff', 'metroCutoffQuant', 'metroCutBand', 'metroReso', '*'].includes(key)) this._rebuildMetro();
         if (key === 'metroRoute' || key === '*') this._applyMetroRoute();
+        if (key === 'fxOrder' || key === '*') this._rewireFX();   // FX-Kette live umstecken
         // Test-Ton: an/aus/Pegel + Frequenz an die BaseFrq nachführen (BaseFrq hängt von
         // baseSrc/baseHz/baseNote/baseOct/tempoOct/bpm ab → bei all diesen aktualisieren).
         if (['baseTestOn', 'baseTestLevel', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm', '*'].includes(key)) this._applyTestOsc();
@@ -182,6 +183,21 @@ export class TeslaEngine {
         this.reverb.setShelf(s.get('revShelfFreq'), s.get('revShelfGain'));
         this.reverb.setPreDelay(s.get('revPreDelay'));
         this.reverb.setXfade(this._reverbLenSeconds() * 1000); // X-Fade an Len gebunden
+    }
+
+    /** FX-Kette in der Reihenfolge state.fxOrder verdrahten: voiceBus → fx[0] → … →
+     *  fx[n] → Master. LIVE umsteckbar (freies Ausprobieren, kein Speichern nötig) – nur
+     *  ein kurzer Reconnect; die Module (interne Verdrahtung) bleiben erhalten. */
+    _rewireFX() {
+        const map = { Filter: this.ladder, Distortion: this.dist, Reverb: this.reverb };
+        const order = (this.state.get('fxOrder') || []).filter((n) => map[n]);
+        for (const n of ['Filter', 'Distortion', 'Reverb']) if (!order.includes(n)) order.push(n);
+        // Nur die VON UNS gesetzten Verbindungen lösen (Ausgänge + voiceBus), Module intakt.
+        try { this.voiceBus.disconnect(); } catch { /* noop */ }
+        for (const n of order) { try { map[n].output.disconnect(); } catch { /* noop */ } }
+        let prev = this.voiceBus;
+        for (const n of order) { prev.connect(map[n].input); prev = map[n].output; }
+        prev.connect(this.master.input);
     }
 
     /* ── Step-Sequenzer (Filter/Amp) ── */

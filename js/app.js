@@ -23,7 +23,7 @@ import { PresetManager } from './data/PresetManager.js';
 import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
-import { freqToMidi, midiToName } from './pitch/Scaler.js';
+import { freqToMidi, midiToName, foldToBand } from './pitch/Scaler.js';
 import { bestFraction } from './pitch/rateFraction.js';
 
 /** 'von'-Anzeige: passende Note + Frequenz (P · F). */
@@ -348,6 +348,7 @@ function boot() {
     let layoutRefresh = () => {};
     let p2Refresh = () => {};
     let p2Bar = null;   // Referenz für Sichtbarkeit (nur im skal2-Modus zeigen)
+    let fxChainRender = () => {};
 
     // Skala-Presets (laden/sichern) – gehören in die Skaler-Gruppe.
     // Die getroffene Auswahl wird in der Optik gemerkt (state.scaleSel) → Recall/Reset-fest.
@@ -422,6 +423,42 @@ function boot() {
         return bar;
     }
     presetBar.element.appendChild(makeMasterBar());
+
+    // FX-Kette: kompakte, ziehbare Chips (Filter/Dist/Reverb) → live umsteckbar zum
+    // Ausprobieren. Osc/AmpEnv sind fest (Quelle bzw. pro-Voice), daher nur die drei Bus-FX.
+    function makeFxChainBar() {
+        const bar = document.createElement('div'); bar.className = 'fx-chain';
+        const lab = document.createElement('span'); lab.className = 'fx-chain-lab'; lab.textContent = 'Kette';
+        const osc = document.createElement('span'); osc.className = 'fx-fixed'; osc.textContent = 'Osc';
+        let dragName = null;
+        const render = () => {
+            bar.innerHTML = '';
+            bar.appendChild(lab); bar.appendChild(osc);
+            const arrow = () => { const a = document.createElement('span'); a.className = 'fx-arrow'; a.textContent = '→'; bar.appendChild(a); };
+            const order = state.get('fxOrder') || [];
+            order.forEach((name) => {
+                arrow();
+                const chip = document.createElement('span'); chip.className = 'fx-chip'; chip.textContent = name; chip.draggable = true; chip.dataset.fx = name;
+                chip.title = 'Ziehen zum Umsortieren der Signalkette';
+                chip.addEventListener('dragstart', (e) => { dragName = name; chip.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', name); } catch { /* noop */ } });
+                chip.addEventListener('dragend', () => { dragName = null; chip.classList.remove('drag'); });
+                chip.addEventListener('dragover', (e) => { e.preventDefault(); });
+                chip.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    if (!dragName || dragName === name) return;
+                    const arr = (state.get('fxOrder') || []).filter((x) => x !== dragName);
+                    arr.splice(arr.indexOf(name), 0, dragName);   // vor das Ziel einsetzen
+                    state.set('fxOrder', arr);
+                });
+                bar.appendChild(chip);
+            });
+            arrow();
+            const out = document.createElement('span'); out.className = 'fx-fixed'; out.textContent = 'Out'; bar.appendChild(out);
+        };
+        fxChainRender = render; render();
+        return bar;
+    }
+    presetBar.element.appendChild(makeFxChainBar());
 
     // ── Optisches Layout-System (Gruppen-Stil/-Position/-Klappen) – eigenständig ──
     // Beim ersten Start optische Einstellungen aus Snapshot "verschiebetest" übernehmen.
@@ -1160,6 +1197,7 @@ function boot() {
         if (key === '*' || key === 'scaleSel') scaleRefresh();
         if (key === '*' || key === 'layoutSel') layoutRefresh();
         if (key === '*' || key === 'p2Sel') p2Refresh();
+        if (key === '*' || key === 'fxOrder') fxChainRender();
         // skal2-Modus: P2-Leiste nur dann zeigen; Höhenänderung → Layout nachrechnen.
         if (key === '*' || key === 'skal2On') { if (p2Bar) p2Bar.style.display = state.get('skal2On') ? '' : 'none'; sizePanel(); }
         // Sichtbarkeits-Umschalter (aktiv-Haken, Modus-Selects) ändern Gruppenhöhen
@@ -1229,7 +1267,10 @@ function boot() {
     }, true);
 
     // ── Render-Loop ──
-    const _bandKnob = knobsById.get('baseBand');   // zeigt live die gefaltete Ist-Frequenz
+    // Band-Regler zeigen live die gefaltete Ist-Frequenz (kompakt formatiert).
+    const _bandKnob = knobsById.get('baseBand');
+    const _metroBandKnob = knobsById.get('metroCutBand');
+    const fmtHz = (f) => (f < 10 ? f.toFixed(2) : f < 1000 ? f.toFixed(1) : Math.round(f) + '');
     let _cpuFrames = 0;
     function frame() {
         const t0 = performance.now();
@@ -1239,9 +1280,11 @@ function boot() {
         for (const w of seqWidgets) w.tick();
         const bf = engine.baseFreq;
         baseReadout.textContent = `BaseFrq: ${midiToName(Math.round(freqToMidi(bf)))} · ${bf.toFixed(bf < 10 ? 2 : 1)} Hz`;
-        // Band-Regler zeigt die TATSÄCHLICHE (gefaltete) Frequenz statt „L–2L" – kompakt,
-        // damit der Control nicht breiter wird (@dpa 20260712).
-        if (_bandKnob) _bandKnob.showValue(bf < 10 ? bf.toFixed(2) : bf < 1000 ? bf.toFixed(1) : Math.round(bf) + '');
+        // Band-Regler zeigen die TATSÄCHLICHE (gefaltete) Frequenz statt „L–2L" – kompakt,
+        // damit der Control nicht breiter wird (@dpa 20260712). baseBand faltet die Quelle
+        // (= engine.baseFreq), metroCutBand faltet die BaseFrq nochmal ins Metro-Cutoff-Band.
+        if (_bandKnob) _bandKnob.showValue(fmtHz(bf));
+        if (_metroBandKnob) _metroBandKnob.showValue(fmtHz(foldToBand(bf, state.get('metroCutBand'))));
         // Freq-Modus: zusammenhängende Speed-Werte (BpM 0.001..999, sonst '..'/'zu hoch'; Hz; P immer).
         if (baseSpeed.style.display !== 'none') {
             const bpm = bf * 60;
