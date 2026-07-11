@@ -1,0 +1,1230 @@
+/**
+ * app.js – Bootstrap: State, Engine, UI-Verdrahtung, Render-Loop, Space-Toggle.
+ *
+ * Panel-Aufbau nach THEMATISCHEN GEBIETEN: jede Gruppe (Takt, Gate, Skaler …)
+ * enthält ALLE zugehörigen Bedienelemente – Selects, Toggles, Regler und (beim
+ * Skaler) das ON/OFF-Keyboard samt Skala-Presets. Nur Transport + Ensemble-
+ * Snapshot sind global (oben).
+ *
+ * Recall-Disziplin: alle Controls sind bidirektional an den State gebunden.
+ * onChange schreibt in den State; bei State-'*' (Recall) wird JEDES Control aus
+ * dem State neu gesetzt → der octaver-Recall-Bug kann hier nicht auftreten.
+ */
+import { State } from './core/State.js';
+import { TeslaEngine } from './engine/TeslaEngine.js';
+import { Knob } from './ui/Knob.js';
+import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
+import { Keyboard } from './ui/Keyboard.js';
+import { StepSeqUI } from './ui/StepSeqUI.js';
+import { Scopes } from './ui/Scopes.js';
+import { DebugPanel } from './ui/DebugPanel.js';
+import { PresetBar } from './ui/PresetBar.js';
+import { PresetManager } from './data/PresetManager.js';
+import { DIVISION_LABELS } from './core/TriggerDivider.js';
+import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
+import { NOTE_NAMES } from './pitch/ScaleModel.js';
+import { freqToMidi, midiToName } from './pitch/Scaler.js';
+import { bestFraction } from './pitch/rateFraction.js';
+
+/** 'von'-Anzeige: passende Note + Frequenz (P · F). */
+const fromHzFormat = (hz) => `${midiToName(Math.round(freqToMidi(hz)))}·${Math.round(hz)}`;
+
+/** Regler-Definitionen (State-Key → Konfiguration). */
+const KNOBS = {
+    bpm:          { label: 'Tempo', min: 40, max: 240, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    gateRate:     { label: 'Gate-Rate', min: 0.05, max: 8, curve: 'log', unit: 'Hz', decimals: 2 },
+    gateWidth:    { label: 'Gate-Weite', min: 0.05, max: 0.95, curve: 'linear', unit: '', decimals: 2 },
+    pitchRate:    { label: 'Rate', min: 0.05, max: 100, curve: 'log', unit: 'Hz', decimals: 2 },
+    fromHz:       { label: 'Von', min: 20, max: 1000, curve: 'log', unit: 'Hz', decimals: 1, formatValue: fromHzFormat },
+    pitchRange:   { label: 'Range', min: 1, max: 36, step: 1, curve: 'linear', unit: 'P', decimals: 0 },
+    rateNumMax:   { label: 'k max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    rateDenMax:   { label: 'l max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    pitchRandSeed:{ label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    baseHz:       { label: 'Base-Frq', min: 1, max: 500, curve: 'log', unit: 'Hz', decimals: 1 },
+    baseOctave:   { label: 'Oktave', min: -6, max: 6, step: 1, curve: 'linear', unit: 'oct', decimals: 0 },
+    harmonizeMix: { label: 'Harmonize', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    baseTestLevel:{ label: 'Test-Vol', min: 0, max: 0.6, curve: 'linear', unit: '', decimals: 2 },
+    duty:         { label: 'PW', min: 0.01, max: 0.99, curve: 'linear', unit: '', decimals: 2 },
+    fmFeedback:   { label: 'FM', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    polyMax:      { label: 'Poly', min: 1, max: 8, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    attack:       { label: 'Attack', min: 0, max: 0.05, step: 0.001, curve: 'linear', unit: 's', decimals: 3 },
+    ampDecay:     { label: 'Release', min: 0, max: 16, curve: 'log', unit: 's', decimals: 3 },
+    envPercent:   { label: 'Länge %', min: 0.05, max: 16, curve: 'linear', unit: '', decimals: 2 },
+    envPitchLo:   { label: 'P→Len tief', min: 1, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    envPitchHi:   { label: 'P→Len hoch', min: 1, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    ampPitchAmt:  { label: 'P→Amp', min: 0, max: 100, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    lpCutoff:     { label: 'Cutoff', min: 20, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
+    lpReso:       { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
+    lpEnv:        { label: 'Env', min: -1, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    lpAttack:     { label: 'Attack', min: 0, max: 8, curve: 'log', unit: 's', decimals: 3 },
+    lpDecay:      { label: 'Decay', min: 0.005, max: 16, curve: 'log', unit: 's', decimals: 3 },
+    lpKeyTrack:   { label: 'KeyTrack', min: 0, max: 100, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    lpGlide:      { label: 'Glide', min: 0, max: 1, curve: 'log', unit: 's', decimals: 3 },
+    distDrive:    { label: 'Drive', min: 0.5, max: 50, curve: 'log', unit: '×', decimals: 1 },
+    distOut:      { label: 'Out', min: 0, max: 2, curve: 'linear', unit: '', decimals: 2 },
+    revMix:       { label: 'Dry/Wet', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    revWet:       { label: 'Wet-Vol', min: 0, max: 4, curve: 'linear', unit: '×', decimals: 2 },
+    revDensity:   { label: 'Density', min: 0, max: 1, curve: 'linear', unit: '', decimals: 4 },
+    revLenPct:    { label: 'Len', min: 0, max: 16, curve: 'linear', unit: '×', decimals: 2 },
+    revAttack:    { label: 'Attack', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    revRelease:   { label: 'Release', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    revShelfFreq: { label: 'HiShelf', min: 40, max: 8000, curve: 'log', unit: 'Hz', decimals: 0 },
+    revShelfGain: { label: 'Boost', min: -18, max: 6, step: 0.5, curve: 'linear', unit: 'dB', decimals: 1 },
+    revPreDelay:  { label: 'Pre-Delay', min: 0, max: 200, step: 1, curve: 'linear', unit: 'ms', decimals: 0 },
+    revSeed:      { label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
+    amp:          { label: 'Amp', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    ampSeqDyn:    { label: 'Dyn', min: -1, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    masterVol:    { label: 'Volume', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    metroLevel:   { label: 'Level', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    metroMorph:   { label: 'LP↔HP', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    metroCutoff:  { label: 'Cutoff', min: 50, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
+    metroCutoffOct: { label: 'Oktaver', min: -2, max: 6, step: 1, curve: 'linear', unit: 'oct', decimals: 0 },
+    metroReso:    { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
+};
+
+const SELECTS = {
+    division:  { label: 'Teilung', options: DIVISION_LABELS },
+    metroDivision: { label: 'Teilung', options: DIVISION_LABELS },
+    metroRoute: { label: 'Route', options: ['Parallel', 'Vor Dist', 'Vor Rev'] },
+    pitchWave: { label: 'Pitch-Wave', options: PITCH_WAVEFORMS },
+    baseSrc:   { label: 'BaseFrq-Quelle', options: ['Freq', 'Tempo', 'Ton'] },
+    baseNote:  { label: 'Ton', options: NOTE_NAMES },
+    oscEngine: { label: 'Engine', options: ['Square-PW', 'Sine-FM'] },
+    filterType: { label: 'Typ', options: ['LP', 'HP', 'BP', 'Ladder-org'] },
+    lpMode:    { label: 'Pole', options: ['1p', '2p', '3p', '4p'] },
+    distMode:  { label: 'Distortion', options: ['Saturation', 'Hard Clip', 'Foldback'] },
+    revView:    { label: 'Ansicht', options: ['L', 'R', 'Beide'] },
+};
+const TOGGLES = {
+    gateEnabled:   { label: 'aktiv' },
+    metroEnabled:  { label: 'aktiv' },
+    filterEnabled: { label: 'aktiv' },
+    filterSeqEnabled: { label: 'Seq' },
+    ampSeqEnabled: { label: 'Seq' },
+    ampHold:       { label: 'Hold' },      // Amp-Env nicht neu triggern solange Note (Len) hält
+    distEnabled:   { label: 'aktiv' },
+    reverbEnabled: { label: 'aktiv' },
+    dcBlock:       { label: 'DC-Block' },
+    intMultiples:  { label: '×ganze' },   // (nur noch Keyboard-Anzeige; kein globaler Schalter mehr)
+    rateQuant:     { label: 'Quant' },     // lokal in Skaler: Rate float ↔ Bruch k/l
+    baseTestOn:    { label: 'Test-Ton' },  // trockener Sinus auf der BaseFrq (Vergleich)
+    metroCutoffQuant: { label: 'Quant' },  // Metronom-Cutoff an BaseFrq gerastet (Oktaver statt Hz-Knob)
+};
+
+/** Gruppen = thematische Gebiete mit ALLEN zugehörigen Controls.
+ *  Master ist global → liegt oben in der Transport-Zeile (nicht hier). */
+const GROUPS = [
+    { name: 'Takt', selects: ['division'], knobs: ['bpm'] },
+    // (Gruppe 'Gate' entfernt – ersatzlos, @dpa. gateEnabled bleibt als State-Default
+    //  false → Gate immer offen, ohne UI. Kein Sound-Effekt.)
+    // Metronom: eigener getakteter Klick mit Vadim-SVF-Morph-Filter (LP↔HP).
+    { name: 'Metronom', selects: ['metroDivision', 'metroRoute'], toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroLevel', 'metroMorph', 'metroCutoff', 'metroCutoffOct', 'metroReso'], metro: true },
+    // Seed sitzt inline neben dem Pitch-Wave-Select (nur bei 'random' sichtbar).
+    { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
+    // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
+    { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseOctave', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
+    { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
+    // Lowpass auf dem OSC: Cutoff (+ Reso ab 2p) mit Decay-Env (Takt×Gate).
+    // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
+    { name: 'Filter', selects: ['filterType', 'lpMode'], toggles: ['filterEnabled', 'filterSeqEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
+    // Distortion: Effekt-Slot vor dem Reverb.
+    { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut'], dist: true },
+    // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
+    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampPitchAmt', 'amp', 'ampSeqDyn'], lengthSat: { main: 'envPercent', sats: ['envPitchLo', 'envPitchHi'] }, seq: 'amp' },
+    // Gate-Reverb: Effekt-Slot mit Umschalter; Regler nur sichtbar wenn aktiv.
+    { name: 'Gate Reverb', selects: ['revView'], toggles: ['reverbEnabled'], knobs: ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'], reverb: true },
+    // Debug-Werkzeug (C7): KEIN Sound-Parameter – Audio/Screenshot/Zustand/Prompt
+    // auf Klick bündeln, für @dpa zum Hochladen an die KI.
+    { name: 'Debug', debug: true },
+];
+
+/** Sound-Parameter-Keys EINER Gruppe (für die Gruppen-Snapshots). Rein Sound:
+ *  Selects/Toggles/Regler + Länge-Satelliten + Sequenzer-Keys + (Skaler) die Maske. */
+function groupSoundKeys(grp) {
+    const keys = [];
+    (grp.selects || []).forEach((k) => keys.push(k));
+    (grp.toggles || []).forEach((k) => keys.push(k));
+    (grp.inlineKnobs || []).forEach((k) => keys.push(k));
+    (grp.knobs || []).forEach((k) => keys.push(k));
+    if (grp.lengthSat) { keys.push(grp.lengthSat.main); (grp.lengthSat.sats || []).forEach((k) => keys.push(k)); }
+    if (grp.seq) keys.push(grp.seq + 'SeqEnabled', grp.seq + 'SeqLen', grp.seq + 'SeqSteps');
+    if (grp.scale) keys.push('scaleMask', 'scaleRoot');
+    return keys;
+}
+
+/** Regler-Keys EINER Gruppe (für die Control-Settings/knobMeta im Gruppen-Snapshot). */
+function groupKnobKeys(grp) {
+    const keys = [...(grp.inlineKnobs || []), ...(grp.knobs || [])];
+    if (grp.lengthSat) { keys.push(grp.lengthSat.main); (grp.lengthSat.sats || []).forEach((k) => keys.push(k)); }
+    return keys;
+}
+
+/** Dirty-Marker aus einer {changed,total,frac}-Messung: '' / '*' / '‼' (>60% verändert). */
+const dirtyMark = (d) => (!d || !d.changed) ? '' : (d.frac > 0.6 ? '‼' : '*');
+
+/** localStorage-Key für den automatisch gesicherten Live-Zustand (Sound + Optik). */
+const LIVE_KEY = 'teslacoil_live';
+
+function boot() {
+    const state = new State();
+
+    // ── Auto-Restore: letzten Live-Zustand wiederherstellen (sonst Default) ──
+    // Vor dem UI-Aufbau, damit alle Controls direkt mit den gesicherten Werten
+    // gebaut werden. Kein Default-Flash beim Reload/Aktualisieren mehr.
+    try {
+        const live = JSON.parse(localStorage.getItem(LIVE_KEY));
+        if (live && typeof live === 'object') state.loadFromJSON(live);
+    } catch { /* korrupter Live-State → beim Default bleiben */ }
+
+    // Migration: die entfernten Moog-Ladder-Typen ('Ladder'/'Ladder-alt') auf den
+    // verbliebenen SVF-Ladder ('Ladder-org') mappen, damit alte Zustände gültig bleiben.
+    if (['Ladder', 'Ladder-alt'].includes(state.get('filterType'))) state.set('filterType', 'Ladder-org');
+    // Migration: die früheren per-Modus-Oktaven (baseOct/tempoOct) in den einen globalen
+    // baseOctave falten → aktuelle Tonhöhe bleibt beim ersten Laden erhalten.
+    {
+        const src = state.get('baseSrc');
+        const legacy = (src === 'Ton' ? state.get('baseOct') : src === 'Tempo' ? state.get('tempoOct') : 0) | 0;
+        if (legacy) {
+            state.set('baseOctave', Math.max(-6, Math.min(6, (state.get('baseOctave') | 0) + legacy)));
+            state.set('baseOct', 0); state.set('tempoOct', 0);
+        }
+    }
+    // Migration: altes flaches seqStyles {w,h,bg,colFilter,colAmp} → per-Typ getrennt
+    // {filter:{w,h,bg,col}, amp:{w,h,bg,col}}. Größe/BG waren früher geteilt, sie werden
+    // in BEIDE Typen kopiert; die je Typ eigene Balkenfarbe bleibt erhalten.
+    {
+        const ss = state.get('seqStyles');
+        if (ss && (('colFilter' in ss) || ('colAmp' in ss) || !ss.filter)) {
+            const w = ss.w ?? 270, h = ss.h ?? 64, bg = ss.bg ?? '#0e1116';
+            state.set('seqStyles', {
+                filter: { w, h, bg, col: ss.colFilter ?? 'rgba(90,209,255,1)' },
+                amp: { w, h, bg, col: ss.colAmp ?? 'rgba(255,159,90,1)' },
+            });
+        }
+    }
+
+    // ── Auto-Save: jede Änderung (Sound + Optik) still sichern (leicht entprellt) ──
+    let _liveTimer = null;
+    const persistLive = () => {
+        clearTimeout(_liveTimer);
+        _liveTimer = setTimeout(() => {
+            try { localStorage.setItem(LIVE_KEY, JSON.stringify(state.toJSON())); } catch { /* Quota o.ä. */ }
+        }, 150);
+    };
+    state.subscribe(persistLive);
+
+    const engine = new TeslaEngine(state);
+    const presets = new PresetManager(state, engine);
+
+    const root = document.getElementById('app');
+    root.innerHTML = '';
+
+    // Doppelklick auf ein editierbares Zahl-/Textfeld → kompletten Inhalt selektieren.
+    document.addEventListener('dblclick', (e) => {
+        const t = e.target;
+        if (t instanceof HTMLInputElement && (t.type === 'number' || t.type === 'text')) t.select();
+    });
+
+    // ── Transport + Ensemble-Snapshot (global) ──
+    const presetBar = new PresetBar(engine, presets);
+    presetBar.mount(root);
+
+    const metaEditor = new KnobMetaEditor(state);
+    // Geänderte Regler-Meta in den State schreiben → wird im Snapshot gesichert.
+    metaEditor.onApply = (knob) => {
+        const key = knob.id.replace(/^knob_/, '');
+        state.set('knobMeta', { ...state.get('knobMeta'), [key]: knob.getMeta() });
+    };
+
+    const knobsById = new Map();
+    const ctrlBindings = new Map();   // key → (data) => UI aktualisieren (Selects/Toggles)
+    const ctrlEls = new Map();        // key → DOM-Wrapper (für modusabhängiges Ein-/Ausblenden)
+    const keyboard = new Keyboard(state, () => engine.currentFreq, () => engine.baseFreq);
+    const baseReadout = document.createElement('div'); // zeigt effektive BaseFrq
+    const baseSpeed = document.createElement('div');    // zeigt BpM/Hz/P (Freq-Modus)
+    const rateReadout = document.createElement('div');  // Skaler-Rate als Vielfaches der BaseFrq
+    const reflCanvas = document.createElement('canvas'); // Reverb-Reflections-Anzeige
+
+    // ── Control-Builder (registrieren sich für den Recall) ──
+    function makeSelect(key) {
+        const cfg = SELECTS[key];
+        const wrap = document.createElement('label');
+        wrap.className = 'select-field';
+        const span = document.createElement('span'); span.textContent = cfg.label;
+        const sel = document.createElement('select');
+        cfg.options.forEach((o) => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
+        sel.value = state.get(key);
+        sel.addEventListener('change', () => state.set(key, sel.value));
+        wrap.appendChild(span); wrap.appendChild(sel);
+        wrap.dataset.ctrl = 's:' + key;   // Kennung für den Arrange-Modus
+        ctrlBindings.set(key, (data) => { sel.value = data[key]; });
+        ctrlEls.set(key, wrap);
+        return wrap;
+    }
+    function makeToggle(key) {
+        const cfg = TOGGLES[key];
+        const wrap = document.createElement('label');
+        wrap.className = 'select-field toggle-field';
+        const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = state.get(key);
+        chk.addEventListener('change', () => state.set(key, chk.checked));
+        const span = document.createElement('span'); span.textContent = cfg.label;
+        wrap.appendChild(chk); wrap.appendChild(span);
+        wrap.dataset.ctrl = 't:' + key;   // Kennung für den Arrange-Modus
+        ctrlBindings.set(key, (data) => { chk.checked = !!data[key]; });
+        return wrap;
+    }
+    function makeKnob(key) {
+        const def = KNOBS[key];
+        const knob = new Knob({
+            id: 'knob_' + key,
+            label: def.label, min: def.min, max: def.max, step: def.step ?? 0,
+            curve: def.curve, unit: def.unit, decimals: def.decimals, formatValue: def.formatValue,
+            value: state.get(key),
+            onChange: (val) => state.set(key, val),
+            onMetaClick: (k) => metaEditor.open(k),
+        });
+        knob._defaultMeta = knob.getMeta();   // Original-Range/Kurve für „Zurücksetzen"
+        knob.element.dataset.ctrl = 'k:' + key;   // Kennung für den Arrange-Modus
+        knobsById.set(key, knob);
+        ctrlEls.set(key, knob.element);
+        return knob;
+    }
+    // Kleiner Icon-Button (glyph + title) – für die kompakten Preset-Cluster.
+    // `kind` (load/save/new/export) gibt ihm eine Aktions-Farbe → klar unterscheidbar.
+    function iconBtn(glyph, title, fn, kind = '') {
+        const b = document.createElement('button'); b.className = 'pb-btn pb-icon' + (kind ? ' pb-ic-' + kind : '');
+        b.textContent = glyph; b.title = title; b.setAttribute('aria-label', title);
+        b.addEventListener('click', fn); return b;
+    }
+    // Flacher, aligned Preset-Cluster (gleiche Optik wie Snapshot/Optik).
+    function presetCluster(label, sel, icons) {
+        const box = document.createElement('div'); box.className = 'pb-cluster';
+        const lab = document.createElement('span'); lab.className = 'pb-cluster-label'; lab.textContent = label;
+        box.appendChild(lab); box.appendChild(sel);
+        icons.forEach(([g, t, fn, kind]) => box.appendChild(iconBtn(g, t, fn, kind)));
+        return box;
+    }
+    // Skaler-Rate als Bruch k/l der BaseFrq: bestFraction findet das k/l (mit den
+    // Maxima rateNumMax/rateDenMax), das rate/base am besten trifft → rate = base·k/l,
+    // im Rate-Bereich 0.05..4 Hz geklemmt. Idempotent (self-stabilisierend).
+    function rateFrac(base, rate) {
+        return bestFraction(rate / base, state.get('rateNumMax'), state.get('rateDenMax'));
+    }
+    function quantRate(base, rate) {
+        if (!base || base <= 0) return rate;
+        const { k, l } = rateFrac(base, rate);
+        // Auf die AKTUELLE Rate-Regler-Range klemmen (via Meta erweiterbar), nicht auf
+        // die feste Default-Range – sonst sprang die Rate bei Quant hart auf 4 Hz.
+        const knob = knobsById.get('pitchRate');
+        const lo = knob ? knob.min : KNOBS.pitchRate.min;
+        const hi = knob ? knob.max : KNOBS.pitchRate.max;
+        return Math.min(hi, Math.max(lo, base * k / l));
+    }
+    // ≈-Knopf: einmalig auf den besten Bruch des Verhältnisses rasten.
+    function snapRateToBase() { state.set('pitchRate', quantRate(engine.baseFreq, state.get('pitchRate'))); }
+    // ×ganze aktiv: den WERT (nicht nur die Anzeige) fortlaufend gerastet halten –
+    // bei jeder Base- oder Rate-Änderung. Behebt „Anzeige ganzzahlig, Wert float".
+    function syncRateQuant() {
+        if (!state.get('rateQuant')) return;
+        state.set('pitchRate', quantRate(engine.baseFreq, state.get('pitchRate')));
+    }
+    // Keys, die das Rate↔Base-Verhältnis beeinflussen → Nachrasten auslösen.
+    const RATE_QUANT_KEYS = new Set(['pitchRate', 'rateQuant', 'rateNumMax', 'rateDenMax', 'baseSrc', 'baseHz', 'baseNote', 'baseOctave', 'bpm']);
+    // Keys, deren Umschalten Controls ein-/ausblendet → Gruppenhöhe ändert sich.
+    const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn']);
+    function makeRateReadout() {
+        const bar = document.createElement('div'); bar.className = 'group-extra rate-readout';
+        rateReadout.className = 'rate-mult';
+        // 'Quant'-Schalter (ersetzt den ≈-Button): AN = Rate auf besten Bruch k/l rasten
+        // und als k/l anzeigen, AUS = freie Rate als Dezimal-Vielfaches.
+        const q = makeToggle('rateQuant');
+        q.title = 'Rate auf den besten Bruch k/l der BaseFrq quantisieren (Maxima: k max / l max)';
+        bar.appendChild(rateReadout); bar.appendChild(q);
+        return bar;
+    }
+    // Refresh-Hooks der Preset-Menüs (vom Recall aufrufbar). Bewusst HIER früh
+    // deklariert (vor makeLayoutBar-Aufruf) – sonst TDZ ('let' vor Initialisierung).
+    let scaleRefresh = () => {};
+    let layoutRefresh = () => {};
+
+    // Skala-Presets (laden/sichern) – gehören in die Skaler-Gruppe.
+    // Die getroffene Auswahl wird in der Optik gemerkt (state.scaleSel) → Recall/Reset-fest.
+    function makeScaleBar() {
+        const sel = document.createElement('select'); sel.className = 'pb-select';
+        const refresh = () => {
+            sel.innerHTML = '';
+            const ph = document.createElement('option'); ph.textContent = '— Skala —'; sel.appendChild(ph);
+            presets.listScales().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
+            const want = state.get('scaleSel');
+            if (want && [...sel.options].some((o) => o.textContent === want)) sel.value = want;
+        };
+        scaleRefresh = refresh;   // vom Recall aufrufbar
+        refresh();
+        // Auswahl LÄDT direkt (wie Combo) und wird gemerkt – kein separater ↺-Button mehr.
+        sel.addEventListener('change', () => {
+            const i = sel.selectedIndex - 1;
+            state.set('scaleSel', i >= 0 ? sel.value : '');
+            if (i >= 0) presets.recallScale(i);
+        });
+        const bar = presetCluster('Skala', sel, [
+            ['✎', 'Ausgewählte Skala mit aktueller Maske überschreiben (Update)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.updateScale(i); }, 'save'],
+            ['＋', 'Als neue Skala speichern', () => { const name = prompt('Skalen-Name?', ''); if (name !== null) { presets.saveScale(name); refresh(); if (name) state.set('scaleSel', name); } }, 'new'],
+            ['🗑', 'Ausgewählte Skala löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('Skala „' + sel.value + '" löschen?')) { presets.deleteScale(i); state.set('scaleSel', ''); refresh(); } }, 'del'],
+        ]);
+        bar.classList.add('group-extra');
+        return bar;
+    }
+
+    // Master (global) – kompakt & flach oben in der Transport-Zeile.
+    function makeMasterBar() {
+        const bar = document.createElement('div'); bar.className = 'master-inline';
+        const sep = document.createElement('span'); sep.className = 'pb-sep'; bar.appendChild(sep);
+        const title = document.createElement('span'); title.className = 'mi-title'; title.textContent = 'Master'; bar.appendChild(title);
+        // Volume als flacher Slider (statt Knob → spart Höhe in der ersten Zeile)
+        const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.01;
+        vol.className = 'mi-vol'; vol.value = state.get('masterVol');
+        vol.addEventListener('input', () => state.set('masterVol', parseFloat(vol.value)));
+        ctrlBindings.set('masterVol', (data) => { vol.value = data.masterVol; });
+        const volWrap = document.createElement('label'); volWrap.className = 'pb-field';
+        const vlab = document.createElement('span'); vlab.textContent = 'Vol'; volWrap.appendChild(vlab); volWrap.appendChild(vol);
+        bar.appendChild(volWrap);
+        bar.appendChild(makeToggle('dcBlock'));
+        return bar;
+    }
+    presetBar.element.appendChild(makeMasterBar());
+
+    // ── Optisches Layout-System (Gruppen-Stil/-Position/-Klappen) – eigenständig ──
+    // Beim ersten Start optische Einstellungen aus Snapshot "verschiebetest" übernehmen.
+    presets.seedLayoutsFromSnapshot('verschiebetest');
+    // Optik-Speicher-Menü ist ausgeblendet: statt manueller Slots wird die Optik bei
+    // jeder Änderung automatisch in EIN Layout "default" geschrieben (s. persistOptik).
+    // makeLayoutBar() bleibt erhalten (Wiedereinblenden jederzeit möglich).
+    const OPTIK_KEYS = new Set(PresetManager.LAYOUT_KEYS);
+    let _optikTimer = null;
+    const persistOptik = () => {
+        clearTimeout(_optikTimer);
+        _optikTimer = setTimeout(() => {
+            try { presets.saveOrUpdateLayout('default'); } catch { /* Quota o.ä. */ }
+        }, 300);
+    };
+    state.subscribe((key) => { if (key === '*' || OPTIK_KEYS.has(key)) persistOptik(); });
+
+    // ── Kopfzeile rechts: Arrange-Schalter, CPU-Last, Settings-Knopf ──
+    const settingsBtn = iconBtn('⚙', 'Einstellungen', () => openSettings());
+    settingsBtn.classList.add('settings-btn');
+    const arrBtn = iconBtn('⇄', 'Alle Elemente in Gruppen frei anordnen (experimentell) – dann per Drag umsortieren', () => setArranging(!arranging));
+    arrBtn.classList.add('arrange-btn');
+    const cpuEl = document.createElement('span'); cpuEl.className = 'hdr-cpu'; cpuEl.textContent = 'CPU –';
+    const hdrRight = document.createElement('div'); hdrRight.className = 'hdr-right';
+    hdrRight.appendChild(arrBtn); hdrRight.appendChild(cpuEl); hdrRight.appendChild(settingsBtn);
+    presetBar.element.appendChild(hdrRight);
+
+    // Audio-Last: echte Render-Kapazität des AudioContext (nur Chrome), sonst grobe UI-Last.
+    let cpuLoad = 0, cpuHasAudio = false;
+    (function initCpu() {
+        const rc = engine.ctx.renderCapacity;
+        if (rc && typeof rc.start === 'function') {
+            try {
+                rc.addEventListener('update', (e) => { cpuLoad = e.averageLoad || 0; });
+                rc.start({ updateInterval: 0.5 });
+                cpuHasAudio = true;
+            } catch { /* nicht verfügbar → UI-Fallback im Frame-Loop */ }
+        }
+    })();
+
+    // ── Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala ──
+    const levelMeter = document.createElement('canvas'); levelMeter.className = 'level-meter';
+    levelMeter.width = 46; levelMeter.height = 340; levelMeter.title = 'Ausgangspegel (dBFS, Peak-Hold)';
+    document.body.appendChild(levelMeter);
+    const METER_DB_MIN = -48;
+    const METER_TICKS = [0, -6, -12, -24, -36, -48];
+    const dbToY = (db, H) => Math.round(H * (1 - (Math.max(METER_DB_MIN, Math.min(0, db)) - METER_DB_MIN) / -METER_DB_MIN));
+    let meterPeak = 0, meterHold = 0, meterHoldAge = 0;
+    function drawMeter() {
+        const buf = engine.master.getWaveform();
+        let peak = 0; for (let i = 0; i < buf.length; i++) { const a = Math.abs(buf[i]); if (a > peak) peak = a; }
+        meterPeak = Math.max(peak, meterPeak * 0.85);              // Ballistik (sanfter Abfall)
+        if (peak >= meterHold) { meterHold = peak; meterHoldAge = 0; } // Peak-Hold
+        else if (++meterHoldAge > 45) meterHold *= 0.92;
+        const cx = levelMeter.getContext('2d');
+        const W = levelMeter.width, H = levelMeter.height, barW = 16, x0 = 4;
+        cx.clearRect(0, 0, W, H);
+        cx.fillStyle = '#0e1116'; cx.fillRect(x0, 0, barW, H);
+        // Füllung bis zum aktuellen Pegel (grün→gelb→rot).
+        const y = dbToY(20 * Math.log10(Math.max(1e-4, meterPeak)), H);
+        const grad = cx.createLinearGradient(0, H, 0, 0);
+        grad.addColorStop(0, '#6ee7a8'); grad.addColorStop(0.75, '#ffcf7a'); grad.addColorStop(0.95, '#ff5a5a');
+        cx.fillStyle = grad; cx.fillRect(x0, y, barW, H - y);
+        // Peak-Hold-Linie.
+        const hy = dbToY(20 * Math.log10(Math.max(1e-4, meterHold)), H);
+        cx.fillStyle = '#e6ecf5'; cx.fillRect(x0, Math.max(0, hy - 1), barW, 2);
+        // dB-Markierungen mit Beschriftung.
+        cx.strokeStyle = '#2a2f3a'; cx.lineWidth = 1;
+        cx.fillStyle = '#8a93a3'; cx.font = '9px ui-sans-serif, system-ui, sans-serif'; cx.textBaseline = 'middle';
+        for (const tck of METER_TICKS) {
+            const ty = dbToY(tck, H);
+            cx.beginPath(); cx.moveTo(x0, ty + 0.5); cx.lineTo(x0 + barW, ty + 0.5); cx.stroke();
+            cx.fillText(String(tck), x0 + barW + 3, Math.max(6, Math.min(H - 6, ty)));
+        }
+        cx.strokeStyle = '#2a2f3a'; cx.strokeRect(x0 + 0.5, 0.5, barW, H - 1);
+    }
+
+    let _settingsOverlay = null;
+    function closeSettings() { if (_settingsOverlay) { _settingsOverlay.remove(); _settingsOverlay = null; } }
+    function openSettings() {
+        closeSettings();
+        const ov = document.createElement('div'); ov.className = 'settings-overlay';
+        // Klick auf den abgedunkelten Hintergrund schließt.
+        ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeSettings(); });
+        const win = document.createElement('div'); win.className = 'settings-window';
+
+        const head = document.createElement('div'); head.className = 'sw-head';
+        const t = document.createElement('span'); t.textContent = 'Einstellungen'; head.appendChild(t);
+        const x = iconBtn('✕', 'Schließen', closeSettings); head.appendChild(x);
+        win.appendChild(head);
+
+        const note = document.createElement('p'); note.className = 'sw-note';
+        note.textContent = 'Auto-Restore ist aktiv: Sound- und Optik-Zustand werden automatisch '
+            + 'gesichert und beim Neuladen/Aktualisieren wiederhergestellt.';
+        win.appendChild(note);
+
+        const acts = document.createElement('div'); acts.className = 'sw-actions';
+        const reset = document.createElement('button'); reset.className = 'pb-btn';
+        reset.textContent = 'Auf Werkseinstellung zurücksetzen';
+        reset.title = 'Gesicherten Live-Zustand verwerfen und Defaults laden';
+        reset.addEventListener('click', () => {
+            if (!confirm('Aktuellen Zustand verwerfen und auf Werkseinstellung zurücksetzen?')) return;
+            try { localStorage.removeItem(LIVE_KEY); } catch { /* noop */ }
+            state.loadFromJSON({});   // → DEFAULTS, UI folgt über '*' (Auto-Save sichert die Defaults neu)
+            closeSettings();
+        });
+        acts.appendChild(reset);
+        win.appendChild(acts);
+
+        ov.appendChild(win);
+        document.body.appendChild(ov);
+        _settingsOverlay = ov;
+    }
+
+    function makeLayoutBar() {
+        const sel = document.createElement('select'); sel.className = 'pb-select';
+        const refresh = () => {
+            sel.innerHTML = '';
+            const ph = document.createElement('option'); ph.textContent = '— Layout —'; sel.appendChild(ph);
+            presets.listLayouts().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
+            const want = state.get('layoutSel');
+            if (want && [...sel.options].some((o) => o.textContent === want)) sel.value = want;
+        };
+        layoutRefresh = refresh;
+        refresh();
+        sel.addEventListener('change', () => state.set('layoutSel', sel.selectedIndex > 0 ? sel.value : ''));
+        return presetCluster('Optik', sel, [
+            ['↺', 'Layout laden (Recall)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.recallLayout(i); }, 'load'],
+            ['✎', 'Ausgewähltes Layout mit aktueller Optik überschreiben (Update)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.updateLayout(i); }, 'save'],
+            ['＋', 'Als neues Layout speichern', () => { const name = prompt('Layout-Name?', ''); if (name !== null) { presets.saveLayout(name); refresh(); if (name) state.set('layoutSel', name); } }, 'new'],
+            ['⤓', 'Layout exportieren (JSON)', () => presets.exportLayout(sel.value), 'export'],
+            ['🗑', 'Ausgewähltes Layout löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('Layout „' + sel.value + '" löschen?')) { presets.deleteLayout(i); state.set('layoutSel', ''); refresh(); } }, 'del'],
+        ]);
+    }
+
+    // ── Panel: Gruppen-Boxen mit allen zugehörigen Controls ──
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    const groupEls = new Map();   // Gruppenname → { g, body, title, collapseBtn, knobRow }
+    const seqWidgets = [];        // Step-Sequenzer-Widgets (Filter/Amp) für refresh/tick
+    let dragName = null;
+    let arranging = false;        // experimenteller Arrange-Modus (Controls in Gruppen)
+    let ctrlDrag = null;          // { row, el } während eines Control-Drags
+    const arrangeRows = [];       // registrierte Sortier-Zeilen: { el, rowId }
+    for (const grp of GROUPS) {
+        const g = document.createElement('div');
+        g.className = 'group';
+        g.dataset.group = grp.name;
+
+        // Titelleiste: Klapp-Button + (ziehbarer) Name + Settings-Knopf
+        const bar = document.createElement('div'); bar.className = 'group-title-bar';
+        const collapseBtn = document.createElement('button'); collapseBtn.className = 'group-collapse'; collapseBtn.textContent = '▾'; collapseBtn.title = 'Ein-/Ausklappen';
+        const h = document.createElement('div'); h.className = 'group-title'; h.textContent = grp.name; h.title = 'Ziehen zum Verschieben';
+        const setBtn = document.createElement('button'); setBtn.className = 'group-settings-btn'; setBtn.textContent = '⚙'; setBtn.title = 'Gruppen-Einstellungen';
+        bar.appendChild(collapseBtn); bar.appendChild(h); bar.appendChild(setBtn);
+        g.appendChild(bar);
+
+        const body = document.createElement('div'); body.className = 'group-body';
+
+        // Selects + Toggles (+ optional inline-Regler) oben in der Gruppe
+        const selKeys = grp.selects || [], togKeys = grp.toggles || [], inlineKeys = grp.inlineKnobs || [];
+        let ctrls = null;
+        if (selKeys.length || togKeys.length || inlineKeys.length) {
+            ctrls = document.createElement('div'); ctrls.className = 'group-ctrls';
+            selKeys.forEach((k) => ctrls.appendChild(makeSelect(k)));
+            togKeys.forEach((k) => ctrls.appendChild(makeToggle(k)));
+            // Inline-Regler (z.B. Skaler-Seed) direkt neben den Selects statt in der Regler-Reihe.
+            inlineKeys.forEach((k) => makeKnob(k).mount(ctrls));
+            body.appendChild(ctrls);
+        }
+
+        // Regler
+        const knobRow = document.createElement('div'); knobRow.className = 'knob-row';
+        (grp.knobs || []).forEach((k) => makeKnob(k).mount(knobRow));
+
+        // Länge + Satelliten (P→Len) als kompakte Einheit. Das Cluster wandert als
+        // Ganzes in der Reglerreihe (data-ctrl='sat'); die Satelliten (tief/hoch)
+        // bilden INNEN eine eigene Sortier-Zeile → einzeln verschiebbar.
+        if (grp.lengthSat) {
+            const cluster = document.createElement('div'); cluster.className = 'sat-cluster';
+            cluster.dataset.ctrl = 'sat';   // als eine Einheit im Arrange-Modus verschiebbar
+            makeKnob(grp.lengthSat.main).mount(cluster);
+            const sats = document.createElement('div'); sats.className = 'sat-knobs';
+            grp.lengthSat.sats.forEach((k) => { const kn = makeKnob(k); kn.element.classList.add('knob-sat'); kn.mount(sats); });
+            cluster.appendChild(sats);
+            knobRow.appendChild(cluster);
+            registerArrange(sats, grp.name + ':sats');   // tief/hoch untereinander umsortierbar
+        }
+        body.appendChild(knobRow);
+
+        if (grp.scale) {
+            body.appendChild(makeRateReadout());
+            keyboard.mount(body); body.appendChild(makeScaleBar());
+        }
+        if (grp.baseFrq) {
+            baseReadout.className = 'group-extra base-readout';
+            baseSpeed.className = 'group-extra base-speed';
+            body.appendChild(baseReadout); body.appendChild(baseSpeed);
+        }
+        if (grp.reverb) {
+            reflCanvas.className = 'refl-canvas';
+            reflCanvas.width = Math.max(80, state.get('reflW') | 0);
+            reflCanvas.height = Math.max(24, state.get('reflH') | 0);
+            const wrap = document.createElement('div'); wrap.className = 'group-extra refl-wrap';
+            const rBtn = iconBtn('⚙', 'Reflections-Anzeige: Größe & Farben', (e) => openReflSettings(e.currentTarget));
+            rBtn.classList.add('refl-settings-btn');
+            wrap.appendChild(reflCanvas); wrap.appendChild(rBtn);
+            body.appendChild(wrap);
+        }
+        if (grp.seq) {
+            const w = new StepSeqUI(state, engine, grp.seq);
+            seqWidgets.push(w);
+            body.appendChild(w.element);
+        }
+        if (grp.debug) {
+            const dbg = new DebugPanel(state, engine);
+            dbg.mount(body);
+        }
+        g.appendChild(body);
+
+        // Klappen / Settings
+        collapseBtn.addEventListener('click', () => setGroupCollapsed(grp.name, !groupCollapsed(grp.name)));
+        setBtn.addEventListener('click', () => openGroupSettings(grp.name, setBtn));
+        // Verschieben per Drag an der Titelleiste. Ein Drag, der auf einem Button
+        // (⚙ Settings / ▾ Klappen) beginnt, wird NICHT als Gruppen-Drag gestartet –
+        // sonst „verschluckt" die draggable Leiste den Klick (Settings gingen nicht,
+        // v.a. im e-Mode). So bleibt der Button-Klick immer erreichbar.
+        bar.draggable = true;
+        bar.addEventListener('dragstart', (e) => {
+            if (e.target.closest('button')) { e.preventDefault(); return; }
+            dragName = grp.name; g.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+            try { e.dataTransfer.setData('text/plain', grp.name); } catch { /* noop */ }
+        });
+        bar.addEventListener('dragend', () => { g.classList.remove('dragging'); clearDropMarks(); persistGroupOrder(); });
+        g.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!dragName || dragName === grp.name) return;
+            // Ghost-Anzeige: farbige Kante zeigt, wo die Gruppe beim Loslassen landet.
+            const rect = g.getBoundingClientRect();
+            const after = e.clientY > rect.top + rect.height / 2;
+            clearDropMarks();
+            g.classList.add(after ? 'drop-after' : 'drop-before');
+        });
+        g.addEventListener('dragleave', (e) => { if (!g.contains(e.relatedTarget)) g.classList.remove('drop-before', 'drop-after'); });
+        g.addEventListener('drop', (e) => {
+            e.preventDefault();
+            clearDropMarks();
+            if (!dragName || dragName === grp.name) return;
+            const dragged = groupEls.get(dragName); if (!dragged) return;
+            const rect = g.getBoundingClientRect();
+            // Spalten-Layout: Gruppen stapeln vertikal → Einfüge-Position an der
+            // senkrechten Mitte der Zielgruppe entscheiden (davor/danach).
+            const after = e.clientY > rect.top + rect.height / 2;
+            panel.insertBefore(dragged.g, after ? g.nextSibling : g);
+            persistGroupOrder();
+        });
+
+        groupEls.set(grp.name, { g, body, title: h, collapseBtn });
+        // Arrange-Zeilen: Selects/Toggles-Zeile + Regler-Zeile. Bewusst KEINE
+        // Container-Blöcke mehr (die erzeugten störende „übergeordnete" Rahmen).
+        // Beide Zeilen brechen um (flex-wrap) → bei schmaler Gruppe automatisch
+        // mehrzeilig, in ALLEN Gruppen gleich (ersetzt manuelles Zeilen-Splitten).
+        if (ctrls) registerArrange(ctrls, grp.name + ':ctrls');
+        registerArrange(knobRow, grp.name + ':knobs');
+        panel.appendChild(g);
+    }
+    root.appendChild(panel);
+
+    // ── Gruppen: Reihenfolge / Klappen / Farben (im State persistiert) ──
+    function persistGroupOrder() {
+        state.set('groupOrder', [...panel.children].map((el) => el.dataset.group).filter(Boolean));
+    }
+    // Ghost-Drop-Markierungen an allen Gruppen zurücksetzen.
+    function clearDropMarks() { for (const { g } of groupEls.values()) g.classList.remove('drop-before', 'drop-after'); }
+    function applyGroupOrder(order) {
+        (order || []).forEach((name) => { const e = groupEls.get(name); if (e) panel.appendChild(e.g); });
+        sizePanel();   // Reihenfolge geändert → Spalten-Umbruch neu berechnen
+    }
+    function groupCollapsed(name) { const st = state.get('groupStyles')[name]; return !!(st && st.collapsed); }
+    function setGroupStyle(name, patch) {
+        const styles = { ...state.get('groupStyles') };
+        styles[name] = { ...(styles[name] || {}), ...patch };
+        state.set('groupStyles', styles);
+    }
+    function setGroupCollapsed(name, on) { setGroupStyle(name, { collapsed: on }); }
+    function applyGroupStyles(data) {
+        const styles = data.groupStyles || {};
+        for (const [name, e] of groupEls) {
+            const st = styles[name] || {};
+            e.g.style.background = st.bg || '';
+            e.title.style.color = st.headColor || '';
+            e.title.textContent = st.name || name;
+            // Vorschlagsbreite: setzt die Gruppenbreite fest → die flex-wrap-Reglerreihe
+            // bricht so um, wie es die Controls zulassen (schmaler = mehr Zeilen, breiter
+            // = eine volle Zeile). 0/leer = zurück auf CSS-Default (max-content, 380er Deckel).
+            e.g.style.width = st.width ? st.width + 'px' : '';
+            e.g.style.maxWidth = st.width ? st.width + 'px' : '';   // hebt den 380er CSS-Deckel auf
+            // Vorschlagshöhe: nur ein MINIMUM (min-height) – die Gruppe wird nie kleiner
+            // als ihr Inhalt (kein Abschneiden), lässt sich aber zum Ausrichten strecken.
+            e.g.style.minHeight = st.height ? st.height + 'px' : '';
+            const col = !!st.collapsed;
+            e.body.style.display = col ? 'none' : '';
+            e.collapseBtn.textContent = col ? '▸' : '▾';
+        }
+        sizePanel();   // Klappen ändert Gruppenhöhen → Spalten-Umbruch neu berechnen
+    }
+    // Container-Höhe für das `column wrap`-Layout setzen: ohne definierte Höhe würde
+    // Flexbox NICHT in Spalten umbrechen (alles in einer langen Spalte). Höhe =
+    // verfügbarer Viewport-Rest, aber mind. so hoch wie die höchste Einzelgruppe
+    // (sonst würde diese über den Container hinausragen). Läuft NUR bei Layout-
+    // Ereignissen (Mount/Resize/Klappen/Umsortieren), nie pro Frame.
+    let _sizeRaf = null;
+    function sizePanel() {
+        cancelAnimationFrame(_sizeRaf);
+        _sizeRaf = requestAnimationFrame(() => {
+            const top = panel.getBoundingClientRect().top;
+            const avail = Math.max(400, window.innerHeight - top - 16);
+            let tallest = 0;
+            for (const { g } of groupEls.values()) tallest = Math.max(tallest, g.offsetHeight);
+            panel.style.height = Math.max(avail, tallest) + 'px';
+        });
+    }
+    applyGroupOrder(state.get('groupOrder'));
+    applyGroupStyles(state.toJSON());
+    sizePanel();
+    window.addEventListener('resize', sizePanel);
+
+    // ── Arrange-Modus: ALLE Elemente innerhalb einer Gruppe per Drag umsortieren ──
+    // (experimentell) Jede „Zeile" (Body-Blöcke, Selects/Toggles, Regler) ist eine
+    // eigene Sortier-Ebene mit rowId. Verschachtelte Zeilen sind konfliktfrei, weil
+    // ein Drop nur wirkt, wenn er in derselben Zeile begonnen hat (ctrlDrag.row).
+    // Reihenfolgen landen in state.controlOrder (= Optik-Ebene) → Recall stellt sie her.
+    function wireArrange(row, rowId) {
+        row.addEventListener('dragover', (e) => {
+            if (!arranging || !ctrlDrag || ctrlDrag.row !== row) return;
+            e.preventDefault(); e.stopPropagation();
+        });
+        row.addEventListener('drop', (e) => {
+            if (!arranging || !ctrlDrag || ctrlDrag.row !== row) return;
+            e.preventDefault(); e.stopPropagation();
+            const target = e.target.closest('[data-ctrl]');
+            if (!target || target === ctrlDrag.el || target.parentElement !== row) return;
+            const rect = target.getBoundingClientRect();
+            const after = e.clientX > rect.left + rect.width / 2;
+            row.insertBefore(ctrlDrag.el, after ? target.nextSibling : target);
+            persistControlOrder(rowId, row);
+        });
+        [...row.children].forEach((child) => {
+            if (!child.dataset.ctrl) return;   // nur getaggte Elemente sind verschiebbar
+            child.addEventListener('dragstart', (e) => {
+                if (!arranging) return;
+                ctrlDrag = { row, el: child };
+                child.classList.add('ctrl-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                try { e.dataTransfer.setData('text/plain', child.dataset.ctrl || ''); } catch { /* noop */ }
+                e.stopPropagation();
+            });
+            child.addEventListener('dragend', (e) => { child.classList.remove('ctrl-dragging'); ctrlDrag = null; e.stopPropagation(); });
+        });
+    }
+    function registerArrange(el, rowId) { arrangeRows.push({ el, rowId }); wireArrange(el, rowId); }
+    function persistControlOrder(rowId, row) {
+        const order = [...row.children].map((c) => c.dataset.ctrl).filter(Boolean);
+        state.set('controlOrder', { ...state.get('controlOrder'), [rowId]: order });
+    }
+    function applyControlOrder(data) {
+        const co = (data && data.controlOrder) || {};
+        for (const { el, rowId } of arrangeRows) {
+            const order = co[rowId]; if (!order) continue;
+            // In gespeicherter Reihenfolge ans Ende hängen → stellt Sortierung her.
+            order.forEach((id) => { const c = [...el.children].find((x) => x.dataset.ctrl === id); if (c) el.appendChild(c); });
+        }
+        sizePanel();   // Control-Umsortierung kann Gruppenhöhen ändern
+    }
+    let _arrangeHint = null;
+    function setArranging(on) {
+        arranging = on;
+        panel.classList.toggle('arranging', on);
+        arrBtn.classList.toggle('on', on);   // Kopfzeilen-Schalter spiegeln
+        for (const { el } of arrangeRows) [...el.children].forEach((c) => { if (c.dataset.ctrl) c.draggable = on; });
+        // Sichtbarer Hinweis, dass hier verschoben statt bedient wird.
+        if (on && !_arrangeHint) {
+            _arrangeHint = document.createElement('div'); _arrangeHint.className = 'arrange-hint';
+            _arrangeHint.textContent = '⇄ Anordnen-Modus – Elemente ziehen (Bedienung deaktiviert)';
+            document.body.appendChild(_arrangeHint);
+        } else if (!on && _arrangeHint) { _arrangeHint.remove(); _arrangeHint = null; }
+    }
+    applyControlOrder(state.toJSON());
+
+    // Farbe ↔ Hex/Alpha
+    const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+    const parseHex = (rgba, fb) => { if (!rgba) return fb; const m = rgba.match(/\d+/g); if (!m) return fb; return '#' + [m[0], m[1], m[2]].map((v) => (+v).toString(16).padStart(2, '0')).join(''); };
+    const parseA = (rgba, fb = 1) => { const m = rgba && rgba.match(/[\d.]+/g); return m && m.length >= 4 ? parseFloat(m[3]) : fb; };
+
+    let _settingsPop = null;
+    const _outsideClose = (e) => { if (_settingsPop && !_settingsPop.contains(e.target)) closeGroupSettings(); };
+    function closeGroupSettings() { if (_settingsPop) { _settingsPop.remove(); _settingsPop = null; document.removeEventListener('mousedown', _outsideClose, true); } }
+    function openGroupSettings(name, anchor) {
+        closeGroupSettings();
+        const st = state.get('groupStyles')[name] || {};
+        const pop = document.createElement('div'); pop.className = 'group-settings';
+        const row = (label, ...els) => { const r = document.createElement('div'); r.className = 'gs-row'; const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label; r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r); };
+
+        const nameIn = document.createElement('input'); nameIn.type = 'text'; nameIn.value = st.name || name; nameIn.className = 'gs-text';
+        nameIn.addEventListener('input', () => setGroupStyle(name, { name: nameIn.value || name }));
+        row('Name', nameIn);
+
+        const bgCol = document.createElement('input'); bgCol.type = 'color'; bgCol.value = parseHex(st.bg, '#1c2027');
+        const bgA = document.createElement('input'); bgA.type = 'range'; bgA.min = 0; bgA.max = 1; bgA.step = 0.01; bgA.value = parseA(st.bg, 1); bgA.className = 'gs-alpha';
+        const bgApply = () => setGroupStyle(name, { bg: hexA(bgCol.value, parseFloat(bgA.value)) });
+        bgCol.addEventListener('input', bgApply); bgA.addEventListener('input', bgApply);
+        row('BG', bgCol, bgA);
+
+        const hCol = document.createElement('input'); hCol.type = 'color'; hCol.value = parseHex(st.headColor, '#8a93a3');
+        const hA = document.createElement('input'); hA.type = 'range'; hA.min = 0; hA.max = 1; hA.step = 0.01; hA.value = parseA(st.headColor, 1); hA.className = 'gs-alpha';
+        const hApply = () => setGroupStyle(name, { headColor: hexA(hCol.value, parseFloat(hA.value)) });
+        hCol.addEventListener('input', hApply); hA.addEventListener('input', hApply);
+        row('Head', hCol, hA);
+
+        // ── Größe: Vorschlagsbreite/-höhe der Gruppe. Breite steuert das Umbrechen
+        //    der Reglerreihe (schmaler = mehr Zeilen, breiter = eine volle Zeile);
+        //    Höhe ist nur ein Minimum (zum Ausrichten). 0 = automatisch (CSS-Default). ──
+        const mkSize = (labelTxt, prop, max) => {
+            const rng = document.createElement('input'); rng.type = 'range'; rng.min = 0; rng.max = max; rng.step = 2;
+            rng.value = st[prop] || 0; rng.className = 'gs-alpha';
+            const out = document.createElement('span'); out.className = 'gs-size-val';
+            const fmt = (v) => (v > 0 ? v + 'px' : 'auto');
+            out.textContent = fmt(+rng.value);
+            rng.addEventListener('input', () => { const v = +rng.value; out.textContent = fmt(v); setGroupStyle(name, { [prop]: v || undefined }); });
+            row(labelTxt, rng, out);
+            return rng;
+        };
+        mkSize('Breite', 'width', 800);
+        mkSize('Höhe', 'height', 800);
+
+        // ── Combo (Farb-Preset): gleiche Bedienung wie ein Snapshot – laden per
+        //    Menü-Auswahl, Icons für Überschreiben/Neu/Löschen direkt in der Zeile. ──
+        const presetSel = document.createElement('select'); presetSel.className = 'gs-text gs-combo-sel';
+        const fillPresets = () => { presetSel.innerHTML = ''; const ph = document.createElement('option'); ph.textContent = '— Combo —'; presetSel.appendChild(ph); state.get('groupStylePresets').forEach((p) => { const o = document.createElement('option'); o.textContent = p.name; presetSel.appendChild(o); }); const want = state.get('comboSel'); if (want && [...presetSel.options].some((o) => o.textContent === want)) presetSel.value = want; };
+        fillPresets();
+        const curColors = () => ({ bg: hexA(bgCol.value, parseFloat(bgA.value)), headColor: hexA(hCol.value, parseFloat(hA.value)) });
+        presetSel.addEventListener('change', () => { state.set('comboSel', presetSel.selectedIndex > 0 ? presetSel.value : ''); const p = state.get('groupStylePresets')[presetSel.selectedIndex - 1]; if (p) { setGroupStyle(name, { bg: p.bg, headColor: p.headColor }); bgCol.value = parseHex(p.bg, '#1c2027'); bgA.value = parseA(p.bg, 1); hCol.value = parseHex(p.headColor, '#8a93a3'); hA.value = parseA(p.headColor, 1); } });
+        const comboRow = document.createElement('div'); comboRow.className = 'gs-row gs-combo-row';
+        const comboLab = document.createElement('span'); comboLab.className = 'gs-lab'; comboLab.textContent = 'Combo';
+        comboRow.appendChild(comboLab); comboRow.appendChild(presetSel);
+        [
+            ['✎', 'Ausgewählten Combo mit den aktuellen Farben überschreiben', () => { const i = presetSel.selectedIndex - 1; if (i < 0) { alert('Erst einen Combo im Menü wählen.'); return; } const list = state.get('groupStylePresets').slice(); list[i] = { ...list[i], ...curColors() }; state.set('groupStylePresets', list); fillPresets(); presetSel.selectedIndex = i + 1; }, 'save'],
+            ['＋', 'Aktuelle Farben als neuen Combo speichern', () => { const pn = prompt('Combo-Name?', ''); if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); fillPresets(); presetSel.value = pn; state.set('comboSel', pn); } }, 'new'],
+            ['🗑', 'Ausgewählten Combo löschen', () => { const i = presetSel.selectedIndex - 1; if (i >= 0 && confirm('Combo „' + presetSel.value + '" löschen?')) { const list = state.get('groupStylePresets').slice(); list.splice(i, 1); state.set('groupStylePresets', list); state.set('comboSel', ''); fillPresets(); } }, 'del'],
+        ].forEach(([g, t, fn, kind]) => comboRow.appendChild(iconBtn(g, t, fn, kind)));
+        pop.appendChild(comboRow);
+
+        // ── Gruppen-Snapshot: eigenes Snapshot-System nur für die Sound-Parameter
+        //    DIESER Gruppe (unabhängig vom globalen Ensemble-Snapshot & von der Optik). ──
+        const grp = GROUPS.find((g) => g.name === name);
+        if (grp) {
+            const gsSel = document.createElement('select'); gsSel.className = 'gs-text gs-snap-sel';
+            const remembered = () => (state.get('groupSnapSel') || {})[name] || '';
+            const remember = (nm) => state.set('groupSnapSel', { ...state.get('groupSnapSel'), [name]: nm || '' });
+            const gsFill = () => {
+                gsSel.innerHTML = '';
+                const ph = document.createElement('option'); ph.textContent = '— Snapshot —'; gsSel.appendChild(ph);
+                presets.listGroupSnaps(name).forEach((s) => { const o = document.createElement('option'); o.textContent = s.name; gsSel.appendChild(o); });
+                // Menü auf dem zuletzt geladenen/gespeicherten Snapshot stehen lassen
+                // (Recall/Reopen-fest) – statt zurück auf den Platzhalter zu springen.
+                const want = remembered();
+                if (want && [...gsSel.options].some((o) => o.textContent === want)) gsSel.value = want;
+            };
+            const keys = () => groupSoundKeys(grp);
+            const metaKeys = () => groupKnobKeys(grp);
+            // Dirty-Marker: zeigt, ob der aktuelle Gruppen-Zustand vom gewählten
+            // Snapshot abweicht ('*' = verändert, '‼' = >60% anders).
+            const gsMark = document.createElement('span'); gsMark.className = 'gs-dirty';
+            const updMark = () => {
+                const i = gsSel.selectedIndex - 1;
+                const d = i >= 0 ? presets.groupSnapDirty(name, i) : null;
+                gsMark.textContent = dirtyMark(d);
+                gsMark.title = d && d.changed ? `${d.changed}/${d.total} Parameter gegenüber „${gsSel.value}" verändert` : '';
+            };
+            gsFill(); updMark();
+            // Auswahl im Menü LÄDT direkt (kein separater Laden-Button mehr) und wird
+            // gemerkt, damit das Menü beim nächsten Öffnen dort steht.
+            gsSel.addEventListener('change', () => {
+                const i = gsSel.selectedIndex - 1;
+                if (i >= 0) { presets.recallGroupSnap(name, i); remember(gsSel.value); }
+                else remember('');
+                updMark();
+            });
+            const gsRow = document.createElement('div'); gsRow.className = 'gs-row gs-snap-row';
+            const gsLab = document.createElement('span'); gsLab.className = 'gs-lab'; gsLab.textContent = 'Snapshot';
+            gsRow.appendChild(gsLab); gsRow.appendChild(gsSel); gsRow.appendChild(gsMark);
+            [
+                ['✎', 'Ausgewählten Gruppen-Snapshot überschreiben (Sound + Control-Settings)', () => { const i = gsSel.selectedIndex - 1; if (i >= 0) { presets.updateGroupSnap(name, i, keys(), metaKeys()); updMark(); } }, 'save'],
+                ['＋', 'Sound + Control-Settings dieser Gruppe als neuen Snapshot speichern', () => { const nm = prompt('Snapshot-Name für „' + name + '"?', ''); if (nm) { presets.saveGroupSnap(name, nm, keys(), metaKeys()); remember(nm); gsFill(); updMark(); } }, 'new'],
+                ['🗑', 'Ausgewählten Gruppen-Snapshot löschen', () => { const i = gsSel.selectedIndex - 1; if (i >= 0 && confirm('Gruppen-Snapshot „' + gsSel.value + '" löschen?')) { presets.deleteGroupSnap(name, i); remember(''); gsFill(); updMark(); } }, 'del'],
+            ].forEach(([g, t, fn, kind]) => gsRow.appendChild(iconBtn(g, t, fn, kind)));
+            pop.appendChild(gsRow);
+        }
+
+        // Combo speichern/überschreiben/löschen liegt jetzt als Icons in der Combo-Zeile
+        // (gleiches Verhalten wie die Snapshot-Zeile) → hier nur noch „Fertig".
+        const acts = document.createElement('div'); acts.className = 'gs-actions';
+        const doneBtn = document.createElement('button'); doneBtn.className = 'pb-btn'; doneBtn.textContent = 'Fertig';
+        doneBtn.addEventListener('click', closeGroupSettings);
+        acts.appendChild(doneBtn); pop.appendChild(acts);
+
+        const r = anchor.getBoundingClientRect();
+        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 280))}px`;
+        pop.style.top = `${r.bottom + 4}px`;
+        document.body.appendChild(pop);
+        _settingsPop = pop;
+        setTimeout(() => document.addEventListener('mousedown', _outsideClose, true), 0);
+    }
+
+    // ── Scopes ──
+    const scopes = new Scopes(engine, state);
+    scopes.mount(root);
+
+    // ── State → UI Rückbindung (Recall!) ──
+    function applyKnobMeta(data) {
+        const metas = data.knobMeta || {};
+        for (const [k, meta] of Object.entries(metas)) {
+            const knob = knobsById.get(k);
+            if (knob && meta) knob.setMeta(meta);
+        }
+    }
+    applyKnobMeta(state.toJSON()); // initialer Stand
+
+    // Modusabhängige Sichtbarkeit der Base-Frq-Controls (Quelle: Freq/Tempo/Ton).
+    const setVis = (key, on) => { const el = ctrlEls.get(key); if (el) el.style.display = on ? '' : 'none'; };
+    function updateBaseVisibility() {
+        const src = state.get('baseSrc');
+        setVis('baseHz', src === 'Freq');     // Freq: Grundfrequenz wichtig
+        setVis('baseNote', src === 'Ton');    // Ton: Tonklasse
+        // baseOctave ist der EINE Oktave-Regler für ALLE Quellen (immer sichtbar).
+        setVis('baseTestLevel', state.get('baseTestOn')); // Test-Vol nur wenn Test-Ton an
+        baseSpeed.style.display = src === 'Freq' ? '' : 'none';  // BpM/Hz/P nur im Freq-Modus
+    }
+    // Filter: Regler nur sichtbar wenn 'aktiv'. Pole-Select nur beim LP (Steilheit);
+    // Resonanz beim LP erst ab 2p, bei HP/BP/Ladder immer.
+    const LP_MODES = ['1p', '2p', '3p', '4p'];
+    function updateFilterVisibility() {
+        const on = state.get('filterEnabled');
+        const type = state.get('filterType');
+        const poles = LP_MODES.indexOf(state.get('lpMode')) + 1; // 1..4
+        ['lpCutoff', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack'].forEach((k) => setVis(k, on));
+        setVis('lpMode', on);   // Polzahl jetzt für ALLE Typen relevant (LP/HP/BP/Ladder)
+        setVis('lpReso', on && (type !== 'LP' || poles >= 2));
+    }
+    // Distortion: Regler nur sichtbar, wenn 'aktiv'.
+    function updateDistVisibility() {
+        const on = state.get('distEnabled');
+        ['distDrive', 'distOut'].forEach((k) => setVis(k, on));
+    }
+    // Metronom: Regler nur sichtbar, wenn 'aktiv'. Cutoff-Knob vs. Oktaver je nach
+    // 'Quant' (AN = Oktaver an der BaseFrq, AUS = freier Cutoff-Knob wie bisher).
+    function updateMetroVisibility() {
+        const on = state.get('metroEnabled');
+        const quant = state.get('metroCutoffQuant');
+        ['metroLevel', 'metroMorph', 'metroReso'].forEach((k) => setVis(k, on));
+        setVis('metroCutoff', on && !quant);
+        setVis('metroCutoffOct', on && quant);
+    }
+    // Skaler: Seed-Regler nur bei 'random'-Wellenform sichtbar.
+    function updatePitchWaveVis() { setVis('pitchRandSeed', state.get('pitchWave') === 'random'); }
+    // OSC-Engine: PW nur bei Square-PW, FM-Regler nur bei Sine-FM.
+    function updateOscVisibility() {
+        const fm = state.get('oscEngine') === 'Sine-FM';
+        setVis('duty', !fm);
+        setVis('fmFeedback', fm);
+    }
+    // Reverb: Regler nur sichtbar, wenn 'aktiv'.
+    function updateReverbVisibility() {
+        const on = state.get('reverbEnabled');
+        ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'].forEach((k) => setVis(k, on));
+        setVis('revView', on);
+    }
+    updateBaseVisibility();
+    updateFilterVisibility();
+    updateReverbVisibility();
+    updateOscVisibility();
+    updateDistVisibility();
+    updateMetroVisibility();
+    updatePitchWaveVis();
+
+    // Reflections-Anzeige zeichnen: jede Reflexion = senkrechter Strich (Höhe = Pegel),
+    // niedriges Alpha → dichte Wolken werden durch Überlagerung kräftiger.
+    function drawReflections() {
+        const ir = engine.reverb.getIR();
+        const cx = reflCanvas.getContext('2d');
+        const W = reflCanvas.width, H = reflCanvas.height;
+        cx.clearRect(0, 0, W, H);
+        cx.fillStyle = '#0e1116'; cx.fillRect(0, 0, W, H);
+        if (!ir) return;
+        // hex → rgba mit fester Deck-Alpha (selbst-enthalten, keine Definitions-Reihenfolge).
+        const rgba = (hex, a) => { const n = parseInt((hex || '#5ad1ff').slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
+        const cL = rgba(state.get('reflColL'), 0.30), cR = rgba(state.get('reflColR'), 0.30);
+        const view = state.get('revView');
+        const chans = view === 'L' ? [[ir.L, cL]]
+            : view === 'R' ? [[ir.R, cR]]
+                : [[ir.L, cL], [ir.R, cR]];
+        const L = ir.length;
+        for (const [d, color] of chans) {
+            cx.strokeStyle = color; cx.lineWidth = 1; cx.beginPath();
+            for (let i = 0; i < L; i++) {
+                const a = Math.abs(d[i]);
+                if (a < 0.002) continue;
+                const x = (i / L) * W + 0.5;
+                cx.moveTo(x, H); cx.lineTo(x, H - a * (H - 2));
+            }
+            cx.stroke();
+        }
+    }
+    engine.reverb.onRebuild = drawReflections;
+    // Reflections-Canvas-Größe aus dem State übernehmen und neu zeichnen.
+    function applyReflSize() {
+        reflCanvas.width = Math.max(80, Math.min(1200, state.get('reflW') | 0));
+        reflCanvas.height = Math.max(24, Math.min(400, state.get('reflH') | 0));
+        drawReflections();
+    }
+    // Kleines Popover: Breite/Höhe + Kanalfarben der Reflections-Anzeige (Optik).
+    let _reflPop = null;
+    const _reflOutside = (e) => { if (_reflPop && !_reflPop.contains(e.target)) closeReflSettings(); };
+    function closeReflSettings() { if (_reflPop) { _reflPop.remove(); _reflPop = null; document.removeEventListener('mousedown', _reflOutside, true); } }
+    function openReflSettings(anchor) {
+        closeReflSettings();
+        const pop = document.createElement('div'); pop.className = 'group-settings';
+        const row = (label, ...els) => { const r = document.createElement('div'); r.className = 'gs-row'; const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label; r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r); };
+        const num = (key, min, max) => {
+            const i = document.createElement('input'); i.type = 'number'; i.min = min; i.max = max; i.step = 1; i.className = 'gs-text'; i.value = state.get(key);
+            i.addEventListener('input', () => { const v = parseInt(i.value); if (!isNaN(v)) state.set(key, Math.max(min, Math.min(max, v))); });
+            return i;
+        };
+        const col = (key) => {
+            const c = document.createElement('input'); c.type = 'color'; c.value = state.get(key);
+            c.addEventListener('input', () => state.set(key, c.value));
+            return c;
+        };
+        row('Breite', num('reflW', 80, 1200));
+        row('Höhe', num('reflH', 24, 400));
+        row('Farbe L', col('reflColL'));
+        row('Farbe R', col('reflColR'));
+        const acts = document.createElement('div'); acts.className = 'gs-actions';
+        const done = document.createElement('button'); done.className = 'pb-btn'; done.textContent = 'Fertig';
+        done.addEventListener('click', closeReflSettings); acts.appendChild(done); pop.appendChild(acts);
+        const r = anchor.getBoundingClientRect();
+        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 280))}px`;
+        pop.style.top = `${r.bottom + 4}px`;
+        document.body.appendChild(pop); _reflPop = pop;
+        setTimeout(() => document.addEventListener('mousedown', _reflOutside, true), 0);
+    }
+    applyReflSize();
+
+    state.subscribe((key, value, data) => {
+        if (key === '*') {
+            applyKnobMeta(data);                              // erst Skala/Kurve …
+            for (const [k, knob] of knobsById) knob.value = data[k];   // … dann Werte
+            for (const upd of ctrlBindings.values()) upd(data);
+            updateBaseVisibility();
+            updateFilterVisibility();
+            updateReverbVisibility();
+            updateOscVisibility();
+            updateDistVisibility();
+            updateMetroVisibility();
+            updatePitchWaveVis();
+            applyReflSize();
+            applyGroupOrder(data.groupOrder);
+            applyGroupStyles(data);
+            applyControlOrder(data);
+        } else if (key === 'groupStyles') {
+            applyGroupStyles(data);
+        } else if (key === 'groupOrder') {
+            applyGroupOrder(data.groupOrder);
+        } else if (key === 'controlOrder') {
+            applyControlOrder(data);
+        } else if (key === 'baseSrc' || key === 'baseTestOn') {
+            ctrlBindings.get(key)(data);
+            updateBaseVisibility();
+        } else if (key === 'lpMode' || key === 'filterType' || key === 'filterEnabled') {
+            ctrlBindings.get(key)(data);
+            updateFilterVisibility();
+        } else if (key === 'reverbEnabled') {
+            ctrlBindings.get(key)(data);
+            updateReverbVisibility();
+        } else if (key === 'distMode' || key === 'distEnabled') {
+            ctrlBindings.get(key)(data);
+            updateDistVisibility();
+        } else if (key === 'metroEnabled' || key === 'metroCutoffQuant') {
+            ctrlBindings.get(key)(data);
+            updateMetroVisibility();
+        } else if (key === 'oscEngine') {
+            ctrlBindings.get(key)(data);
+            updateOscVisibility();
+        } else if (key === 'pitchWave') {
+            ctrlBindings.get(key)(data);
+            updatePitchWaveVis();
+        } else if (key === 'revView') {
+            ctrlBindings.get(key)(data);
+            drawReflections();
+        } else if (key === 'reflW' || key === 'reflH') {
+            applyReflSize();
+        } else if (key === 'reflColL' || key === 'reflColR') {
+            drawReflections();
+        } else if (key === 'knobMeta') {
+            applyKnobMeta(data);
+        } else if (knobsById.has(key)) {
+            const knob = knobsById.get(key);
+            if (knob.value !== value) knob.value = value;
+        } else if (ctrlBindings.has(key)) {
+            ctrlBindings.get(key)(data);
+        }
+        // ×ganze: den Rate-Wert bei jeder relevanten Änderung gerastet halten.
+        // Bewusst NICHT bei '*' (Recall): sonst würde der gerade geladene pitchRate
+        // sofort wieder überschrieben (= „Rate oft nicht recalled"-Bug).
+        if (key !== '*' && RATE_QUANT_KEYS.has(key)) syncRateQuant();
+        // Sequenzer-Widgets neu zeichnen (Recall oder Edit an Steps/Länge/aktiv).
+        if (key === '*' || key === 'seqStyles' || /^(amp|filter)Seq/.test(key)) { seqWidgets.forEach((w) => w.refresh()); if (key === 'seqStyles') sizePanel(); }
+        // Menü-Auswahlen nachziehen (Recall).
+        if (key === '*' || key === 'scaleSel') scaleRefresh();
+        if (key === '*' || key === 'layoutSel') layoutRefresh();
+        // Sichtbarkeits-Umschalter (aktiv-Haken, Modus-Selects) ändern Gruppenhöhen
+        // → Spalten-Umbruch des column-wrap-Layouts neu berechnen. '*'/order/styles
+        // rufen sizePanel bereits selbst, daher hier nur die Einzel-Toggles.
+        if (VIS_TOGGLE_KEYS.has(key)) sizePanel();
+    });
+
+    // ── Tastatur: Space = Start/Stop, Pfeile = BaseFrq-Fernsteuerung (Ton-Modus) ──
+    window.addEventListener('keydown', (e) => {
+        // Textarea (Debug-Prompt) & contenteditable ausdrücklich ausnehmen: sonst
+        // schluckt der Space-Transport-Toggle jedes Leerzeichen beim Tippen (startStop
+        // muss vom Debug-Editor entkoppelt sein).
+        const onBody = !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)
+            && !(e.target instanceof HTMLTextAreaElement) && !e.target.isContentEditable
+            && !(e.target.classList && e.target.classList.contains('knob-container'));
+        if (e.key === 'Escape') {
+            // Esc räumt auf: Overlays zu UND den Fokus abgeben – Eingabe verlassen,
+            // Controls (v.a. Switches) deselektieren. Danach schaltet Space wieder
+            // Start/Stop statt den zuletzt fokussierten Schalter zu toggeln.
+            closeGroupSettings(); closeReflSettings(); closeSettings();
+            const ae = document.activeElement;
+            if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur();
+            return;
+        }
+        if (e.code === 'Space' && onBody) { e.preventDefault(); presetBar.toggle(); return; }
+        // 'e' = Anordnen-Modus („Alle Elemente frei anordnen") an/aus. Nur auf dem Body
+        // (nicht beim Tippen in Feldern) und ohne Modifier, damit Cmd/Ctrl+E unberührt bleiben.
+        if (onBody && (e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            e.preventDefault(); setArranging(!arranging); return;
+        }
+
+        // BaseFrq-Fernsteuerung (ein einziger Oktave-Regler für ALLE Quellen):
+        //   ↑/↓ = baseOctave (−6..+6) in JEDEM Modus.
+        //   ←/→ = Tonklasse (nur im Ton-Modus).
+        if (onBody && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            const d = e.key === 'ArrowUp' ? 1 : -1;
+            state.set('baseOctave', Math.max(-6, Math.min(6, state.get('baseOctave') + d)));
+            return;
+        }
+        if (state.get('baseSrc') === 'Ton' && onBody) {
+            const pc = Math.max(0, NOTE_NAMES.indexOf(state.get('baseNote')));
+            if (e.key === 'ArrowRight') { e.preventDefault(); state.set('baseNote', NOTE_NAMES[(pc + 1) % 12]); }
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); state.set('baseNote', NOTE_NAMES[(pc + 11) % 12]); }
+        }
+    });
+
+    // ── Tab-Fokus-Loop: innerhalb der Panels wandert Tab/Shift+Tab modulo durch
+    // ALLE sichtbaren Bedienelemente (Regler, Selects, Toggles, Buttons, Seq-Felder)
+    // – ein „übersichtlicher Kreis". Außerhalb der Panels (Overlays/Kopfzeile) bleibt
+    // das native Tab-Verhalten. Rein/­raus per Klick oder erstem Tab in ein Panel-Control.
+    function panelFocusables() {
+        return [...panel.querySelectorAll('.knob-container, select, input, button')]
+            .filter((el) => el.offsetParent !== null && !el.disabled && el.tabIndex !== -1);
+    }
+    window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab') return;
+        const cur = document.activeElement;
+        if (!cur || !panel.contains(cur)) return;   // nur innerhalb der Panels loopen
+        const items = panelFocusables();
+        const idx = items.indexOf(cur);
+        if (idx === -1) return;
+        e.preventDefault();
+        const next = (idx + (e.shiftKey ? -1 : 1) + items.length) % items.length;
+        items[next].focus();
+    }, true);
+
+    // ── Render-Loop ──
+    let _cpuFrames = 0;
+    function frame() {
+        const t0 = performance.now();
+        keyboard.tick();
+        scopes.tick();
+        drawMeter();
+        for (const w of seqWidgets) w.tick();
+        const bf = engine.baseFreq;
+        baseReadout.textContent = `BaseFrq: ${midiToName(Math.round(freqToMidi(bf)))} · ${bf.toFixed(bf < 10 ? 2 : 1)} Hz`;
+        // Freq-Modus: zusammenhängende Speed-Werte (BpM 0.001..999, sonst '..'/'zu hoch'; Hz; P immer).
+        if (baseSpeed.style.display !== 'none') {
+            const bpm = bf * 60;
+            const bpmStr = bpm < 0.001 ? '..' : bpm > 999 ? 'zu hoch' : bpm.toFixed(bpm < 10 ? 3 : 1);
+            baseSpeed.textContent = `BpM ${bpmStr} · ${bf.toFixed(bf < 10 ? 2 : 1)} Hz · P ${Math.round(freqToMidi(bf))}`;
+        }
+        // Skaler-Rate als Verhältnis zur BaseFrq. Im Rast-Modus (×ganze) als Bruch k/l,
+        // sonst als Dezimal-Vielfaches. Nur noch „×… Base" (kein Hz/=n mehr).
+        const rate = state.get('pitchRate');
+        let multStr = '×0';
+        if (bf > 0) {
+            if (state.get('rateQuant')) {
+                const { k, l } = bestFraction(rate / bf, state.get('rateNumMax'), state.get('rateDenMax'));
+                multStr = l === 1 ? `×${k}` : `×${k}/${l}`;
+            } else {
+                const m = rate / bf;
+                multStr = `×${m.toFixed(m < 1 ? 3 : 2)}`;
+            }
+        }
+        rateReadout.textContent = `${multStr} Base`;
+        // Ohne echte Audio-Render-Kapazität: grobe UI-Last aus der Frame-Arbeitszeit.
+        if (!cpuHasAudio) cpuLoad = cpuLoad * 0.9 + Math.min(1, (performance.now() - t0) / 16.7) * 0.1;
+        if ((_cpuFrames++ % 15) === 0) {
+            cpuEl.textContent = `${cpuHasAudio ? 'CPU' : 'UI~'} ${Math.round(cpuLoad * 100)}%`;
+            cpuEl.title = cpuHasAudio
+                ? 'Audio-Render-Last des AudioContext'
+                : 'Grobe UI-Rechenlast (dieser Browser bietet keine echte Audio-CPU-Messung – nur Chrome via renderCapacity)';
+        }
+        requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    window.tesla = { state, engine, presets };
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+} else {
+    boot();
+}

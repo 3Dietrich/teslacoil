@@ -1,0 +1,10 @@
+{
+  "name": "teslacoil",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Modularer Tesla-Coil-Oszillator (Browser, Web Audio API)",
+  "scripts": {
+    "test": "node test/logic.test.mjs"
+  }
+}

@@ -1,0 +1,349 @@
+:root {
+  --bg: #14171d;
+  --panel: #1c2027;
+  --panel2: #232833;
+  --line: #2a2f3a;
+  --text: #d7dde6;
+  --muted: #8a93a3;
+  --accent: #5ad1ff;
+  --accent2: #ff9f5a;
+  --on: #6ee7a8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.topbar {
+  display: flex; align-items: baseline; gap: 16px;
+  padding: 12px 18px; border-bottom: 1px solid var(--line);
+}
+.topbar h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
+.topbar h1 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.topbar .hint { color: var(--muted); margin-left: auto; }
+
+#app { padding: 16px 18px; padding-right: 64px; display: flex; flex-direction: column; gap: 16px; }
+
+/* ── PresetBar ── */
+.presetbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pb-btn, .play-btn {
+  background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+}
+.pb-btn:hover { border-color: var(--accent); }
+/* kompakte Icon-Buttons (Snapshot/Layout) */
+.pb-icon { padding: 4px 6px; min-width: 24px; font-size: 12px; line-height: 1; text-align: center; }
+/* Aktions-Farben: gleiche Glyph-Sprache in allen Clustern, aber klar unterscheidbar
+   (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export). */
+.pb-ic-load   { color: #7fc8ff; }
+.pb-ic-save   { color: #ffcf7a; }
+.pb-ic-new    { color: #8fe388; }
+.pb-ic-export { color: #9aa4b2; }
+.pb-ic-del    { color: #ff7a7a; }
+.pb-icon:hover { border-color: var(--accent); }
+/* Kopfzeile rechts: Arrange-Schalter + CPU-Last + Settings-Knopf */
+.hdr-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.hdr-cpu { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; min-width: 52px; text-align: right; }
+.settings-btn { font-size: 14px; }
+.arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
+
+/* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
+.level-meter { position: fixed; right: 8px; top: 64px; z-index: 400; border-radius: 4px; }
+/* Flacher, vertikal zentrierter Preset-Cluster (Snapshot / Skala / Optik – gleiche Höhe) */
+.pb-cluster {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 4px 6px;
+}
+.pb-cluster-label { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 9px; }
+/* Dirty-Marker: geladener Snapshot wurde verändert (* leicht, ‼ >60% anders). */
+.snap-dirty, .gs-dirty { color: var(--accent2); font-weight: 700; min-width: 10px; font-size: 13px; }
+.pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
+.play-btn { font-weight: 600; min-width: 84px; }
+.play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
+/* Sync-Schalter neben Start/Stop (aktiv = grün) */
+.sync-btn { font-size: 12px; }
+.sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
+.pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
+.pb-select, .select-field select {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px;
+}
+
+/* ── Selects ── */
+.select-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
+.toggle-field { flex-direction: row; align-items: center; gap: 6px; }
+
+/* ── Panel / Groups / Knobs ── */
+/* Vertikales Packen per Flexbox-Spalten (NICHT CSS `columns` – multicol erzwingt
+   bei jedem Canvas-Repaint im Render-Loop eine globale Spalten-Neubalancierung
+   → ~1 FPS. `column wrap` ist normales Flex-Layout: 60 FPS.). Gruppen stapeln
+   sich senkrecht und füllen leeren Platz; `align-items: flex-start` lässt jede
+   Gruppe ihre NATÜRLICHE (schmale) Breite behalten statt auf Spaltenbreite zu
+   strecken. Container-Höhe wird per JS gesetzt (sizePanel), damit umgebrochen wird. */
+.panel {
+  display: flex; flex-flow: column wrap;
+  align-items: flex-start; align-content: flex-start;
+  gap: 12px; overflow-x: auto;
+}
+.group {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px 12px; display: flex; flex-direction: column;
+  /* Nur so breit wie der Inhalt (nicht die Spalte füllen), gedeckelt. */
+  width: max-content; max-width: 380px;
+}
+/* Titelleiste: Klapp-Button + ziehbarer Name + Settings */
+.group-title-bar { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; cursor: grab; }
+.group-title-bar:active { cursor: grabbing; }
+.group-title { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; flex: 1; user-select: none; }
+.group-collapse, .group-settings-btn {
+  background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px;
+  padding: 0 2px; opacity: .5; line-height: 1;
+}
+.group-collapse:hover, .group-settings-btn:hover { opacity: 1; color: var(--accent); }
+.group.dragging { opacity: .45; }
+
+/* Gruppen-Settings-Popup */
+.group-settings {
+  position: fixed; z-index: 1100; width: 264px;
+  background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6); padding: 10px; font-size: 11px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+/* Zeilen mit Select + mehreren Icons (Combo/Snapshot) dürfen umbrechen */
+.group-settings .gs-row { flex-wrap: wrap; }
+.group-settings .gs-row .pb-icon { padding: 2px 5px; min-width: 22px; }
+/* Snapshot-/Combo-Zeile: alles linksbündig, Menü schmal → ＋/🗑 passen auf die Zeile
+   (kein Umbruch mehr). Der gemerkte Snapshot-Name bleibt im Menü stehen. */
+.group-settings .gs-snap-row, .group-settings .gs-combo-row { flex-wrap: nowrap; justify-content: flex-start; gap: 4px; }
+.gs-snap-sel, .gs-combo-sel { flex: 0 1 118px; min-width: 0; }
+.gs-row { display: flex; align-items: center; gap: 6px; }
+.gs-lab { color: var(--muted); min-width: 40px; font-size: 10px; }
+.gs-text { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; color: var(--text); padding: 3px 6px; font-size: 11px; }
+.gs-alpha { flex: 1; accent-color: var(--accent); }
+.gs-size-val { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10px; min-width: 34px; text-align: right; }
+.gs-actions { display: flex; gap: 6px; margin-top: 2px; }
+.gs-actions .pb-btn { flex: 1; }
+.knob-row { display: flex; gap: 10px; flex-wrap: wrap; }
+/* Selects/Toggles innerhalb einer Gruppe */
+.group-ctrls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; }
+/* zusätzliche Widgets in einer Gruppe (Keyboard, Skala-Bar) */
+.group-extra { margin-top: 10px; }
+.group .keyboard { border: none; background: transparent; padding: 0; margin-top: 10px; width: auto; }
+.scalebar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+/* Skaler-Rate: Vielfaches der BaseFrq + Snap-Button */
+.rate-readout { display: flex; align-items: center; gap: 6px; }
+.rate-mult { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+.rate-readout .pb-icon { padding: 2px 5px; font-size: 10px; min-width: 0; }
+.base-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
+.base-speed { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; margin-top: 4px; }
+.refl-canvas { display: block; border: 1px solid var(--line); border-radius: 6px; background: #0e1116; }
+
+/* ── Step-Sequenzer (Filter/Amp): Steps + Fill/set0 + Balken-Canvas ── */
+.seq-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.seq-lab { color: var(--muted); font-size: 11px; }
+.seq-steps { width: 52px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font: inherit; }
+.seq-canvas { display: block; border: 1px solid var(--line); border-radius: 6px; background: #0e1116; cursor: crosshair; touch-action: none; }
+/* Seq-Header-Buttons: kompakter Button, größeres Glyph (Mittelmaß, @dpa). */
+.seq-ic { padding: 2px 5px; min-width: 24px; font-size: 15px; line-height: 1; text-align: center; }
+
+/* ── Reflections-Anzeige mit eigenem Settings-Knopf ── */
+.refl-wrap { display: flex; align-items: flex-start; gap: 6px; }
+.refl-settings-btn { flex: 0 0 auto; }
+
+/* ── Tab-Fokus-Loop: klar sichtbarer Ring auf allen Panel-Bedienelementen ── */
+.panel select:focus-visible, .panel input:focus-visible, .panel button:focus-visible,
+.panel .knob-container:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 5px; }
+
+/* ── Envelope: Länge mit P→Len-Satelliten (kompakt, tief/hoch einzeln umsortierbar) ── */
+.sat-cluster { display: flex; align-items: flex-start; gap: 2px; }
+.sat-knobs { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
+.knob-sat { transform: scale(0.58); transform-origin: top left; width: 38px; margin: 0 -10px -18px 0; }
+
+/* ── Master inline (oben in der Transport-Zeile, flach) ── */
+.master-inline { display: flex; align-items: center; gap: 10px; }
+.mi-title { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; }
+.mi-vol { width: 90px; accent-color: var(--accent); }
+
+/* Knob (aus octaver) */
+.knob-container { display: flex; flex-direction: column; align-items: center; width: 64px; position: relative; outline: none; }
+.knob-svg { cursor: ns-resize; }
+.knob-track { stroke: var(--line); }
+/* Per-Knob-Farbe über --knob-accent (Fallback = globale Akzentfarbe/Text). */
+.knob-value-arc { stroke: var(--knob-accent, var(--accent)); }
+.knob-indicator { fill: var(--knob-accent, var(--text)); }
+.knob-center { fill: var(--panel2); }
+.knob-value { font-size: 11px; color: var(--knob-accent, var(--text)); margin-top: 2px; }
+/* Ansicht-Größen: groß / mittel (Default 64px) / klein / mini / ohne Knob.
+   Die Control-Höhe „berechnet" sich aus der Ansicht mit: weniger/kein Knob → flacher,
+   mini schrumpft zusätzlich die Breite (Wunsch @dpa – Controls wie Gruppen platzierbar). */
+.knob-size-small { width: 46px; }
+.knob-size-small .knob-svg { width: 38px; height: 38px; }
+/* Mini: kleiner als „klein" – Höhe UND Breite schrumpfen. */
+.knob-size-mini { width: 36px; }
+.knob-size-mini .knob-svg { width: 26px; height: 26px; }
+.knob-size-mini .knob-label { font-size: 8px; }
+.knob-size-mini .knob-value { font-size: 9px; margin-top: 0; }
+.knob-size-large { width: 88px; }
+.knob-size-large .knob-svg { width: 80px; height: 80px; }
+/* Ohne Knob: kein reservierter Knob-Platz → Höhe nimmt deutlich ab. */
+.knob-size-none .knob-svg { display: none; }
+.knob-size-none { width: 54px; }
+.knob-size-none::before { content: ''; display: block; height: 4px; }
+.knob-size-none .knob-label { font-size: 9px; }
+.knob-size-none .knob-value { font-size: 10px; margin-top: 0; }
+.knob-label { font-size: 10px; color: var(--muted); margin-top: 1px; text-align: center; }
+.knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; }
+.knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
+.knob-meta-btn:hover { opacity: 1; color: var(--accent); }
+
+/* ── Knob-Meta-Editor (übernommen aus octaver) ── */
+.knob-meta-editor {
+  position: fixed; z-index: 1000; width: 220px;
+  background: var(--panel2); border: 1px solid var(--accent);
+  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  font-size: 12px; overflow: hidden;
+}
+.kme-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.kme-title { color: var(--accent); font-weight: 600; font-size: 11px; }
+.kme-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+.kme-close:hover { color: var(--accent2); }
+.kme-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.kme-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.kme-row label { color: var(--muted); font-size: 10px; min-width: 56px; }
+.kme-row input, .kme-row select {
+  flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+  padding: 3px 6px; color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums;
+}
+.kme-row input:focus, .kme-row select:focus { outline: none; border-color: var(--accent); }
+.kme-row input.kme-color { flex: 0 0 34px; padding: 1px; height: 22px; cursor: pointer; }
+/* Farb-Preset-Menü + Speichern-Icon (ersetzt den früheren „Standard"-Button) */
+.kme-color-preset { flex: 1 1 auto; min-width: 0; }
+.kme-color-save, .kme-color-del { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; color: var(--text); font-size: 13px; padding: 2px 7px; cursor: pointer; }
+.kme-color-save:hover { border-color: var(--accent); }
+.kme-color-del:hover { border-color: #ff7a7a; }
+.kme-curve-preview { display: flex; justify-content: center; margin: 4px 0; }
+.kme-curve-preview canvas { border: 1px solid var(--line); border-radius: 5px; background: #0e1116; }
+.kme-actions { display: flex; gap: 8px; }
+.kme-actions button { flex: 1; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
+.kme-apply { border-color: var(--accent) !important; color: var(--accent) !important; }
+.kme-apply:hover { background: rgba(90,209,255,.15) !important; }
+.kme-reset:hover { border-color: var(--accent2); color: var(--accent2); }
+.knob-active .knob-value-arc { stroke: var(--accent2); }
+/* ausgewählter Regler (Klick auf Wert) → Pfeiltasten aktiv */
+.knob-selected { background: rgba(90,209,255,.06); border-radius: 8px; }
+.knob-selected .knob-value { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* ── Keyboard (kompakt) ── */
+.keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: fit-content; }
+.kb-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; margin-bottom: 6px; min-height: 15px; }
+/* Frequenzanzeige als klickbarer Schalter für den Transponier-Modus (MouseOver-Hint) */
+.kb-readout-hint { cursor: pointer; border-radius: 5px; padding: 1px 5px; margin-left: -5px; transition: background .1s, box-shadow .1s; }
+.kb-readout-hint:hover { background: rgba(90,209,255,.12); box-shadow: inset 0 0 0 1px rgba(90,209,255,.4); }
+.keyboard.kb-transpose-mode .kb-readout { color: var(--accent2); }
+.keyboard.kb-transpose-mode .kb-readout-hint:hover { background: rgba(255,159,90,.14); box-shadow: inset 0 0 0 1px rgba(255,159,90,.5); }
+/* Skala-Anker im Transponier-Modus – leuchtet wie eine selektierte Frequenz */
+.kb-key.kb-anchor { box-shadow: inset 0 0 0 2px var(--accent2), 0 0 8px rgba(255,159,90,.6); z-index: 2; }
+.kb-keys { display: grid; grid-template-columns: repeat(12, 26px); gap: 2px; }
+.kb-key {
+  position: relative; height: 46px; border-radius: 0 0 4px 4px; cursor: pointer;
+  border: 1px solid var(--line); padding: 0; overflow: hidden;
+  display: flex; flex-direction: column; background: transparent;
+  transition: box-shadow .1s;
+}
+/* Maus-Klick soll keinen Fokusring hinterlassen (sonst „Schatten" auf Off-Tönen);
+   Tastatur-Fokus bleibt für Bedienbarkeit erhalten. */
+.kb-key:focus { outline: none; }
+.kb-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* obere Hälfte: Zustand (aus = sehr dezent, an = helles Orange, +0.2 Opazität) */
+.kb-ind { height: 50%; background: rgba(255,154,46,.16); transition: background .1s; }
+.kb-key.kb-on .kb-ind { background: rgba(255,154,46,.6); }
+/* untere Hälfte: Original-Tastenidentität (s/w) + Notenname */
+.kb-id { height: 50%; display: flex; justify-content: center; align-items: center; font-size: 9px; font-weight: 600; }
+.kb-white .kb-id { background: #cdd3dc; color: #2a2f3a; }
+.kb-black .kb-id { background: #2b313c; color: #aeb6c2; }
+/* gerade klingende Note – inset-Rahmen + weicher Halo (gewollter Effekt). */
+.kb-key.kb-active { box-shadow: inset 0 0 0 2px var(--accent), 0 0 8px rgba(90,209,255,.55); z-index: 1; }
+
+/* ── Scopes ── */
+.scopes { display: flex; gap: 12px; flex-wrap: wrap; }
+.scope-box { flex: 1 1 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.scope-title { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; margin-bottom: 6px; }
+.scope-canvas { width: 100%; height: 140px; display: block; background: #0e1116; border-radius: 6px; }
+.scope-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.scope-head .scope-title { margin-bottom: 0; margin-right: auto; }
+.scope-ctrl { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
+.scope-range { width: 110px; accent-color: var(--accent); }
+.scope-range-readout { font-variant-numeric: tabular-nums; color: var(--accent); min-width: 46px; text-align: right; }
+.scope-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font-size: 10px; }
+
+/* ── Settings-Fenster (Overlay on top) ── */
+.settings-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12vh;
+}
+.settings-window {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; width: min(420px, 92vw);
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+.sw-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sw-head span { font-size: 14px; font-weight: 600; margin-right: auto; }
+.sw-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+.sw-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.sw-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); margin-bottom: 12px; cursor: pointer; }
+.sw-toggle input { accent-color: var(--accent); }
+
+/* ── Arrange-Modus: ALLE Elemente in Gruppen umsortieren (experimentell) ── */
+/* Interaktive Leaf-Elemente stumm schalten, damit der Drag greift (nur im Panel;
+   der Settings-Knopf in der Kopfzeile bleibt bedienbar → Modus abschaltbar). */
+.arranging button, .arranging select, .arranging input,
+.arranging .knob-svg, .arranging .keyboard * { pointer-events: none; }
+/* Ausnahme (@dpa): die Zahnrad-Knöpfe bleiben im e-Mode bedienbar → EINSTELLUNGEN
+   weiterhin erreichbar (Gruppen-⚙ und je-Regler-⚙), ebenso der Klapp-Pfeil. */
+.arranging .group-settings-btn, .arranging .group-collapse,
+.arranging .knob-meta-btn { pointer-events: auto; }
+/* Klar sichtbarer „Anordnen-Modus": das ganze Panel wird dezent eingefärbt +
+   schraffiert, jedes Element bekommt einen kräftigen Greif-Rahmen und getönten
+   Hintergrund → man sieht sofort, dass hier verschoben (nicht bedient) wird. */
+.panel.arranging {
+  outline: 2px dashed rgba(90,209,255,.5); outline-offset: 6px; border-radius: 12px;
+  background:
+    repeating-linear-gradient(45deg, rgba(90,209,255,.05) 0 10px, rgba(90,209,255,.10) 10px 20px);
+}
+.panel.arranging .group { background: rgba(90,209,255,.06); }
+/* Jedes verschiebbare Element: kräftiger gestrichelter Rahmen + Tönung. */
+.arranging [data-ctrl] {
+  cursor: grab; outline: 1px dashed var(--accent); outline-offset: 3px; border-radius: 6px;
+  background: rgba(90,209,255,.10); box-shadow: inset 0 0 0 100vmax rgba(90,209,255,.05);
+}
+.arranging [data-ctrl]:hover { outline-width: 2px; background: rgba(90,209,255,.18); }
+.ctrl-dragging { opacity: .4; }
+/* Kleines Hinweis-Badge oben links im Panel (nur im Anordnen-Modus). */
+.arrange-hint {
+  position: fixed; top: 60px; left: 18px; z-index: 500;
+  background: rgba(90,209,255,.16); border: 1px solid var(--accent); color: var(--accent);
+  border-radius: 8px; padding: 4px 10px; font-size: 11px; letter-spacing: .04em;
+  pointer-events: none;
+}
+
+/* ── Ghost-Drop-Indikator beim Gruppen-Umsortieren ── */
+/* Farbige Kante an der Zielgruppe zeigt, WO die gezogene Gruppe landet. */
+.group.drop-before { box-shadow: -4px 0 0 -1px var(--accent), 0 -4px 0 -1px var(--accent); }
+.group.drop-after  { box-shadow:  4px 0 0 -1px var(--accent), 0  4px 0 -1px var(--accent); }
+
+/* ── Debug-Panel (C7): Audio/Screenshot/Zustand/Prompt bündeln ── */
+.debug-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.debug-prompt { width: 100%; resize: vertical; font-family: inherit; font-size: 12px; padding: 6px 8px; }
+.debug-row { display: flex; align-items: center; gap: 8px; }
+.debug-status { color: var(--muted); font-size: 11px; }
+.debug-rec-on { border-color: var(--accent2); color: var(--accent2); }
