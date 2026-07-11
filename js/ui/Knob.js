@@ -128,6 +128,11 @@ export class Knob {
         if (this.onChange) this.onChange(this.value);
     }
 
+    /** Anzeigetext direkt setzen, OHNE den Wert zu ändern (z.B. Band-Regler zeigt die
+     *  tatsächliche gefaltete Frequenz live). Wird beim nächsten _updateVisual/Wert-
+     *  Wechsel wieder überschrieben – für Live-Anzeigen daher pro Frame aufrufen. */
+    showValue(text) { if (this._valueDisplay) this._valueDisplay.textContent = text; }
+
     get min() { return this._min; }
     set min(v) { this._min = v; this._updateVisual(); }
 

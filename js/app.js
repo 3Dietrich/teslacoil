@@ -1229,6 +1229,7 @@ function boot() {
     }, true);
 
     // ── Render-Loop ──
+    const _bandKnob = knobsById.get('baseBand');   // zeigt live die gefaltete Ist-Frequenz
     let _cpuFrames = 0;
     function frame() {
         const t0 = performance.now();
@@ -1238,6 +1239,9 @@ function boot() {
         for (const w of seqWidgets) w.tick();
         const bf = engine.baseFreq;
         baseReadout.textContent = `BaseFrq: ${midiToName(Math.round(freqToMidi(bf)))} · ${bf.toFixed(bf < 10 ? 2 : 1)} Hz`;
+        // Band-Regler zeigt die TATSÄCHLICHE (gefaltete) Frequenz statt „L–2L" – kompakt,
+        // damit der Control nicht breiter wird (@dpa 20260712).
+        if (_bandKnob) _bandKnob.showValue(bf < 10 ? bf.toFixed(2) : bf < 1000 ? bf.toFixed(1) : Math.round(bf) + '');
         // Freq-Modus: zusammenhängende Speed-Werte (BpM 0.001..999, sonst '..'/'zu hoch'; Hz; P immer).
         if (baseSpeed.style.display !== 'none') {
             const bpm = bf * 60;
