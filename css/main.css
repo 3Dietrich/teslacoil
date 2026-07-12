@@ -108,6 +108,12 @@ body {
 }
 .fx-chip:active { cursor: grabbing; }
 .fx-chip.drag { opacity: .5; }
+/* Ghost-Einfügehinweis: leuchtende Linie links vom Ziel (dort landet der Chip). */
+.fx-drop-mark { position: relative; }
+.fx-drop-mark::before {
+  content: ''; position: absolute; left: -3px; top: 0; bottom: 0; width: 2px;
+  background: var(--accent2); border-radius: 1px; box-shadow: 0 0 6px var(--accent2);
+}
 /* Titelleiste: Klapp-Button + ziehbarer Name + Settings */
 .group-title-bar { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; cursor: grab; }
 .group-title-bar:active { cursor: grabbing; }

@@ -431,6 +431,7 @@ function boot() {
         const lab = document.createElement('span'); lab.className = 'fx-chain-lab'; lab.textContent = 'Kette';
         const osc = document.createElement('span'); osc.className = 'fx-fixed'; osc.textContent = 'Osc';
         let dragName = null;
+        const clearMarks = () => bar.querySelectorAll('.fx-drop-mark').forEach((c) => c.classList.remove('fx-drop-mark'));
         const render = () => {
             bar.innerHTML = '';
             bar.appendChild(lab); bar.appendChild(osc);
@@ -441,10 +442,13 @@ function boot() {
                 const chip = document.createElement('span'); chip.className = 'fx-chip'; chip.textContent = name; chip.draggable = true; chip.dataset.fx = name;
                 chip.title = 'Ziehen zum Umsortieren der Signalkette';
                 chip.addEventListener('dragstart', (e) => { dragName = name; chip.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', name); } catch { /* noop */ } });
-                chip.addEventListener('dragend', () => { dragName = null; chip.classList.remove('drag'); });
-                chip.addEventListener('dragover', (e) => { e.preventDefault(); });
+                chip.addEventListener('dragend', () => { dragName = null; chip.classList.remove('drag'); clearMarks(); });
+                // Ghost-Hinweis: Einfüge-Linie VOR dem Ziel-Chip (dort landet es beim Loslassen).
+                chip.addEventListener('dragover', (e) => { e.preventDefault(); if (dragName && dragName !== name) { clearMarks(); chip.classList.add('fx-drop-mark'); } });
+                chip.addEventListener('dragleave', () => chip.classList.remove('fx-drop-mark'));
                 chip.addEventListener('drop', (e) => {
                     e.preventDefault();
+                    clearMarks();
                     if (!dragName || dragName === name) return;
                     const arr = (state.get('fxOrder') || []).filter((x) => x !== dragName);
                     arr.splice(arr.indexOf(name), 0, dragName);   // vor das Ziel einsetzen
@@ -453,7 +457,18 @@ function boot() {
                 bar.appendChild(chip);
             });
             arrow();
-            const out = document.createElement('span'); out.className = 'fx-fixed'; out.textContent = 'Out'; bar.appendChild(out);
+            // „Out" ist zugleich End-Ablage: hier fallen lassen = ans Ende der Kette.
+            const out = document.createElement('span'); out.className = 'fx-fixed fx-out'; out.textContent = 'Out';
+            out.addEventListener('dragover', (e) => { if (dragName) { e.preventDefault(); clearMarks(); out.classList.add('fx-drop-mark'); } });
+            out.addEventListener('dragleave', () => out.classList.remove('fx-drop-mark'));
+            out.addEventListener('drop', (e) => {
+                e.preventDefault(); clearMarks();
+                if (!dragName) return;
+                const arr = (state.get('fxOrder') || []).filter((x) => x !== dragName);
+                arr.push(dragName);   // ans Ende
+                state.set('fxOrder', arr);
+            });
+            bar.appendChild(out);
         };
         fxChainRender = render; render();
         return bar;
