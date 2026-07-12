@@ -53,11 +53,18 @@ export function foldToBand(freq, low) {
     return f;
 }
 
-/** Frequenz auf nächstes ganzzahliges Vielfaches von baseHz ziehen (n>=1). */
+/**
+ * Frequenz auf das Harmonie-Raster um baseHz ziehen – in BEIDE Richtungen:
+ *   • hz ≥ baseHz → nächstes ganzzahliges Vielfache n·baseHz (n≥1): baseHz, 2·, 3· …
+ *   • hz < baseHz → nächste Sub-Oktave baseHz/2^k (k≥0): baseHz, /2, /4, /8 …
+ * So rasten tiefere Töne als die Basis auf Oktaven UNTER der Basis (statt fälschlich
+ * nach oben auf die Basis zu klappen). @dpa: „Teiler <1 → 1/2, 1/4, 1/8 der BaseFrq".
+ */
 export function harmonicSnap(hz, baseHz) {
-    if (baseHz <= 0) return hz;
-    const n = Math.max(1, Math.round(hz / baseHz));
-    return n * baseHz;
+    if (baseHz <= 0 || hz <= 0) return hz;
+    if (hz >= baseHz) return Math.max(1, Math.round(hz / baseHz)) * baseHz;
+    const k = Math.max(0, Math.round(Math.log2(baseHz / hz)));   // 0 = Basis, 1 = /2, 2 = /4 …
+    return baseHz / Math.pow(2, k);
 }
 
 /**

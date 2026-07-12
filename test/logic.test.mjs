@@ -76,8 +76,11 @@ t('Anzahl aktiver Töne bleibt erhalten (reine Verschiebung)', () => {
 
 console.log('Scaler – Helfer');
 t('semitoneToHz: +12 = Oktave', () => assert.ok(approx(semitoneToHz(12, 100), 200)));
-t('harmonicSnap zieht auf n·base', () => assert.equal(harmonicSnap(317, 100), 300));
-t('harmonicSnap min n=1', () => assert.equal(harmonicSnap(20, 100), 100));
+t('harmonicSnap zieht auf n·base (über Basis)', () => assert.equal(harmonicSnap(317, 100), 300));
+t('harmonicSnap: knapp unter Basis → Basis', () => assert.equal(harmonicSnap(90, 100), 100));   // k=0
+t('harmonicSnap: ~1/2 → Sub-Oktave base/2', () => assert.equal(harmonicSnap(52, 100), 50));     // log2(1.92)≈0.94→k=1
+t('harmonicSnap: 1/4 der Basis (C1 unter C3)', () => assert.ok(approx(harmonicSnap(32.7, 131), 32.75, 0.01))); // 131/4
+t('harmonicSnap: tief → 1/8', () => assert.equal(harmonicSnap(13, 100), 12.5));                 // log2(7.7)≈2.9→k=3
 t('foldToBand: hohe Freq halbiert ins Band', () => assert.ok(approx(foldToBand(440, 30), 55)));   // 440→220→110→55 ∈ [30,60)
 t('foldToBand: tiefe Freq verdoppelt ins Band', () => assert.ok(approx(foldToBand(10, 30), 40))); // 10→20→40 ∈ [30,60)
 t('foldToBand: schon im Band bleibt', () => assert.equal(foldToBand(45, 30), 45));

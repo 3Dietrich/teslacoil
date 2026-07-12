@@ -324,7 +324,9 @@ export class TeslaEngine {
 
         const open = this.gate.isOpen();
         const von = s.get('fromHz');
-        const baseHz = Math.min(this.baseFreq, von);     // baseHz nie höher als 'von'
+        // Harmonize-Basis = echte BaseFrq. harmonicSnap rastet Töne DARUNTER auf Sub-
+        // Oktaven (BF/2^k), DARÜBER auf n·BF – daher kein min(…,von)-Deckel mehr nötig.
+        const baseHz = this.baseFreq;
         const u = this.pitch.sampleUnipolar();           // Pitch-Position 0..1 im Fenster
         // S&H-Wert (0..1) wird gleichmäßig auf die aktiven Töne im Fenster verteilt
         const freq = quantizeToScale({
