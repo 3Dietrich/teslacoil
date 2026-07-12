@@ -17,7 +17,7 @@ import { Clock } from '../core/Clock.js';
 import { triggerInterval } from '../core/TriggerDivider.js';
 import { PitchOsc } from '../pitch/PitchOsc.js';
 import { GateOsc } from '../core/GateOsc.js';
-import { ScaleModel, NOTE_NAMES } from '../pitch/ScaleModel.js';
+import { ScaleModel, NOTE_NAMES, rotateMask } from '../pitch/ScaleModel.js';
 import { quantizeToScale, freqToMidi, midiToFreq, foldToBand } from '../pitch/Scaler.js';
 import { seqAdvance } from '../dsp/stepSeq.js';
 import { keytrackCutoff, envPeakMult } from '../dsp/filterMod.js';
@@ -89,7 +89,9 @@ export class TeslaEngine {
         const s = this.state;
         if (key === 'masterVol' || key === '*') this.master.setVolume(s.get('masterVol'));
         if (key === 'dcBlock' || key === '*') this.master.setDcBlock(s.get('dcBlock'));
-        if (key === 'scaleMask' || key === '*') this.scale.mask = s.get('scaleMask').map(Boolean);
+        if (['scaleMask', 'baseToC', '*'].includes(key)) this._applyScale();
+        // Base→C: bei jeder BaseFrq-Änderung die effektive (relativ rotierte) Maske nachziehen.
+        else if (s.get('baseToC') && ['baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm'].includes(key)) this._applyScale();
         // Filter: Typ/Pole NUR bei echter Änderung an den Worklet posten – jede solche
         // Message nullt dort den kompletten Filter-State (_reset) → hörbarer Knacks UND
         // der Resonanz-/Selbstoszillations-Aufbau (der den Ladder „singen" lässt) wird
@@ -198,6 +200,20 @@ export class TeslaEngine {
         let prev = this.voiceBus;
         for (const n of order) { prev.connect(map[n].input); prev = map[n].output; }
         prev.connect(this.master.input);
+    }
+
+    /** Effektive Skalen-Maske für den Quantizer setzen. Base→C AN: scaleMask ist RELATIV
+     *  (Index 0 = Basis = do) → um die Tonklasse der BaseFrq rotieren, damit das Muster
+     *  mit der Basis mitwandert. AUS: absolut wie gespeichert. */
+    _applyScale() {
+        const s = this.state;
+        const mask = s.get('scaleMask').map(Number);
+        if (s.get('baseToC')) {
+            const pc = ((Math.round(freqToMidi(this.baseFreq)) % 12) + 12) % 12;
+            this.scale.mask = rotateMask(mask, pc).map(Boolean);
+        } else {
+            this.scale.mask = mask.map(Boolean);
+        }
     }
 
     /* ── Step-Sequenzer (Filter/Amp) ── */

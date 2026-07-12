@@ -107,6 +107,7 @@ const TOGGLES = {
     dcBlock:       { label: 'DC-Block' },
     intMultiples:  { label: '×ganze' },   // (nur noch Keyboard-Anzeige; kein globaler Schalter mehr)
     rateQuant:     { label: 'Quant' },     // lokal in Skaler: Rate float ↔ Bruch k/l
+    baseToC:       { label: 'Base→C' },    // Skala relativ zur Basis (do re mi); Klang folgt der Basis
     baseTestOn:    { label: 'Test-Ton' },  // trockener Sinus auf der BaseFrq (Vergleich)
     metroCutoffQuant: { label: 'Quant' },  // Metronom-Cutoff an BaseFrq gerastet (Oktaver statt Hz-Knob)
 };
@@ -120,7 +121,7 @@ const GROUPS = [
     // Metronom: eigener getakteter Klick mit Vadim-SVF-Morph-Filter (LP↔HP).
     { name: 'Metronom', selects: ['metroDivision', 'metroRoute'], toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroLevel', 'metroMorph', 'metroCutoff', 'metroCutBand', 'metroReso'], metro: true },
     // Seed sitzt inline neben dem Pitch-Wave-Select (nur bei 'random' sichtbar).
-    { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
+    { name: 'Skaler', selects: ['pitchWave'], toggles: ['baseToC'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
     // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
     { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },

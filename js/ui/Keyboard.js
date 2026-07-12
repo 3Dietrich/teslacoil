@@ -19,6 +19,9 @@ import { NOTE_NAMES, rotateMask } from '../pitch/ScaleModel.js';
 import { freqToMidi, midiToName } from '../pitch/Scaler.js';
 
 const BLACK = new Set([1, 3, 6, 8, 10]); // C#, D#, F#, G#, A#
+// Relative (diatonische) Namen für den Base→C-Modus: do…ti auf 0,2,4,5,7,9,11;
+// die chromatischen Zwischenstufen bleiben leer (Wunsch @dpa).
+const REL_NAMES = ['do', '', 're', '', 'mi', 'fa', '', 'sol', '', 'la', '', 'ti'];
 
 export class Keyboard {
     /**
@@ -37,7 +40,7 @@ export class Keyboard {
         this._transpose = false;
         this._build();
         state.subscribe((k) => {
-            if (['scaleMask', 'scaleRoot', 'skal2On', 'skal2Active', 'skal2Slots', '*'].includes(k)) this._refresh();
+            if (['scaleMask', 'scaleRoot', 'skal2On', 'skal2Active', 'skal2Slots', 'baseToC', '*'].includes(k)) this._refresh();
         });
     }
 
@@ -158,6 +161,7 @@ export class Keyboard {
         const mask = this.state.get('scaleMask');
         const root = this.state.get('scaleRoot') | 0;
         const sk = this._skal2();
+        const rel = this.state.get('baseToC') && !sk;   // relative Namen (do re mi …)
         const active = this.state.get('skal2Active') | 0;
         const slots = this.state.get('skal2Slots') || [];
         this.element.classList.toggle('kb-skal2', sk);
@@ -167,8 +171,10 @@ export class Keyboard {
             k.classList.toggle('kb-anchor', this._transpose && i === root);
             k.classList.toggle('kb-slot-active', sk && i === active);  // aktiver Slot hervorgehoben
             const id = k.querySelector('.kb-id');
-            if (id) id.textContent = sk ? ((slots[i] && slots[i].name) || String(i + 1)) : NOTE_NAMES[i];
-            k.title = sk ? `Slot ${i + 1}: ${(slots[i] && slots[i].name) || i + 1} (Doppelklick = umbenennen)` : NOTE_NAMES[i];
+            const label = sk ? ((slots[i] && slots[i].name) || String(i + 1)) : (rel ? REL_NAMES[i] : NOTE_NAMES[i]);
+            if (id) id.textContent = label;
+            k.title = sk ? `Slot ${i + 1}: ${(slots[i] && slots[i].name) || i + 1} (Doppelklick = umbenennen)`
+                : rel ? `${REL_NAMES[i] || '·'} (relativ zur Basis)` : NOTE_NAMES[i];
         });
     }
 
@@ -179,7 +185,12 @@ export class Keyboard {
         const midi = Math.round(freqToMidi(f));
         const pc = ((midi % 12) + 12) % 12;
         // Live-Highlight nur im Normal-Modus (im Transponier-Modus leuchtet der Anker).
-        const showPc = this._transpose ? -1 : pc;
+        // Base→C: die absolute Tonklasse auf ihre RELATIVE Position abbilden (pc − pcBase).
+        let showPc = this._transpose ? -1 : pc;
+        if (showPc >= 0 && this.state.get('baseToC') && !this._skal2()) {
+            const bpc = ((Math.round(freqToMidi(this.getBaseFreq())) % 12) + 12) % 12;
+            showPc = (pc - bpc + 12) % 12;
+        }
         if (showPc !== this._lastPc) {
             this._keys.forEach((k, i) => k.classList.toggle('kb-active', i === showPc));
             this._lastPc = showPc;

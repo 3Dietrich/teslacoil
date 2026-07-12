@@ -150,6 +150,11 @@ export const DEFAULTS = Object.freeze({
     // Lage der Skala auf der Frequenzachse (Transponier-Anker, 0 = C). Nur Position,
     // nicht das Intervallmuster – s. Transponier-Modus im Keyboard.
     scaleRoot: 0,
+    // Base→C (Sound): Skala RELATIV zur BaseFreq. scaleMask wird dann als relatives Muster
+    // (Index 0 = Basis = „do") interpretiert; effektiv klingend = rotateMask(scaleMask,
+    // pcBase). Ändert sich die Basis, transponiert das Muster mit (immer „in der Base-Tonart").
+    // Keyboard zeigt dann relative Namen (do re mi …), skal2 behält eigene Slot-Namen.
+    baseToC: false,
     // skal2 (Optik-Ebene): die 12 Keyboard-Tasten werden zu 12 abrufbaren Skala-Slots.
     // skal2On schaltet den Modus, skal2Active = geladener Slot, skal2Slots = die 12
     // Slot-Definitionen. Ein Slot laden setzt scaleMask+scaleRoot; Ton-Toggle/Versatz
