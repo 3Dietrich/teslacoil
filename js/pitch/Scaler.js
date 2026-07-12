@@ -98,13 +98,24 @@ export function activeMidis(vonMidi, range, scale) {
  * @returns {number|null} Frequenz, oder null wenn KEIN Ton aktiv ist
  */
 export function quantizeToScale({ unipolar, vonMidi, range, scale, baseHz, harmonizeMix = 0 }) {
-    const list = activeMidis(vonMidi, range, scale);
-    if (list.length === 0) return null; // alle Töne aus → Stille
+    // Stille NUR, wenn WIRKLICH kein Ton aktiv ist (ganze Maske aus). Solange ≥1 Ton an
+    // ist, kommt IMMER ein Ton (@dpa): bei einem aktiven Ton landen alle Frequenzen auf
+    // dessen Oktaven, bei zweien auf beiden usw.
+    if (!scale || !scale.hasActive) return null;
 
     const u = clamp01(unipolar);
-    let idx = Math.floor(u * list.length);
-    if (idx >= list.length) idx = list.length - 1; // u==1 sauber abfangen
-    const midi = list[idx];
+    const list = activeMidis(vonMidi, range, scale);
+    let midi;
+    if (list.length > 0) {
+        // Fenster enthält aktive Töne → S&H gleichmäßig auf sie verteilen.
+        let idx = Math.floor(u * list.length);
+        if (idx >= list.length) idx = list.length - 1; // u==1 sauber abfangen
+        midi = list[idx];
+    } else {
+        // Schmale Range trifft keinen aktiven Ton → auf den NÄCHSTEN aktiven Ton (über
+        // Oktaven) rasten statt zu verstummen. So ist es bei 1 aktivem Ton nie still.
+        midi = scale.quantize(vonMidi + range * u);
+    }
 
     const scaledHz = midiToFreq(midi);
     if (harmonizeMix <= 0 || baseHz <= 0) return scaledHz;

@@ -135,6 +135,19 @@ t('gleichmäßige Verteilung: jeder aktive Ton wird getroffen', () => {
     }
     assert.equal(hit.size, list.length, `nur ${hit.size}/${list.length} Töne getroffen`);
 });
+t('nur 1 aktiver Ton + schmale Range ohne Treffer → nächster aktiver Ton (nicht still)', () => {
+    const s = new ScaleModel([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]); // nur C
+    for (const vonMidi of [26, 29, 31, 34]) {   // D1..A#1: kein C im 1-Halbton-Fenster
+        const hz = quantizeToScale({ unipolar: 0.5, vonMidi, range: 1, scale: s, baseHz: 0, harmonizeMix: 0 });
+        assert.ok(hz !== null, `vonMidi=${vonMidi} darf nicht still sein`);
+        const pc = ((Math.round(freqToMidi(hz)) % 12) + 12) % 12;
+        assert.equal(pc, 0, `vonMidi=${vonMidi} muss auf ein C rasten, war pc=${pc}`);
+    }
+});
+t('leere Maske → null (echte Stille)', () => {
+    const s = new ScaleModel([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    assert.equal(quantizeToScale({ unipolar: 0.5, vonMidi: 45, range: 12, scale: s, baseHz: 0, harmonizeMix: 0 }), null);
+});
 t('Harmonize Mix=1 zieht auf n·base', () => {
     const s = new ScaleModel();
     const hz = quantizeToScale({ unipolar: 0, vonMidi: 69, range: 0, scale: s, baseHz: 55, harmonizeMix: 1 });
