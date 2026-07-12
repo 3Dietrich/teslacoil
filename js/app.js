@@ -121,7 +121,7 @@ const GROUPS = [
     // Metronom: eigener getakteter Klick mit Vadim-SVF-Morph-Filter (LP↔HP).
     { name: 'Metronom', selects: ['metroDivision', 'metroRoute'], toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroLevel', 'metroMorph', 'metroCutoff', 'metroCutBand', 'metroReso'], metro: true },
     // Seed sitzt inline neben dem Pitch-Wave-Select (nur bei 'random' sichtbar).
-    { name: 'Skaler', selects: ['pitchWave'], toggles: ['baseToC'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
+    { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
     // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
     { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },

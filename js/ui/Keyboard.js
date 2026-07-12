@@ -57,12 +57,23 @@ export class Keyboard {
         this._readout.addEventListener('click', () => this._toggleTranspose());
         head.appendChild(this._readout);
 
+        // Rechts gruppiert: Base→C + skal2 (bleiben zusammen).
+        const btns = document.createElement('div'); btns.className = 'kb-head-btns';
+        // Base→C: Skala relativ zur Basis (do re mi), Klang folgt der Basis. Neben skal2.
+        this._bcBtn = document.createElement('button');
+        this._bcBtn.className = 'pb-btn kb-skal2-btn';
+        this._bcBtn.textContent = 'Base→C';
+        this._bcBtn.title = 'Base→C: Skala relativ zur Basis (do re mi); der Klang folgt der BaseFreq.';
+        this._bcBtn.addEventListener('click', () => this.state.set('baseToC', !this.state.get('baseToC')));
+        btns.appendChild(this._bcBtn);
+
         this._skBtn = document.createElement('button');
         this._skBtn.className = 'pb-btn kb-skal2-btn';
         this._skBtn.textContent = 'skal2';
         this._skBtn.title = 'skal2: die 12 Tasten als abrufbare Skala-Slots (P2). Bleibt auch im Anker-Modus aktiv.';
         this._skBtn.addEventListener('click', () => this.state.set('skal2On', !this._skal2()));
-        head.appendChild(this._skBtn);
+        btns.appendChild(this._skBtn);
+        head.appendChild(btns);
         this.element.appendChild(head);
 
         const row = document.createElement('div');
@@ -166,6 +177,7 @@ export class Keyboard {
         const slots = this.state.get('skal2Slots') || [];
         this.element.classList.toggle('kb-skal2', sk);
         if (this._skBtn) this._skBtn.classList.toggle('pb-active', sk);
+        if (this._bcBtn) this._bcBtn.classList.toggle('pb-active', !!this.state.get('baseToC'));
         this._keys.forEach((k, i) => {
             k.classList.toggle('kb-on', !!mask[i]);                    // IO = Live-Töne (beide Modi)
             k.classList.toggle('kb-anchor', this._transpose && i === root);
