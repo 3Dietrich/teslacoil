@@ -299,7 +299,10 @@ export class TeslaEngine {
         this.gate.rate = s.get('gateRate');
         this.gate.width = s.get('gateWidth');
         this.gate.enabled = s.get('gateEnabled');
-        this.scale.mask = s.get('scaleMask').map(Boolean);
+        // Effektive Maske pro Trigger frisch setzen – über _applyScale, damit Base→C
+        // (relative Rotation um die BaseFrq-Tonklasse) NICHT überschrieben wird und der
+        // BaseFrq live folgt. (Früher stand hier die rohe scaleMask → Base→C wirkungslos.)
+        this._applyScale();
     }
 
     _onTrigger(time, interval) {
