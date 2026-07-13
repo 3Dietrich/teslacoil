@@ -720,12 +720,23 @@ function boot() {
     const snapAxis = (v, rem, fine) => fine ? Math.round(v) : Math.round((v - rem) / GRID) * GRID + rem;
     const mod = (v, m) => ((v % m) + m) % m;
     const freeGroups = new Set(); // Gruppen im Free-Canvas-Modus (Laufzeit; früh deklariert wg. TDZ)
-    let selectedEl = null;        // aktuell im e-Mode ausgewähltes Element (Gruppe ODER Control)
-    function setSelected(el) {
-        if (selectedEl === el) return;
-        if (selectedEl) selectedEl.classList.remove('arrange-selected');
-        selectedEl = el;
-        if (el) el.classList.add('arrange-selected');
+    // e-Mode-Auswahl als MENGE (Block E, Multi-Select): enthält entweder mehrere Controls
+    // ODER genau eine Gruppe – Gruppen haben eigene Positions-Logik und sind nicht mit
+    // Controls mischbar.
+    const selected = new Set();   // aktuell im e-Mode ausgewählte Elemente
+    function clearSelection() { for (const s of selected) s.classList.remove('arrange-selected'); selected.clear(); }
+    function addSelected(el) { if (el && !selected.has(el)) { selected.add(el); el.classList.add('arrange-selected'); } }
+    function removeSelected(el) { if (selected.has(el)) { selected.delete(el); el.classList.remove('arrange-selected'); } }
+    // additive = Shift/Cmd-Klick → Auswahl erweitern/toggeln; sonst frische Einzelauswahl.
+    // el === null hebt die ganze Auswahl auf.
+    function setSelected(el, additive = false) {
+        if (!el) { clearSelection(); return; }
+        const isGroup = el.classList.contains('group');
+        const hasGroup = [...selected].some((s) => s.classList.contains('group'));
+        // Gruppen immer einzeln; nicht additiv mit Controls kombinierbar.
+        if (isGroup || hasGroup || !additive) { clearSelection(); addSelected(el); return; }
+        // additiv unter Controls: an-/abwählen (Auswahl wächst/schrumpft).
+        if (selected.has(el)) removeSelected(el); else addSelected(el);
     }
     for (const grp of GROUPS) {
         const g = document.createElement('div');
@@ -1033,27 +1044,53 @@ function boot() {
             if (!arranging) return;
             if (e.target.closest('.knob-meta-btn')) return;   // ⚙ bleibt im e-Mode bedienbar
             e.preventDefault(); e.stopPropagation();
-            setSelected(el);
-            const name = el.closest('.group') && el.closest('.group').dataset.group; if (!name) return;
-            if (!freeGroups.has(name)) freezeGroup(name);   // erste Bewegung → Canvas
-            const startX = parseFloat(el.style.left) || 0, startY = parseFloat(el.style.top) || 0;
+            // Shift/Cmd-Klick = additive Auswahl (Block E) → nur selektieren, KEIN Drag.
+            if (e.shiftKey || e.metaKey) { setSelected(el, true); return; }
+            // Normaler Klick auf ein NICHT-selektiertes Control → frische Einzelauswahl.
+            // Klick auf ein bereits (mit-)selektiertes → ganze Auswahl gemeinsam ziehen.
+            if (!selected.has(el)) setSelected(el);
+            // Nur Controls bewegen (keine Gruppe); Anker garantiert enthalten.
+            const movers = [...selected].filter((s) => s.dataset.ctrl && !s.classList.contains('group'));
+            if (!movers.includes(el)) movers.push(el);
+            // Betroffene Gruppen einfrieren, dann Start-Positionen sichern.
+            const groups = new Set();
+            const starts = new Map();
+            for (const m of movers) {
+                const nm = m.closest('.group') && m.closest('.group').dataset.group; if (!nm) continue;
+                if (!freeGroups.has(nm)) freezeGroup(nm);   // erste Bewegung → Canvas
+                groups.add(nm);
+                starts.set(m, { x: parseFloat(m.style.left) || 0, y: parseFloat(m.style.top) || 0, name: nm });
+            }
+            // Untere Schranke fürs GEMEINSAME Delta: kein Element darf unter 0 rutschen →
+            // so bleiben die relativen px-Abstände zwischen den Selektierten exakt erhalten.
+            let minX = Infinity, minY = Infinity;
+            for (const st of starts.values()) { minX = Math.min(minX, st.x); minY = Math.min(minY, st.y); }
+            const aStart = starts.get(el) || { x: 0, y: 0 };
             const sx = e.clientX, sy = e.clientY;
-            let remX = mod(startX, GRID), remY = mod(startY, GRID);
-            el.classList.add('ctrl-moving');
+            let remX = mod(aStart.x, GRID), remY = mod(aStart.y, GRID);
+            movers.forEach((m) => m.classList.add('ctrl-moving'));
             const onMove = (ev) => {
-                let x = startX + (ev.clientX - sx), y = startY + (ev.clientY - sy);
-                if (ev.shiftKey) { x = Math.round(x); y = Math.round(y); remX = mod(x, GRID); remY = mod(y, GRID); }
-                else { x = snapAxis(x, remX, false); y = snapAxis(y, remY, false); }
-                x = Math.max(0, x); y = Math.max(0, y);
-                el.style.left = x + 'px'; el.style.top = y + 'px'; el._pend = { x, y };
+                // Delta am Anker rastern (Shift = 1px), dann auf ALLE anwenden.
+                let ax = aStart.x + (ev.clientX - sx), ay = aStart.y + (ev.clientY - sy);
+                if (ev.shiftKey) { ax = Math.round(ax); ay = Math.round(ay); remX = mod(ax, GRID); remY = mod(ay, GRID); }
+                else { ax = snapAxis(ax, remX, false); ay = snapAxis(ay, remY, false); }
+                let dx = ax - aStart.x, dy = ay - aStart.y;
+                dx = Math.max(dx, -minX); dy = Math.max(dy, -minY);   // Gruppe als Ganzes klemmen
+                for (const [m, st] of starts) {
+                    const x = st.x + dx, y = st.y + dy;
+                    m.style.left = x + 'px'; m.style.top = y + 'px'; m._pend = { x, y };
+                }
             };
             const onUp = () => {
                 window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
-                el.classList.remove('ctrl-moving');
-                const p = el._pend || { x: startX, y: startY };
-                const all = { ...state.get('ctrlPos') }; all[name] = { ...(all[name] || {}), [el.dataset.ctrl]: p };
+                const all = { ...state.get('ctrlPos') };
+                for (const [m, st] of starts) {
+                    m.classList.remove('ctrl-moving');
+                    const p = m._pend || { x: st.x, y: st.y };
+                    all[st.name] = { ...(all[st.name] || {}), [m.dataset.ctrl]: p };
+                }
                 state.set('ctrlPos', all);
-                sizeFreeGroup(name);
+                for (const nm of groups) sizeFreeGroup(nm);
             };
             window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
         });
@@ -1068,24 +1105,35 @@ function boot() {
     }
     // Ausgewähltes Element (Gruppe ODER Einheit) per Pfeiltaste bewegen (fine = Shift = 1px).
     function nudgeSelected(dx, dy, fine) {
-        if (!selectedEl) return;
+        if (!selected.size) return;
         const step = fine ? 1 : GRID;
-        if (selectedEl.classList.contains('group')) {
-            const nm = selectedEl.dataset.group;
+        // Gruppe (immer Einzelauswahl) hat eigene Positions-Logik.
+        const groupSel = [...selected].find((s) => s.classList.contains('group'));
+        if (groupSel) {
+            const nm = groupSel.dataset.group;
             const pos = { ...state.get('groupPos') };
-            const p = pos[nm] || { x: parseFloat(selectedEl.style.left) || 0, y: parseFloat(selectedEl.style.top) || 0 };
+            const p = pos[nm] || { x: parseFloat(groupSel.style.left) || 0, y: parseFloat(groupSel.style.top) || 0 };
             pos[nm] = { x: Math.max(0, p.x + dx * step), y: Math.max(0, p.y + dy * step) };
             state.set('groupPos', pos);   // applyGroupPositions folgt via subscribe
-        } else if (selectedEl.dataset.ctrl) {
-            const name = selectedEl.closest('.group') && selectedEl.closest('.group').dataset.group; if (!name) return;
-            if (!freeGroups.has(name)) freezeGroup(name);
-            const x = Math.max(0, (parseFloat(selectedEl.style.left) || 0) + dx * step);
-            const y = Math.max(0, (parseFloat(selectedEl.style.top) || 0) + dy * step);
-            selectedEl.style.left = x + 'px'; selectedEl.style.top = y + 'px';
-            const all = { ...state.get('ctrlPos') }; all[name] = { ...(all[name] || {}), [selectedEl.dataset.ctrl]: { x, y } };
-            state.set('ctrlPos', all);
-            sizeFreeGroup(name);
+            return;
         }
+        // Controls: erst alle betroffenen Gruppen einfrieren (style.left/top gültig machen).
+        const ctrls = [...selected].filter((s) => s.dataset.ctrl);
+        const groups = new Set();
+        for (const el of ctrls) { const nm = el.closest('.group') && el.closest('.group').dataset.group; if (nm) { if (!freeGroups.has(nm)) freezeGroup(nm); groups.add(nm); } }
+        // Gemeinsames Delta klemmen, damit kein Element unter 0 rutscht → relative Abstände bleiben.
+        let minX = Infinity, minY = Infinity;
+        for (const el of ctrls) { minX = Math.min(minX, parseFloat(el.style.left) || 0); minY = Math.min(minY, parseFloat(el.style.top) || 0); }
+        const mx = Math.max(dx * step, -minX), my = Math.max(dy * step, -minY);
+        const all = { ...state.get('ctrlPos') };
+        for (const el of ctrls) {
+            const name = el.closest('.group') && el.closest('.group').dataset.group; if (!name) continue;
+            const x = (parseFloat(el.style.left) || 0) + mx, y = (parseFloat(el.style.top) || 0) + my;
+            el.style.left = x + 'px'; el.style.top = y + 'px';
+            all[name] = { ...(all[name] || {}), [el.dataset.ctrl]: { x, y } };
+        }
+        state.set('ctrlPos', all);
+        for (const nm of groups) sizeFreeGroup(nm);
     }
     function persistControlOrder(rowId, row) {
         const order = [...row.children].map((c) => c.dataset.ctrl).filter(Boolean);
@@ -1123,8 +1171,12 @@ function boot() {
             document.body.appendChild(_arrangeHint);
         } else if (!on && _arrangeHint) { _arrangeHint.remove(); _arrangeHint = null; }
     }
-    applyControlOrder(state.toJSON());
-    applyCtrlPos(state.toJSON());
+    // ACHTUNG Reihenfolge: applyControlOrder/applyCtrlPos rufen freezeGroup(), das die
+    // natürlichen Fluss-Positionen MISST. Das darf erst NACH refreshVisibility() laufen –
+    // sonst misst es Gruppen, in denen (z.B. Filter „aktiv“ aus) noch alles sichtbar ist,
+    // friert falsche Positionen ein → Controls sitzen beim Reload „tiefer“ und der Filter
+    // blitzt kurz offen auf. Die beiden Apply-Aufrufe stehen deshalb weiter unten,
+    // direkt hinter refreshVisibility(). (@dpa 20260714)
 
     // Farbe ↔ Hex/Alpha
     const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
@@ -1342,6 +1394,10 @@ function boot() {
         updatePitchWaveVis();
     }
     refreshVisibility();
+    // Erst JETZT (finale Sichtbarkeit steht) die Positionen anwenden – siehe Kommentar
+    // oben bei der verschobenen Reihenfolge.
+    applyControlOrder(state.toJSON());
+    applyCtrlPos(state.toJSON());
 
     // Reflections-Anzeige zeichnen: jede Reflexion = senkrechter Strich (Höhe = Pegel),
     // niedriges Alpha → dichte Wolken werden durch Überlagerung kräftiger.
@@ -1498,6 +1554,7 @@ function boot() {
             // Controls (v.a. Switches) deselektieren. Danach schaltet Space wieder
             // Start/Stop statt den zuletzt fokussierten Schalter zu toggeln.
             closeGroupSettings(); closeReflSettings(); closeSettings();
+            clearSelection();   // im e-Mode: Auswahl aufheben (Block E)
             const ae = document.activeElement;
             if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur();
             return;
@@ -1510,7 +1567,7 @@ function boot() {
         }
         // e-Mode + ausgewähltes Element: Pfeiltasten bewegen es im 10px-Raster (Shift = 1px).
         // Hat Vorrang vor der BaseFrq-Fernsteuerung, solange etwas ausgewählt ist.
-        if (arranging && selectedEl && e.key.startsWith('Arrow')) {
+        if (arranging && selected.size && e.key.startsWith('Arrow')) {
             const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
             if (d) { e.preventDefault(); nudgeSelected(d[0], d[1], e.shiftKey); return; }
         }
