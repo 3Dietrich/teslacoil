@@ -102,7 +102,10 @@ export const DEFAULTS = Object.freeze({
     filterSeqSteps: makeSeqSteps('first'),
     // FX-Ketten-Reihenfolge (Sound): frei umsteckbare Reihenfolge der drei Bus-FX.
     // voiceBus → fx[0] → … → Master. Live umsteckbar zum Ausprobieren (kein Speichern nötig).
-    fxOrder: ['Filter', 'Distortion', 'Reverb'],
+    // Kette: Ketten-Knoten in Reihenfolge. Effekte (Filter/Distortion/Reverb) bilden den
+    // Insert (voiceBus→…→Master); 'Metronom' ist eine Quelle, die am ihrer Position in die
+    // Kette einspeist (steht sie hinter allen Effekten = parallel an den Master). @dpa 20260713.
+    fxOrder: ['Filter', 'Distortion', 'Reverb', 'Metronom'],
     // Distortion (Effekt-Slot vor dem Reverb)
     distEnabled: false,  // 'aktiv'-Haken (aus = Bypass)
     distMode: 'Saturation', // 'Saturation' | 'Hard Clip' | 'Foldback'
@@ -116,6 +119,8 @@ export const DEFAULTS = Object.freeze({
     revLenPct: 1.0,      // Länge der Hall-Wolke relativ zum Trigger-Intervall (0..8×)
     revAttack: 0.0,      // Einschwing-Anteil am Anfang der Reflections (0 = sofort voll)
     revRelease: 0.0,     // Ausfade-Anteil am Ende (0 = flaches Gate, harter Abriss)
+    revReleaseShape: 0,  // Release-KURVE 0..100 (@dpa 20260713): 0 = linear (wie bisher),
+                         // 100 = „logarithmisch" (faked, schneller Anfangs-Abfall + langer Schwanz)
     revShelfFreq: 400,   // HighShelf-Grenzfrequenz auf dem Hall-Anteil (Hz)
     revShelfGain: 0,     // HighShelf-Anhebung/Absenkung (dB, 0 = neutral)
     revPreDelay: 0,      // Pre-Delay der Reflections (ms)
@@ -126,7 +131,11 @@ export const DEFAULTS = Object.freeze({
     reflColL: '#5ad1ff', reflColR: '#ff9f5a',
     // Metronom (eigener getakteter Klick, umgeht die FX-Kette)
     metroEnabled: false,   // 'aktiv'-Haken
-    metroDivision: '1/4',  // eigene Teilung (unabhängig vom Skaler-Takt)
+    metroDivision: '1/4',  // DEPRECATED (ersetzt durch metroL/metroM): alte feste Teilung
+    // Metronom-Rate als freies Verhältnis l/m des Viertels (@dpa 20260713): Klickperiode
+    // = (60/bpm) · (l/m). l,m ∈ [1,16] ganzzahlig. l=1,m=1 → Viertel (wie früher '1/4').
+    metroL: 1,
+    metroM: 1,
     metroLevel: 0.5,       // Ausgangspegel
     metroMorph: 0.5,       // Filter: 0=LP · 0.5=Bypass · 1=HP
     metroCutoff: 2000,     // Vadim-SVF-Cutoff (Hz)
@@ -188,6 +197,12 @@ export const DEFAULTS = Object.freeze({
     // Reihenfolge der Controls INNERHALB einer Gruppe (experimenteller Arrange-Modus).
     // name → [ 'k:<knobKey>' | 'sat', … ]; leer/fehlend = Default-Reihenfolge.
     controlOrder: {},
+    // Freies Gruppen-Canvas im e-Mode (@dpa 20260713): sobald ein Element bewegt wird,
+    // wird die Gruppe zum Canvas – ALLE Einheiten (Regler, Selects, Toggles, Sequenzer,
+    // Keyboard, Readouts …) absolut platziert, der Rahmen umschließt exakt die Fläche.
+    // Struktur: { [Gruppenname]: { [data-ctrl-Kennung]: { x, y } } } in px. 10px-Raster,
+    // Shift=1px. Rein optisch (LAYOUT_KEYS) – kein Sound.
+    ctrlPos: {},
     // Step-Sequenzer-Optik – GETRENNT je Seq-Typ (modular: Filter- und Amp-Seq haben
     // eigene Größe/BG/Balkenfarbe, verstellen sich nicht mehr gegenseitig). Struktur:
     // { filter: {w,h,bg,col}, amp: {w,h,bg,col} }. Optik-Ebene (LAYOUT_KEYS) → im Layout

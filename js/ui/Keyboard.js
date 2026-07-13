@@ -57,8 +57,18 @@ export class Keyboard {
         this._readout.addEventListener('click', () => this._toggleTranspose());
         head.appendChild(this._readout);
 
-        // Rechts gruppiert: Base→C + skal2 (bleiben zusammen).
+        // Rechts gruppiert: Anker + Base→C + skal2 (bleiben zusammen).
         const btns = document.createElement('div'); btns.className = 'kb-head-btns';
+        // Anker: eigener (bläulicher) Schalter für den Transponier-Modus, links neben
+        // Base→C (@dpa 20260713). Ersetzt das „versteckte" Klicken auf die Frequenzanzeige
+        // durch einen sichtbaren Schalter; die Anzeige bleibt zusätzlich klickbar.
+        this._ankBtn = document.createElement('button');
+        this._ankBtn.className = 'pb-btn kb-skal2-btn kb-anchor-btn';
+        this._ankBtn.textContent = '⚓ Anker';
+        this._ankBtn.title = 'Anker: Skala auf der Frequenzachse verschieben (Transponier-Modus).';
+        this._ankBtn.addEventListener('click', () => this._toggleTranspose());
+        btns.appendChild(this._ankBtn);
+
         // Base→C: Skala relativ zur Basis (do re mi), Klang folgt der Basis. Neben skal2.
         this._bcBtn = document.createElement('button');
         this._bcBtn.className = 'pb-btn kb-skal2-btn';
@@ -178,6 +188,7 @@ export class Keyboard {
         this.element.classList.toggle('kb-skal2', sk);
         if (this._skBtn) this._skBtn.classList.toggle('pb-active', sk);
         if (this._bcBtn) this._bcBtn.classList.toggle('pb-active', !!this.state.get('baseToC'));
+        if (this._ankBtn) this._ankBtn.classList.toggle('pb-active', this._transpose);   // bläulich-aktiv
         this._keys.forEach((k, i) => {
             k.classList.toggle('kb-on', !!mask[i]);                    // IO = Live-Töne (beide Modi)
             k.classList.toggle('kb-anchor', this._transpose && i === root);

@@ -73,7 +73,7 @@ export class GateReverb {
         this._fading = false;  // läuft gerade eine Überblendung?
         this._pending = false; // kam währenddessen neuer Input? → danach neu rechnen
         this._fadeTimer = null;
-        this._params = { density: 0.85, len: 0.3, attack: 0, release: 0.4, seed: 1 };
+        this._params = { density: 0.85, len: 0.3, attack: 0, release: 0.4, releaseShape: 0, seed: 1 };
         // Erste IR direkt in Slot A (ohne Crossfade); B startet stumm.
         this._cur = 'A';
         this._activeBuffer = this._renderIR();
@@ -171,13 +171,16 @@ export class GateReverb {
 
     /** Synthetische, hart abreißende Impulsantwort erzeugen (seed-deterministisch). */
     _renderIR() {
-        const { density, len, attack, release, seed } = this._params;
+        const { density, len, attack, release, releaseShape, seed } = this._params;
         const sr = this.ctx.sampleRate;
         const L = Math.max(1, Math.floor(Math.max(0.02, len) * sr));
         const ir = this.ctx.createBuffer(2, L, sr);
         const d = Math.max(0, Math.min(1, density));
         const aEnd = Math.max(0, Math.min(1, attack));       // Attack-Anteil am Anfang
         const fadeStart = 1 - Math.max(0, Math.min(1, release)); // Release-Anteil am Ende
+        // Release-Kurve: 0 = linear (Potenz 1), 100 = „log" gefaked (Potenz 4 → schneller
+        // Anfangsabfall, langer Schwanz). rG = (1 - x)^p, x = Fortschritt im Release-Fenster.
+        const relPow = 1 + 3 * Math.max(0, Math.min(1, (releaseShape || 0) / 100));
         // Pro Kanal eigener, aber fester RNG-Strom (Seed + Kanal-Offset) → Stereo,
         // aber reproduzierbar: gleiche Parameter = exakt gleiche Wolke.
         for (let c = 0; c < 2; c++) {
@@ -187,7 +190,7 @@ export class GateReverb {
                 const t = i / L;
                 // Attack: linear 0→1 über [0, aEnd]. Release: 1→0 über [fadeStart, 1].
                 const aG = t < aEnd ? (aEnd > 0 ? t / aEnd : 1) : 1;
-                const rG = t >= fadeStart ? (release > 0 ? 1 - (t - fadeStart) / release : 1) : 1;
+                const rG = t >= fadeStart ? (release > 0 ? Math.pow(1 - (t - fadeStart) / release, relPow) : 1) : 1;
                 const env = aG * rG;
                 // Dichte = Wahrscheinlichkeit eines Reflexions-Taps (dünn ↔ voll).
                 const tap = rand() < d ? (rand() * 2 - 1) : 0;

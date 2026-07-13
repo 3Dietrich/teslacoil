@@ -36,19 +36,28 @@ export class PresetBar {
         // Einheitliche Icon-Sprache (auch in Skala/Optik): ↺ laden · ✎ überschreiben ·
         // ＋ neu · ⤓ export – zusätzlich je Aktion eine Farbe, damit sie klar
         // unterscheidbar sind (glyph + Farbe, nicht nur ähnliche Rundpfeile).
+        // Der geladene Snapshot ergibt sich aus dem gemerkten Namen (snapSel), da die Box
+        // auf dem Platzhalter steht (Reselect-fähig). Icons wirken auf diesen.
+        const curIdx = () => { const w = this.engine.state.get('snapSel'); return w ? this.presets.listSnapshots().findIndex((s) => s.name === w) : -1; };
         const cluster = this._cluster('Snapshot', this._snapSel, [
-            ['✎', 'Ausgewählten Snapshot mit aktuellem Zustand überschreiben (Update)', () => {
-                const i = this._snapSel.selectedIndex - 1;
-                if (i >= 0) this.presets.updateSnapshot(i);
+            ['✎', 'Geladenen Snapshot mit aktuellem Zustand überschreiben (Update)', () => {
+                const i = curIdx();
+                if (i >= 0) { this.presets.updateSnapshot(i); this._updateSnapMark(); }
             }, 'save'],
             ['＋', 'Als neuen Snapshot speichern (gleicher Name = überschreiben)', () => {
                 const name = prompt('Snapshot-Name?', '');
-                if (name !== null) { this.presets.saveSnapshot(name); this.refreshSnapshots(); }
+                if (name !== null) {
+                    const list = this.presets.saveSnapshot(name);
+                    // Nach dem Speichern direkt AUF den neuen Snapshot setzen (@dpa 20260713).
+                    const nm = name || (list[list.length - 1] && list[list.length - 1].name) || '';
+                    this.engine.state.set('snapSel', nm);
+                    this.refreshSnapshots();
+                }
             }, 'new'],
-            ['⤓', 'Snapshot exportieren (JSON)', () => this.presets.exportSnapshot(this._snapSel.value), 'export'],
-            ['🗑', 'Ausgewählten Snapshot löschen', () => {
-                const i = this._snapSel.selectedIndex - 1;
-                if (i >= 0 && confirm('Snapshot „' + this._snapSel.value + '" löschen?')) { this.presets.deleteSnapshot(i); this.refreshSnapshots(); }
+            ['⤓', 'Geladenen Snapshot exportieren (JSON)', () => this.presets.exportSnapshot(this.engine.state.get('snapSel')), 'export'],
+            ['🗑', 'Geladenen Snapshot löschen', () => {
+                const i = curIdx(); const w = this.engine.state.get('snapSel');
+                if (i >= 0 && confirm('Snapshot „' + w + '" löschen?')) { this.presets.deleteSnapshot(i); this.engine.state.set('snapSel', ''); this.refreshSnapshots(); }
             }, 'del'],
         ]);
         this.element.appendChild(cluster);
@@ -57,11 +66,18 @@ export class PresetBar {
         this._snapMark = document.createElement('span'); this._snapMark.className = 'snap-dirty';
         this.element.appendChild(this._snapMark);
         // Auswahl LÄDT direkt (wie Combo/Gruppen-Snapshot – kein separater ↺-Button mehr)
-        // und wird gemerkt (Optik), damit das Dropdown nach Reset/Recall richtig steht.
+        // und wird gemerkt (Optik). Der geladene Name steht im Platzhalter (↻ Name), die
+        // Box selbst bleibt auf dem Platzhalter → dasselbe Element ERNEUT wählen feuert
+        // wieder 'change' und stellt den Snapshot erneut her (@dpa 20260713).
         this._snapSel.addEventListener('change', () => {
             const i = this._snapSel.selectedIndex - 1;
-            this.engine.state.set('snapSel', i >= 0 ? this._snapSel.value : '');
-            if (i >= 0) this.presets.recallSnapshot(i);
+            if (i >= 0) {
+                this.engine.state.set('snapSel', this._snapSel.value);   // erst merken (Optik-Key)…
+                this.presets.recallSnapshot(i);                          // …dann laden (Recall behält snapSel)
+            } else {
+                this.engine.state.set('snapSel', '');
+            }
+            this.refreshSnapshots();
         });
         this.engine.state.subscribe((key) => {
             if (key === '*' || key === 'snapSel') this.refreshSnapshots();
@@ -77,10 +93,13 @@ export class PresetBar {
     }
     _updateSnapMark() {
         if (!this._snapMark) return;
-        const i = this._snapSel.selectedIndex - 1;
+        // Die Box steht auf dem Platzhalter → der geladene Snapshot ergibt sich aus dem
+        // gemerkten Namen (snapSel), nicht aus selectedIndex.
+        const want = this.engine.state.get('snapSel');
+        const i = want ? this.presets.listSnapshots().findIndex((s) => s.name === want) : -1;
         const d = i >= 0 ? this.presets.snapshotDirty(i) : null;
         this._snapMark.textContent = (!d || !d.changed) ? '' : (d.frac > 0.6 ? '‼' : '*');
-        this._snapMark.title = d && d.changed ? `${d.changed}/${d.total} Parameter gegenüber „${this._snapSel.value}" verändert` : '';
+        this._snapMark.title = d && d.changed ? `${d.changed}/${d.total} Parameter gegenüber „${want}" verändert` : '';
     }
 
     toggle() {
@@ -92,16 +111,16 @@ export class PresetBar {
     _updateSyncBtn() { this._syncBtn.classList.toggle('on', !!this.engine.state.get('syncOnStart')); }
 
     refreshSnapshots() {
-        this._fill(this._snapSel, this.presets.listSnapshots(), '— Snapshot —');
+        const sel = this._snapSel;
         const want = this.engine.state.get('snapSel');
-        if (want && [...this._snapSel.options].some((o) => o.textContent === want)) this._snapSel.value = want;
-        this._updateSnapMark();
-    }
-
-    _fill(sel, list, placeholder) {
+        const exists = want && this.presets.listSnapshots().some((s) => s.name === want);
         sel.innerHTML = '';
-        const ph = document.createElement('option'); ph.textContent = placeholder; sel.appendChild(ph);
-        list.forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
+        // Platzhalter trägt den geladenen Namen (↻ Name) → man sieht, was aktiv ist, und
+        // die Box bleibt trotzdem auf Index 0, damit ein erneutes Wählen wieder feuert.
+        const ph = document.createElement('option'); ph.textContent = exists ? `↻ ${want}` : '— Snapshot —'; sel.appendChild(ph);
+        this.presets.listSnapshots().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
+        sel.selectedIndex = 0;
+        this._updateSnapMark();
     }
 
     _btn(label, onClick, cls = '') {

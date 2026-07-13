@@ -33,7 +33,7 @@ body {
 .presetbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pb-btn, .play-btn {
   background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 12px;
+  border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px;
 }
 .pb-btn:hover { border-color: var(--accent); }
 /* kompakte Icon-Buttons (Snapshot/Layout) */
@@ -53,11 +53,11 @@ body {
 .arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 
 /* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
-.level-meter { position: fixed; right: 8px; top: 64px; z-index: 400; border-radius: 4px; }
+.level-meter { position: fixed; right: 8px; top: 64px; z-index: 400; border-radius: 2px; }
 /* Flacher, vertikal zentrierter Preset-Cluster (Snapshot / Skala / Optik – gleiche Höhe) */
 .pb-cluster {
   display: flex; align-items: center; gap: 5px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px;
   padding: 4px 6px;
 }
 .pb-cluster-label { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 9px; }
@@ -73,7 +73,7 @@ body {
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
 .pb-select, .select-field select {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 8px;
+  border-radius: 4px; padding: 5px 8px;
 }
 
 /* ── Selects ── */
@@ -89,25 +89,35 @@ body {
 .panel { position: relative; overflow: auto; }
 .group {
   position: absolute; top: 0; left: 0;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding: 10px 12px 12px; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 8px 8px; display: flex; flex-direction: column;
   /* Nur so breit wie der Inhalt (nicht strecken), gedeckelt. */
   width: max-content; max-width: 380px;
 }
 .group.dragging { opacity: .85; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
 
-/* FX-Kette (Kopfzeile): ziehbare Chips zum Umsortieren der Signalkette */
-.fx-chain { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.fx-chain-lab { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-right: 2px; }
-.fx-fixed { color: var(--muted); font-size: 10px; opacity: .6; }
+/* Kette / Patchbay (Kopfzeile): Quellen · Effekte · Ziele mit Ports; ziehbar. */
+.fx-chain-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 320px; }
+.fx-chain { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; padding: 2px 0; min-width: 0; }
+.fx-chain-wrap.fx-showall .fx-chain { flex-wrap: wrap; overflow-x: visible; }
+.fx-chain-lab { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 .fx-arrow { color: var(--muted); font-size: 10px; opacity: .5; }
-.fx-chip {
-  font-size: 10px; padding: 2px 7px; border-radius: 5px; cursor: grab;
-  background: rgba(90,209,255,.14); box-shadow: inset 0 0 0 1px rgba(90,209,255,.35);
-  color: var(--fg); user-select: none;
+.fx-arrow-split { opacity: .6; }
+/* Knoten: Quelle (grün, out•) · Effekt (blau, •in/out•) · Ziel (orange, •in). */
+.fx-node {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; user-select: none;
+  font-size: 10px; padding: 2px 6px; border-radius: 3px;
 }
+.fx-src { background: rgba(110,231,168,.14); box-shadow: inset 0 0 0 1px rgba(110,231,168,.4); color: var(--on); }
+.fx-eff { background: rgba(90,209,255,.14); box-shadow: inset 0 0 0 1px rgba(90,209,255,.35); color: var(--accent); }
+.fx-dst { background: rgba(255,159,90,.12); box-shadow: inset 0 0 0 1px rgba(255,159,90,.35); color: var(--accent2); }
+.fx-port { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.fx-port.fx-out { background: var(--on); }
+.fx-port.fx-in { background: var(--accent2); }
+.fx-chip { cursor: grab; }
 .fx-chip:active { cursor: grabbing; }
 .fx-chip.drag { opacity: .5; }
+.pb-icon.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 /* Ghost-Einfügehinweis: leuchtende Linie links vom Ziel (dort landet der Chip). */
 .fx-drop-mark { position: relative; }
 .fx-drop-mark::before {
@@ -128,7 +138,7 @@ body {
 /* Gruppen-Settings-Popup */
 .group-settings {
   position: fixed; z-index: 1100; width: 264px;
-  background: var(--panel2); border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--accent); border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0,0,0,.6); padding: 10px; font-size: 11px;
   display: flex; flex-direction: column; gap: 6px;
 }
@@ -141,17 +151,22 @@ body {
 .gs-snap-sel, .gs-combo-sel { flex: 0 1 118px; min-width: 0; }
 .gs-row { display: flex; align-items: center; gap: 6px; }
 .gs-lab { color: var(--muted); min-width: 40px; font-size: 10px; }
-.gs-text { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 5px; color: var(--text); padding: 3px 6px; font-size: 11px; }
+.gs-text { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; color: var(--text); padding: 3px 6px; font-size: 11px; }
 .gs-alpha { flex: 1; accent-color: var(--accent); }
 .gs-size-val { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 10px; min-width: 34px; text-align: right; }
 .gs-actions { display: flex; gap: 6px; margin-top: 2px; }
 .gs-actions .pb-btn { flex: 1; }
-.knob-row { display: flex; gap: 10px; flex-wrap: wrap; }
+/* align-items:flex-start → jedes Control ist nur so hoch wie sein Inhalt (kein Strecken
+   auf die Reihenhöhe; „ohne Knob" endet direkt unter dem Label, @dpa 20260713). */
+.knob-row { display: flex; gap: 4px; flex-wrap: wrap; align-items: flex-start; }
 /* Selects/Toggles innerhalb einer Gruppe */
-.group-ctrls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; }
+.group-ctrls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 7px; align-items: flex-start; }
+/* Freies Gruppen-Canvas: Einheiten absolut, Rahmen (body) umschließt exakt die Fläche. */
+.group-body.free-canvas { position: relative; }
+.group-body.free-canvas > [data-ctrl] { position: absolute; }
 /* zusätzliche Widgets in einer Gruppe (Keyboard, Skala-Bar) */
-.group-extra { margin-top: 10px; }
-.group .keyboard { border: none; background: transparent; padding: 0; margin-top: 10px; width: auto; }
+.group-extra { margin-top: 7px; }
+.group .keyboard { border: none; background: transparent; padding: 0; margin-top: 7px; width: auto; }
 .scalebar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 /* Skaler-Rate: Vielfaches der BaseFrq + Snap-Button */
 .rate-readout { display: flex; align-items: center; gap: 6px; }
@@ -159,13 +174,13 @@ body {
 .rate-readout .pb-icon { padding: 2px 5px; font-size: 10px; min-width: 0; }
 .base-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
 .base-speed { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; margin-top: 4px; }
-.refl-canvas { display: block; border: 1px solid var(--line); border-radius: 6px; background: #0e1116; }
+.refl-canvas { display: block; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; }
 
 /* ── Step-Sequenzer (Filter/Amp): Steps + Fill/set0 + Balken-Canvas ── */
 .seq-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .seq-lab { color: var(--muted); font-size: 11px; }
-.seq-steps { width: 52px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font: inherit; }
-.seq-canvas { display: block; border: 1px solid var(--line); border-radius: 6px; background: #0e1116; cursor: crosshair; touch-action: none; }
+.seq-steps { width: 52px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 2px; padding: 2px 4px; font: inherit; }
+.seq-canvas { display: block; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; cursor: crosshair; touch-action: none; }
 /* Seq-Header-Buttons: kompakter Button, größeres Glyph (Mittelmaß, @dpa). */
 .seq-ic { padding: 2px 5px; min-width: 24px; font-size: 15px; line-height: 1; text-align: center; }
 
@@ -175,7 +190,7 @@ body {
 
 /* ── Tab-Fokus-Loop: klar sichtbarer Ring auf allen Panel-Bedienelementen ── */
 .panel select:focus-visible, .panel input:focus-visible, .panel button:focus-visible,
-.panel .knob-container:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 5px; }
+.panel .knob-container:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
 
 /* ── Envelope: Länge mit P→Len-Satelliten (kompakt, tief/hoch einzeln umsortierbar) ── */
 .sat-cluster { display: flex; align-items: flex-start; gap: 2px; }
@@ -215,7 +230,7 @@ body {
 .knob-size-none .knob-label { font-size: 9px; }
 .knob-size-none .knob-value { font-size: 10px; margin-top: 0; }
 .knob-label { font-size: 10px; color: var(--muted); margin-top: 1px; text-align: center; }
-.knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 4px; }
+.knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 .knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
 .knob-meta-btn:hover { opacity: 1; color: var(--accent); }
 
@@ -223,7 +238,7 @@ body {
 .knob-meta-editor {
   position: fixed; z-index: 1000; width: 220px;
   background: var(--panel2); border: 1px solid var(--accent);
-  border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
   font-size: 12px; overflow: hidden;
 }
 .kme-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -234,38 +249,45 @@ body {
 .kme-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .kme-row label { color: var(--muted); font-size: 10px; min-width: 56px; }
 .kme-row input, .kme-row select {
-  flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+  flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
   padding: 3px 6px; color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums;
 }
 .kme-row input:focus, .kme-row select:focus { outline: none; border-color: var(--accent); }
 .kme-row input.kme-color { flex: 0 0 34px; padding: 1px; height: 22px; cursor: pointer; }
 /* Farb-Preset-Menü + Speichern-Icon (ersetzt den früheren „Standard"-Button) */
 .kme-color-preset { flex: 1 1 auto; min-width: 0; }
-.kme-color-save, .kme-color-del { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; color: var(--text); font-size: 13px; padding: 2px 7px; cursor: pointer; }
+.kme-color-save, .kme-color-del { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-size: 13px; padding: 2px 7px; cursor: pointer; }
 .kme-color-save:hover { border-color: var(--accent); }
 .kme-color-del:hover { border-color: #ff7a7a; }
 .kme-curve-preview { display: flex; justify-content: center; margin: 4px 0; }
-.kme-curve-preview canvas { border: 1px solid var(--line); border-radius: 5px; background: #0e1116; }
+.kme-curve-preview canvas { border: 1px solid var(--line); border-radius: 3px; background: #0e1116; }
 .kme-actions { display: flex; gap: 8px; }
-.kme-actions button { flex: 1; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
+.kme-actions button { flex: 1; padding: 5px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
 .kme-apply { border-color: var(--accent) !important; color: var(--accent) !important; }
 .kme-apply:hover { background: rgba(90,209,255,.15) !important; }
 .kme-reset:hover { border-color: var(--accent2); color: var(--accent2); }
 .knob-active .knob-value-arc { stroke: var(--accent2); }
 /* ausgewählter Regler (Klick auf Wert) → Pfeiltasten aktiv */
-.knob-selected { background: rgba(90,209,255,.06); border-radius: 8px; }
+.knob-selected { background: rgba(90,209,255,.06); border-radius: 5px; }
 .knob-selected .knob-value { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 
 /* ── Keyboard (kompakt) ── */
-.keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: fit-content; }
+.keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: fit-content; }
 /* Kopfzeile: Frequenzanzeige/Anker links, skal2-Schalter rechts */
 .kb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 .kb-head-btns { display: flex; align-items: center; gap: 5px; }
 .kb-skal2-btn { font-size: 10px; padding: 1px 7px; }
 .kb-skal2-btn.pb-active { background: rgba(255,159,90,.22); box-shadow: inset 0 0 0 1px rgba(255,159,90,.6); color: var(--accent2); }
+/* Anker-Schalter (Transponier-Modus): eigener, „etwas bläulicher" Schalter links neben
+   Base→C. Muss das orange .kb-skal2-btn.pb-active überschreiben → steht danach. */
+.kb-anchor-btn { color: var(--accent); box-shadow: inset 0 0 0 1px rgba(90,209,255,.30); }
+.kb-anchor-btn.pb-active { background: rgba(90,209,255,.22); box-shadow: inset 0 0 0 1px rgba(90,209,255,.7); color: var(--accent); }
+/* Anker aktiv: obere Reihe (Zustandsanzeige) bläulich einfärben → Modus klar erkennbar. */
+.keyboard.kb-transpose-mode .kb-ind { background: rgba(90,209,255,.28); }
+.keyboard.kb-transpose-mode .kb-key.kb-on .kb-ind { background: rgba(90,209,255,.52); }
 .kb-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; min-height: 15px; }
 /* Frequenzanzeige als klickbarer Schalter für den Transponier-Modus (MouseOver-Hint) */
-.kb-readout-hint { cursor: pointer; border-radius: 5px; padding: 1px 5px; margin-left: -5px; transition: background .1s, box-shadow .1s; }
+.kb-readout-hint { cursor: pointer; border-radius: 3px; padding: 1px 5px; margin-left: -5px; transition: background .1s, box-shadow .1s; }
 .kb-readout-hint:hover { background: rgba(90,209,255,.12); box-shadow: inset 0 0 0 1px rgba(90,209,255,.4); }
 .keyboard.kb-transpose-mode .kb-readout { color: var(--accent2); }
 .keyboard.kb-transpose-mode .kb-readout-hint:hover { background: rgba(255,159,90,.14); box-shadow: inset 0 0 0 1px rgba(255,159,90,.5); }
@@ -273,7 +295,7 @@ body {
 .kb-key.kb-anchor { box-shadow: inset 0 0 0 2px var(--accent2), 0 0 8px rgba(255,159,90,.6); z-index: 2; }
 .kb-keys { display: grid; grid-template-columns: repeat(12, 26px); gap: 2px; }
 .kb-key {
-  position: relative; height: 46px; border-radius: 0 0 4px 4px; cursor: pointer;
+  position: relative; height: 46px; border-radius: 0 0 2px 2px; cursor: pointer;
   border: 1px solid var(--line); padding: 0; overflow: hidden;
   display: flex; flex-direction: column; background: transparent;
   transition: box-shadow .1s;
@@ -298,15 +320,15 @@ body {
 
 /* ── Scopes ── */
 .scopes { display: flex; gap: 12px; flex-wrap: wrap; }
-.scope-box { flex: 1 1 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.scope-box { flex: 1 1 320px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
 .scope-title { color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-size: 10px; margin-bottom: 6px; }
-.scope-canvas { width: 100%; height: 140px; display: block; background: #0e1116; border-radius: 6px; }
+.scope-canvas { width: 100%; height: 140px; display: block; background: #0e1116; border-radius: 4px; }
 .scope-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .scope-head .scope-title { margin-bottom: 0; margin-right: auto; }
 .scope-ctrl { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; }
 .scope-range { width: 110px; accent-color: var(--accent); }
 .scope-range-readout { font-variant-numeric: tabular-nums; color: var(--accent); min-width: 46px; text-align: right; }
-.scope-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font-size: 10px; }
+.scope-select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 3px 6px; font-size: 10px; }
 
 /* ── Settings-Fenster (Overlay on top) ── */
 .settings-overlay {
@@ -316,7 +338,7 @@ body {
   padding-top: 12vh;
 }
 .settings-window {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 14px 16px; width: min(420px, 92vw);
   box-shadow: 0 12px 40px rgba(0,0,0,.5);
 }
@@ -341,23 +363,26 @@ body {
    schraffiert, jedes Element bekommt einen kräftigen Greif-Rahmen und getönten
    Hintergrund → man sieht sofort, dass hier verschoben (nicht bedient) wird. */
 .panel.arranging {
-  outline: 2px dashed rgba(90,209,255,.5); outline-offset: 6px; border-radius: 12px;
+  outline: 2px dashed rgba(90,209,255,.5); outline-offset: 6px; border-radius: 7px;
   background:
     repeating-linear-gradient(45deg, rgba(90,209,255,.05) 0 10px, rgba(90,209,255,.10) 10px 20px);
 }
 .panel.arranging .group { background: rgba(90,209,255,.06); }
 /* Jedes verschiebbare Element: kräftiger gestrichelter Rahmen + Tönung. */
 .arranging [data-ctrl] {
-  cursor: grab; outline: 1px dashed var(--accent); outline-offset: 3px; border-radius: 6px;
+  cursor: grab; outline: 1px dashed var(--accent); outline-offset: 3px; border-radius: 4px;
   background: rgba(90,209,255,.10); box-shadow: inset 0 0 0 100vmax rgba(90,209,255,.05);
 }
 .arranging [data-ctrl]:hover { outline-width: 2px; background: rgba(90,209,255,.18); }
 .ctrl-dragging { opacity: .4; }
+.ctrl-moving { opacity: .7; z-index: 6; }
+/* Ausgewähltes Element (Gruppe ODER Control): Pfeiltasten bewegen es → orange Markierung. */
+.arranging .arrange-selected { outline: 2px solid var(--accent2) !important; outline-offset: 3px; z-index: 5; }
 /* Kleines Hinweis-Badge oben links im Panel (nur im Anordnen-Modus). */
 .arrange-hint {
   position: fixed; top: 60px; left: 18px; z-index: 500;
   background: rgba(90,209,255,.16); border: 1px solid var(--accent); color: var(--accent);
-  border-radius: 8px; padding: 4px 10px; font-size: 11px; letter-spacing: .04em;
+  border-radius: 5px; padding: 4px 10px; font-size: 11px; letter-spacing: .04em;
   pointer-events: none;
 }
 

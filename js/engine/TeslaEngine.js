@@ -57,7 +57,14 @@ export class TeslaEngine {
         this._applyMetroRoute();
         this.metro.setLevel(state.get('metroLevel'));
         this.metroClock = new Clock(this.ctx, (t) => { if (state.get('metroEnabled')) this.metro.tick(t); });
-        this.metroClock.intervalFn = () => triggerInterval(state.get('bpm'), state.get('metroDivision'));
+        // Metronom-Periode als freies Verhältnis l/m des Viertels (@dpa 20260713):
+        // (60/bpm)·(l/m). l,m ganzzahlig 1..16; l=1,m=1 → Viertel (wie früher '1/4').
+        this.metroClock.intervalFn = () => {
+            const secPerBeat = 60 / Math.max(1e-6, state.get('bpm'));
+            const l = Math.max(1, state.get('metroL') | 0);
+            const m = Math.max(1, state.get('metroM') | 0);
+            return secPerBeat * (l / m);
+        };
 
         this._lastFreq = state.get('baseHz');
 
@@ -109,12 +116,11 @@ export class TeslaEngine {
         else if (key === 'revWet') this.reverb.setWetVol(s.get('revWet'));
         else if (key === 'revShelfFreq' || key === 'revShelfGain') this.reverb.setShelf(s.get('revShelfFreq'), s.get('revShelfGain'));
         else if (key === 'revPreDelay') this.reverb.setPreDelay(s.get('revPreDelay'));
-        else if (['revDensity', 'revAttack', 'revRelease', 'revSeed', 'revLenPct', 'bpm', 'division'].includes(key)) this._rebuildReverb();
+        else if (['revDensity', 'revAttack', 'revRelease', 'revReleaseShape', 'revSeed', 'revLenPct', 'bpm', 'division'].includes(key)) this._rebuildReverb();
         // Metronom: Pegel ohne Rebuild; Klang-Parameter rendern den Buffer neu.
         if (key === 'metroLevel' || key === '*') this.metro.setLevel(s.get('metroLevel'));
         if (['metroMorph', 'metroCutoff', 'metroCutoffQuant', 'metroCutBand', 'metroReso', '*'].includes(key)) this._rebuildMetro();
-        if (key === 'metroRoute' || key === '*') this._applyMetroRoute();
-        if (key === 'fxOrder' || key === '*') this._rewireFX();   // FX-Kette live umstecken
+        if (key === 'fxOrder' || key === '*') this._rewireFX();   // FX-Kette live umstecken (setzt auch Metro-Ziel)
         // Test-Ton: an/aus/Pegel + Frequenz an die BaseFrq nachführen (BaseFrq hängt von
         // baseSrc/baseHz/baseNote/baseOct/tempoOct/bpm ab → bei all diesen aktualisieren).
         if (['baseTestOn', 'baseTestLevel', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm', '*'].includes(key)) this._applyTestOsc();
@@ -140,16 +146,18 @@ export class TeslaEngine {
         }
     }
 
-    /** Metronom-Ausgang routen (Kette: … → Dist → Reverb → Master):
-     *  'Parallel' (am Master, umgeht FX) · 'Vor Dist' (durch Dist + Reverb) ·
-     *  'Vor Rev' (nach Dist eingespeist → nur durch den Reverb). */
-    _applyMetroRoute() {
-        const r = this.state.get('metroRoute');
-        const dest = r === 'Vor Dist' ? this.dist.input
-            : r === 'Vor Rev' ? this.reverb.input
-                : this.master.input;
-        this.metro.setDestination(dest);
+    /** Metronom-Ziel aus der KETTE ableiten (@dpa 20260713, ersetzt den Route-Select):
+     *  Metronom ist ein Ketten-Knoten in fxOrder. Es speist in den Eingang des ERSTEN
+     *  Effekts NACH ihm ein → durchläuft ab dort die Kette. Steht es hinter allen Effekten
+     *  (oder nicht in der Kette), geht es parallel an den Master. */
+    _metroDestFromChain() {
+        const order = this.state.get('fxOrder') || [];
+        const map = { Filter: this.ladder, Distortion: this.dist, Reverb: this.reverb };
+        const mi = order.indexOf('Metronom');
+        if (mi >= 0) for (let i = mi + 1; i < order.length; i++) if (map[order[i]]) return map[order[i]].input;
+        return this.master.input;
     }
+    _applyMetroRoute() { if (this.metro) this.metro.setDestination(this._metroDestFromChain()); }
 
     /** Metronom-Klick-Buffer aus dem State neu rendern. Quant AN: Cutoff kommt aus
      *  dem Oktaver an der BaseFrq (cutoff = BaseFrq · 2^oct) statt aus dem Cutoff-Knob. */
@@ -200,6 +208,7 @@ export class TeslaEngine {
         let prev = this.voiceBus;
         for (const n of order) { prev.connect(map[n].input); prev = map[n].output; }
         prev.connect(this.master.input);
+        this._applyMetroRoute();   // Metro-Ziel hängt an der (neuen) Ketten-Position
     }
 
     /** Effektive Skalen-Maske für den Quantizer setzen. Base→C AN: scaleMask ist RELATIV
@@ -241,7 +250,7 @@ export class TeslaEngine {
         const s = this.state;
         const len = this._reverbLenSeconds();
         this.reverb.setXfade(len * 1000);
-        this.reverb.set({ density: s.get('revDensity'), len, attack: s.get('revAttack'), release: s.get('revRelease'), seed: s.get('revSeed') });
+        this.reverb.set({ density: s.get('revDensity'), len, attack: s.get('revAttack'), release: s.get('revRelease'), releaseShape: s.get('revReleaseShape'), seed: s.get('revSeed') });
     }
 
     /** Polzahl aus dem lpMode-Select (1..4; 'Aus' gibt es nicht mehr → 'aktiv'-Haken). */
