@@ -17,6 +17,9 @@ export class PresetBar {
     _build() {
         // Transport
         this._playBtn = this._btn('▶ Start', () => this.toggle(), 'play-btn');
+        // War als eigener Hint im Header untergebracht – zog dort nur unnötig Platz,
+        // gehört inhaltlich sowieso zum Start-Button (@dpa 20260713).
+        this._playBtn.title = 'Leertaste = Start/Stop';
         this.element.appendChild(this._playBtn);
 
         // Sync: bei aktivem Schalter beginnen bei jedem Start alle Sequenzer bei Step 1.

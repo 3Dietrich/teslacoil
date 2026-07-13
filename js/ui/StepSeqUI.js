@@ -14,6 +14,7 @@
  * `${which}SeqSteps/-Len`, Edits gehen über state.set → Recall/Snapshot/Auto-Save.
  */
 import { fillSeq, SEQ_MAX } from '../dsp/stepSeq.js';
+import { Knob } from './Knob.js';
 
 const DRAG_THRESH = 4;   // px: darüber = Höhe ziehen, darunter = Klick (Gate toggeln)
 // Per-Typ-Default: Balkenfarbe unterscheidet Filter (cyan) und Amp (orange).
@@ -40,6 +41,11 @@ export class StepSeqUI {
         this._lenKey = which + 'SeqLen';
         this._stepsKey = which + 'SeqSteps';
         this._enKey = which + 'SeqEnabled';
+        // Filter hat kein eigenes Bool mehr – 'an' heißt dort filterEnvTrig === 'seq'
+        // (dreistufiger Env-Trig, @dpa 20260713). Amp bleibt beim einfachen Bool-Toggle.
+        this._isOn = which === 'filter'
+            ? () => this.state.get('filterEnvTrig') === 'seq'
+            : () => !!this.state.get(this._enKey);
         this._lastH = new Array(SEQ_MAX).fill(1);  // gemerkte Höhe je Step (Gate-Toggle)
         this._lastPos = -2;
         this.element = this._build();
@@ -133,13 +139,36 @@ export class StepSeqUI {
     }
 
     /** Kleines Optik-Popup: Größe (Breite/Höhe), BG-Farbe, Balkenfarbe (mit Alpha).
-     *  ALLES gilt je Seq-Typ (Filter/Amp getrennt) – Schreiben nur in seqStyles[which]. */
+     *  ALLES gilt je Seq-Typ (Filter/Amp getrennt) – Schreiben nur in seqStyles[which].
+     *  Fenster ist per Linksklick auf ein Label verschiebbar, ESC/Außenklick schließt
+     *  (kein „Fertig"-Button mehr nötig). */
     _openSettings(anchor) {
         this._closeSettings();
         const colKey = 'col';
         const patch = (p) => this.state.set('seqStyles', { ...(this.state.get('seqStyles') || {}), [this.which]: { ...this._style(), ...p } });
-        const pop = document.createElement('div'); pop.className = 'group-settings';
-        const row = (label, ...els) => { const r = document.createElement('div'); r.className = 'gs-row'; const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label; r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r); };
+        const pop = document.createElement('div'); pop.className = 'group-settings seq-settings-pop';
+        // Linksklick auf ein Label zieht das ganze Popup; Klick auf den Value/Regler
+        // bleibt normale Bedienung (kein Drag-Konflikt, da eigener Listener auf dem Label).
+        const wireDrag = (labelEl) => {
+            labelEl.style.cursor = 'move';
+            labelEl.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const sx = e.clientX, sy = e.clientY;
+                const startL = parseFloat(pop.style.left) || 0, startT = parseFloat(pop.style.top) || 0;
+                const onMove = (ev) => {
+                    pop.style.left = Math.max(0, startL + (ev.clientX - sx)) + 'px';
+                    pop.style.top = Math.max(0, startT + (ev.clientY - sy)) + 'px';
+                };
+                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+            });
+        };
+        const row = (label, ...els) => {
+            const r = document.createElement('div'); r.className = 'gs-row';
+            const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label;
+            wireDrag(l);
+            r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r);
+        };
         const num = (key, min, max) => {
             const i = document.createElement('input'); i.type = 'number'; i.min = min; i.max = max; i.step = 1; i.className = 'gs-text'; i.value = this._style()[key];
             i.addEventListener('input', () => { const v = parseInt(i.value); if (!isNaN(v)) patch({ [key]: Math.max(min, Math.min(max, v)) }); });
@@ -151,21 +180,30 @@ export class StepSeqUI {
         bg.addEventListener('input', () => patch({ bg: bg.value }));
         row('BG', bg);
         const col = document.createElement('input'); col.type = 'color'; col.value = parseHex(this._style()[colKey], '#5ad1ff');
-        const alpha = document.createElement('input'); alpha.type = 'range'; alpha.min = 0; alpha.max = 1; alpha.step = 0.01; alpha.value = parseA(this._style()[colKey], 1); alpha.className = 'gs-alpha';
-        const applyCol = () => patch({ [colKey]: hexA(col.value, parseFloat(alpha.value)) });
-        col.addEventListener('input', applyCol); alpha.addEventListener('input', applyCol);
-        row(this.which === 'amp' ? 'Amp' : 'Filter', col, alpha);
-        const acts = document.createElement('div'); acts.className = 'gs-actions';
-        const done = document.createElement('button'); done.className = 'pb-btn'; done.textContent = 'Fertig';
-        done.addEventListener('click', () => this._closeSettings()); acts.appendChild(done); pop.appendChild(acts);
+        // Opaque-Regler: kleiner Knob OHNE Value-Anzeige statt Slider (spart rechts Platz).
+        const alphaKnob = new Knob({
+            label: 'A', min: 0, max: 1, step: 0.01, curve: 'linear', decimals: 2,
+            viewSize: 'mini', hideValue: true, value: parseA(this._style()[colKey], 1),
+            onChange: (v) => patch({ [colKey]: hexA(col.value, v) }),
+        });
+        col.addEventListener('input', () => patch({ [colKey]: hexA(col.value, alphaKnob.value) }));
+        row(this.which === 'amp' ? 'Amp' : 'Filter', col, alphaKnob.element);
         const r = anchor.getBoundingClientRect();
-        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 280))}px`;
+        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
         pop.style.top = `${r.bottom + 4}px`;
         document.body.appendChild(pop); this._pop = pop;
         this._outside = (e) => { if (this._pop && !this._pop.contains(e.target) && e.target !== anchor) this._closeSettings(); };
+        this._escClose = (e) => { if (e.key === 'Escape') this._closeSettings(); };
         setTimeout(() => document.addEventListener('mousedown', this._outside, true), 0);
+        document.addEventListener('keydown', this._escClose, true);
     }
-    _closeSettings() { if (this._pop) { this._pop.remove(); this._pop = null; document.removeEventListener('mousedown', this._outside, true); } }
+    _closeSettings() {
+        if (this._pop) {
+            this._pop.remove(); this._pop = null;
+            document.removeEventListener('mousedown', this._outside, true);
+            document.removeEventListener('keydown', this._escClose, true);
+        }
+    }
 
     /** Aus dem State neu zeichnen (Recall/Edit). Größe kann sich geändert haben. */
     refresh() {
@@ -178,7 +216,7 @@ export class StepSeqUI {
 
     /** Im Render-Loop: Playhead nur bei Positionswechsel neu zeichnen. */
     tick() {
-        const on = this.state.get(this._enKey) && this.engine.running;
+        const on = this._isOn() && this.engine.running;
         const pos = on ? this.engine.seqPos(this.which) : -1;
         if (pos !== this._lastPos) { this._lastPos = pos; this._draw(); }
     }
@@ -190,7 +228,7 @@ export class StepSeqUI {
         const cx = this._cv.getContext('2d');
         const len = this._len();
         const steps = this._steps();
-        const on = this.state.get(this._enKey) && this.engine.running;
+        const on = this._isOn() && this.engine.running;
         const pos = on ? this.engine.seqPos(this.which) : -1;
         const bw = W / len;
         cx.clearRect(0, 0, W, H);

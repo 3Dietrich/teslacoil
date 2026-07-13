@@ -323,7 +323,11 @@ export class TeslaEngine {
         const ampSeqV = this._seqStep('amp');
         const filtSeqV = this._seqStep('filter');
         const ampEn = s.get('ampSeqEnabled');
-        const filtEn = s.get('filterSeqEnabled');
+        // Env-Trig dreistufig (@dpa 20260713, ersetzt das alte Bool 'filterSeqEnabled'):
+        // 'off' = Env nie triggern, 'each' = jeder Trigger volle Env, 'seq' = Sequenzer
+        // steuert Trigger+Depth pro Step (bisheriges "filterSeqEnabled=true"-Verhalten).
+        const filterEnvTrig = s.get('filterEnvTrig');
+        const filtEn = filterEnvTrig === 'seq';
         // Amp-Sequenzer gated die Note (0 = kein Trigger) und skaliert die Velocity.
         // 'Dyn' biegt die Velocity-Kurve bipolar: −1 = alle Steps auf 75 % (flach),
         // 0 = linear (roher Step-Wert), +1 = quadratisch v² (Kontrast, "hart/weich").
@@ -415,7 +419,7 @@ export class TeslaEngine {
             // (2) ENV als Multiplikator NUR auf getriggerten Steps neu anstoßen; sie läuft
             //     danach eigenständig weiter (eigener Param), während Keytrack die Basis
             //     darunter pro Note weiterbewegt → beide gleichzeitig, keiner würgt ab.
-            if (lpEnv !== 0) {
+            if (lpEnv !== 0 && filterEnvTrig !== 'off') {
                 const doTrig = filtEn ? filtSeqV > 0 : noteOn;
                 if (doTrig) {
                     const depth = filtEn ? filtSeqV : 1;

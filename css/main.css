@@ -19,13 +19,16 @@ body {
   font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
+/* Kopfzeile (@dpa 20260713): Name größer bei WENIGER Padding (behält die Zeilenhöhe),
+   rechts zieht Zeile-1-Kram (Master Vol · Settings · CPU · e-Mode) rein – die vorherige
+   Leerzeile war reine Platzverschwendung. */
 .topbar {
-  display: flex; align-items: baseline; gap: 16px;
-  padding: 12px 18px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 18px; border-bottom: 1px solid var(--line);
 }
-.topbar h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
+.topbar h1 { margin: 0; font-size: 21px; letter-spacing: .04em; }
 .topbar h1 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
-.topbar .hint { color: var(--muted); margin-left: auto; }
+.topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 
 #app { padding: 16px 18px; padding-right: 64px; display: flex; flex-direction: column; gap: 16px; }
 
@@ -39,17 +42,18 @@ body {
 /* kompakte Icon-Buttons (Snapshot/Layout) */
 .pb-icon { padding: 4px 6px; min-width: 24px; font-size: 12px; line-height: 1; text-align: center; }
 /* Aktions-Farben: gleiche Glyph-Sprache in allen Clustern, aber klar unterscheidbar
-   (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export). */
-.pb-ic-load   { color: #7fc8ff; }
-.pb-ic-save   { color: #ffcf7a; }
-.pb-ic-new    { color: #8fe388; }
-.pb-ic-export { color: #9aa4b2; }
-.pb-ic-del    { color: #ff7a7a; }
+   (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export). Icons etwas größer als der Rest von
+   .pb-icon – die Vierecke bleiben normal (@dpa 20260713: "Icon oft zu klein im Viereck"). */
+.pb-ic-load   { color: #7fc8ff; font-size: 15px; }
+.pb-ic-save   { color: #ffcf7a; font-size: 15px; }
+.pb-ic-new    { color: #8fe388; font-size: 15px; }
+.pb-ic-export { color: #9aa4b2; font-size: 15px; }
+.pb-ic-del    { color: #ff7a7a; font-size: 15px; }
 .pb-icon:hover { border-color: var(--accent); }
-/* Kopfzeile rechts: Arrange-Schalter + CPU-Last + Settings-Knopf */
-.hdr-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+/* Master Vol/Settings/CPU/e-Mode sitzen jetzt in .topbar-right (Kopfzeile Zeile 1).
+   „Alles zeigen" an der Kette (fx-showall-btn) bekommt dieselbe Icon+Viereck-Größe. */
 .hdr-cpu { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; min-width: 52px; text-align: right; }
-.settings-btn { font-size: 14px; }
+.settings-btn, .arrange-btn, .fx-showall-btn { padding: 6px 9px; min-width: 30px; font-size: 15px; }
 .arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 
 /* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
@@ -66,8 +70,8 @@ body {
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
 .play-btn { font-weight: 600; min-width: 84px; }
 .play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
-/* Sync-Schalter neben Start/Stop (aktiv = grün) */
-.sync-btn { font-size: 12px; }
+/* Sync-Schalter neben Start/Stop (aktiv = grün) – reload-Glyph war zu klein (@dpa 20260713). */
+.sync-btn { font-size: 13px; }
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
@@ -79,6 +83,9 @@ body {
 /* ── Selects ── */
 .select-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
 .toggle-field { flex-direction: row; align-items: center; gap: 6px; }
+/* Label von Controls ohne Knob (Select/Toggle) ist wie ein Regler draggbar (@dpa
+   20260713) – Cursor zeigt das an; Klick auf den Value bleibt normale Bedienung. */
+.ctrl-label-drag { cursor: ns-resize; user-select: none; }
 
 /* ── Panel / Groups / Knobs ── */
 /* FESTE POSITIONEN (@dpa): jede Gruppe steht absolut an ihrer gespeicherten x/y-
@@ -148,6 +155,9 @@ body {
 /* Snapshot-/Combo-Zeile: alles linksbündig, Menü schmal → ＋/🗑 passen auf die Zeile
    (kein Umbruch mehr). Der gemerkte Snapshot-Name bleibt im Menü stehen. */
 .group-settings .gs-snap-row, .group-settings .gs-combo-row { flex-wrap: nowrap; justify-content: flex-start; gap: 4px; }
+/* StepSeq-Settings (Filter/Amp): weniger Inhalt (kein Name/Combo) → schmaler, der
+   Opaque-Knob (statt Slider) spart zusätzlich rechts Platz. */
+.seq-settings-pop { width: 190px; }
 .gs-snap-sel, .gs-combo-sel { flex: 0 1 118px; min-width: 0; }
 .gs-row { display: flex; align-items: center; gap: 6px; }
 .gs-lab { color: var(--muted); min-width: 40px; font-size: 10px; }
@@ -229,6 +239,8 @@ body {
 .knob-size-none::before { content: ''; display: block; height: 4px; }
 .knob-size-none .knob-label { font-size: 9px; }
 .knob-size-none .knob-value { font-size: 10px; margin-top: 0; }
+/* Zahlen-Anzeige weg (Dial+Label bleiben) – spart rechts Platz, z.B. Opaque-Regler in Popups. */
+.knob-hide-value .knob-value { display: none; }
 .knob-label { font-size: 10px; color: var(--muted); margin-top: 1px; text-align: center; }
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 .knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }

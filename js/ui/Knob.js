@@ -31,6 +31,7 @@ export class Knob {
         this._decimals = config.decimals ?? 2;
         this._viewSize = config.viewSize ?? 'medium';   // 'medium'|'small'|'large'|'none'
         this._color = config.color ?? '';               // '' = Standardfarbe
+        this._hideValue = !!config.hideValue;            // true = Zahlen-Anzeige weg (nur Dial+Label, spart Platz)
         this.formatValue = config.formatValue || null;
         this.onChange = config.onChange || null;
         this.onMetaClick = config.onMetaClick || null;
@@ -358,6 +359,7 @@ export class Knob {
         if (!this.element) return;
         this.element.classList.remove('knob-size-medium', 'knob-size-mini', 'knob-size-small', 'knob-size-large', 'knob-size-none');
         this.element.classList.add('knob-size-' + (this._viewSize || 'medium'));
+        this.element.classList.toggle('knob-hide-value', this._hideValue);
         // Farbe als CSS-Variable → Wertbogen/Indikator/Value nutzen sie (Fallback = Default).
         if (this._color) this.element.style.setProperty('--knob-accent', this._color);
         else this.element.style.removeProperty('--knob-accent');

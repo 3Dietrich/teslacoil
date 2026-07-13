@@ -95,9 +95,17 @@ export const DEFAULTS = Object.freeze({
                          // Cutoff. 0 % = nur Cutoff, 100 % = Cutoff + gespielte Frequenz.
     lpGlide: 0.015,      // Glide-Zeitkonstante (τ, s) für Keytrack-Cutoff-Sprünge zwischen
                          // Noten ('Option A', @dpa). 0 = harter Sprung (kein Glide).
+    // Env-Trig (@dpa 20260713, ersetzt das alte Bool 'filterSeqEnabled'): dreistufig,
+    // steuert WANN/WIE die Filter-Hüllkurve (lpEnv/lpAttack/lpDecay) getriggert wird.
+    //   'off'  – Env komplett aus (kein Trigger, kein Cutoff-Hub)
+    //   'each' – jeder Trigger löst die volle Env aus (Sequenzer ausgeblendet)
+    //   'seq'  – Filter-Sequenzer steuert Env-Trigger + -Depth pro Step (bisheriges Verhalten)
+    // Migration (app.js, boot()): altes filterSeqEnabled true→'seq', false→'each' (Bool
+    // war NIE "Env aus", sondern "jeder Trigger volle Env" – 1:1-Verhaltenserhalt beim Laden
+    // alter Zustände, s. @dpa-Regel „keine stillen Deckel auf User-Werte").
+    filterEnvTrig: 'seq',
     // Filter-Sequenzer: pro Takt-Step Env-Trigger (>0) + Env-Depth (0..1).
     // Default: nur Step 0 = 100 %, Rest 0 → einmal triggern, dann Env laufen lassen.
-    filterSeqEnabled: false,
     filterSeqLen: 8,
     filterSeqSteps: makeSeqSteps('first'),
     // FX-Ketten-Reihenfolge (Sound): frei umsteckbare Reihenfolge der drei Bus-FX.

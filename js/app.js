@@ -95,6 +95,10 @@ const SELECTS = {
     oscEngine: { label: 'Engine', options: ['Square-PW', 'Sine-FM'] },
     filterType: { label: 'Typ', options: ['LP', 'HP', 'BP', 'Ladder-org'] },
     lpMode:    { label: 'Pole', options: ['1p', '2p', '3p', '4p'] },
+    // MouseOver-Info pro Option (@dpa 20260713): sinnvoll gefüllt statt leer.
+    filterEnvTrig: { label: 'Env-Trig', options: ['off', 'each', 'seq'], optionTitles: {
+        off: 'Env aus', each: 'jeder Trigger volle Env', seq: 'Env-Trigger folgt Sequenzer',
+    } },
     distMode:  { label: 'Distortion', options: ['Saturation', 'Hard Clip', 'Foldback'] },
     revView:    { label: 'Ansicht', options: ['L', 'R', 'Beide'] },
 };
@@ -102,7 +106,6 @@ const TOGGLES = {
     gateEnabled:   { label: 'aktiv' },
     metroEnabled:  { label: 'aktiv' },
     filterEnabled: { label: 'aktiv' },
-    filterSeqEnabled: { label: 'Seq' },
     ampSeqEnabled: { label: 'Seq' },
     ampHold:       { label: 'Hold' },      // Amp-Env nicht neu triggern solange Note (Len) hält
     distEnabled:   { label: 'aktiv' },
@@ -132,7 +135,7 @@ const GROUPS = [
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
     // Lowpass auf dem OSC: Cutoff (+ Reso ab 2p) mit Decay-Env (Takt×Gate).
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
-    { name: 'Filter', selects: ['filterType', 'lpMode'], toggles: ['filterEnabled', 'filterSeqEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
+    { name: 'Filter', selects: ['filterType', 'lpMode', 'filterEnvTrig'], toggles: ['filterEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
     // Distortion: Effekt-Slot vor dem Reverb.
     { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut'], dist: true },
     // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
@@ -155,7 +158,9 @@ function groupSoundKeys(grp) {
     (grp.inlineKnobs || []).forEach((k) => keys.push(k));
     (grp.knobs || []).forEach((k) => keys.push(k));
     if (grp.lengthSat) { keys.push(grp.lengthSat.main); (grp.lengthSat.sats || []).forEach((k) => keys.push(k)); }
-    if (grp.seq) keys.push(grp.seq + 'SeqEnabled', grp.seq + 'SeqLen', grp.seq + 'SeqSteps');
+    // 'SeqEnabled'/-Äquivalent (ampSeqEnabled bzw. filterEnvTrig) steckt bereits in
+    // toggles/selects der Gruppe – hier nur die reinen Sequenzer-Daten.
+    if (grp.seq) keys.push(grp.seq + 'SeqLen', grp.seq + 'SeqSteps');
     if (grp.scale) keys.push('scaleMask', 'scaleRoot');
     return keys;
 }
@@ -187,6 +192,12 @@ function boot() {
     // Migration: die entfernten Moog-Ladder-Typen ('Ladder'/'Ladder-alt') auf den
     // verbliebenen SVF-Ladder ('Ladder-org') mappen, damit alte Zustände gültig bleiben.
     if (['Ladder', 'Ladder-alt'].includes(state.get('filterType'))) state.set('filterType', 'Ladder-org');
+    // Migration: altes Bool 'filterSeqEnabled' → dreistufiges 'filterEnvTrig'. Das Bool
+    // bedeutete NIE "Env aus" – false löste die Env bei JEDEM Trigger voll aus (='each'),
+    // true ließ den Sequenzer steuern (='seq'). 1:1-Verhaltenserhalt für alte Zustände.
+    if (state.get('filterSeqEnabled') !== undefined) {
+        state.set('filterEnvTrig', state.get('filterSeqEnabled') ? 'seq' : 'each');
+    }
     // Migration: die früheren per-Modus-Oktaven (baseOct/tempoOct) in den einen globalen
     // baseOctave falten → aktuelle Tonhöhe bleibt beim ersten Laden erhalten.
     {
@@ -275,10 +286,31 @@ function boot() {
         const sel = document.createElement('select');
         cfg.options.forEach((o) => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
         sel.value = state.get(key);
-        sel.addEventListener('change', () => state.set(key, sel.value));
+        // MouseOver-Info je nach gewählter Option (falls die Select-Def welche mitgibt,
+        // z.B. Env-Trig off/each/seq) – live nachziehen bei Änderung/Recall.
+        const applyTitle = () => { if (cfg.optionTitles) sel.title = cfg.optionTitles[sel.value] || ''; };
+        applyTitle();
+        sel.addEventListener('change', () => { state.set(key, sel.value); applyTitle(); });
+        // Label-Drag (@dpa 20260713, „Controls ohne Knob wie Knobs draggbar"): vertikal
+        // ziehen wechselt die Option. Klick auf den Value (sel) bleibt normale Bedienung.
+        // Im e-Mode (arranging) nichts tun → Event blubbert zum wrap, wireCtrlMove
+        // übernimmt dort das Verschieben (Position statt Wert).
+        span.classList.add('ctrl-label-drag');
+        span.addEventListener('mousedown', (e) => {
+            if (arranging) return;
+            e.preventDefault();
+            const startY = e.clientY;
+            const baseIdx = cfg.options.indexOf(sel.value);
+            const onMove = (ev) => {
+                const idx = Math.max(0, Math.min(cfg.options.length - 1, baseIdx + Math.round((startY - ev.clientY) / 18)));
+                if (cfg.options[idx] !== sel.value) { sel.value = cfg.options[idx]; state.set(key, sel.value); applyTitle(); }
+            };
+            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        });
         wrap.appendChild(span); wrap.appendChild(sel);
         wrap.dataset.ctrl = 's:' + key;   // Kennung für den Arrange-Modus
-        ctrlBindings.set(key, (data) => { sel.value = data[key]; });
+        ctrlBindings.set(key, (data) => { sel.value = data[key]; applyTitle(); });
         ctrlEls.set(key, wrap);
         return wrap;
     }
@@ -289,6 +321,21 @@ function boot() {
         const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = state.get(key);
         chk.addEventListener('change', () => state.set(key, chk.checked));
         const span = document.createElement('span'); span.textContent = cfg.label;
+        // Label-Drag: nach oben ziehen = an, nach unten = aus (wie ein Regler). Klick auf
+        // die Checkbox selbst bleibt normale Bedienung. Im e-Mode → wireCtrlMove (Bubble).
+        span.classList.add('ctrl-label-drag');
+        span.addEventListener('mousedown', (e) => {
+            if (arranging) return;
+            e.preventDefault();
+            const startY = e.clientY, THRESH = 10;
+            const onMove = (ev) => {
+                const dy = startY - ev.clientY;
+                const want = dy > THRESH ? true : dy < -THRESH ? false : chk.checked;
+                if (want !== chk.checked) { chk.checked = want; state.set(key, want); }
+            };
+            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        });
         wrap.appendChild(chk); wrap.appendChild(span);
         wrap.dataset.ctrl = 't:' + key;   // Kennung für den Arrange-Modus
         ctrlBindings.set(key, (data) => { chk.checked = !!data[key]; });
@@ -435,12 +482,13 @@ function boot() {
         return bar;
     }
 
-    // Master (global) – kompakt & flach oben in der Transport-Zeile.
-    function makeMasterBar() {
+    // Master-Vol (global) – sitzt jetzt in der Kopfzeile (Zeile 1, @dpa 20260713: die
+    // vorher fast leere erste Zeile bekommt Inhalt). DC-Block bleibt unten in der
+    // Transport-Zeile (Reihenfolge Start·Snapshot·Kette·DC), s. hdrRight-Aufbau unten.
+    function makeMasterVolBar() {
         const bar = document.createElement('div'); bar.className = 'master-inline';
-        const sep = document.createElement('span'); sep.className = 'pb-sep'; bar.appendChild(sep);
         const title = document.createElement('span'); title.className = 'mi-title'; title.textContent = 'Master'; bar.appendChild(title);
-        // Volume als flacher Slider (statt Knob → spart Höhe in der ersten Zeile)
+        // Volume als flacher Slider (statt Knob → spart Höhe)
         const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.01;
         vol.className = 'mi-vol'; vol.value = state.get('masterVol');
         vol.addEventListener('input', () => state.set('masterVol', parseFloat(vol.value)));
@@ -448,10 +496,8 @@ function boot() {
         const volWrap = document.createElement('label'); volWrap.className = 'pb-field';
         const vlab = document.createElement('span'); vlab.textContent = 'Vol'; volWrap.appendChild(vlab); volWrap.appendChild(vol);
         bar.appendChild(volWrap);
-        bar.appendChild(makeToggle('dcBlock'));
         return bar;
     }
-    presetBar.element.appendChild(makeMasterBar());
 
     // Kette (Patchbay, @dpa 20260713): Quellen (OSC fest · Metronom ziehbar) mit Out•,
     // Effekte (Filter/Dist/Reverb) mit •in/out•, Ziele (Oscillator/Spectrum/Debug) mit •in.
@@ -465,6 +511,7 @@ function boot() {
         const wrap = document.createElement('div'); wrap.className = 'fx-chain-wrap';
         const lab = document.createElement('span'); lab.className = 'fx-chain-lab'; lab.textContent = 'Kette';
         const showAllBtn = iconBtn('⤢', 'Alles zeigen (umbrechen statt scrollen)', () => { fxShowAll = !fxShowAll; wrap.classList.toggle('fx-showall', fxShowAll); showAllBtn.classList.toggle('on', fxShowAll); });
+        showAllBtn.classList.add('fx-showall-btn');
         const bar = document.createElement('div'); bar.className = 'fx-chain';
         let dragName = null;
         const clearMarks = () => bar.querySelectorAll('.fx-drop-mark').forEach((c) => c.classList.remove('fx-drop-mark'));
@@ -518,6 +565,8 @@ function boot() {
         return wrap;
     }
     presetBar.element.appendChild(makeFxChainBar());
+    // DC-Block ans Ende der Transport-Zeile (Reihenfolge Start·Snapshot·Kette·DC, @dpa 20260713).
+    presetBar.element.appendChild(makeToggle('dcBlock'));
 
     // ── Optisches Layout-System (Gruppen-Stil/-Position/-Klappen) – eigenständig ──
     // Beim ersten Start optische Einstellungen aus Snapshot "verschiebetest" übernehmen.
@@ -535,15 +584,17 @@ function boot() {
     };
     state.subscribe((key) => { if (key === '*' || OPTIK_KEYS.has(key)) persistOptik(); });
 
-    // ── Kopfzeile rechts: Arrange-Schalter, CPU-Last, Settings-Knopf ──
+    // ── Kopfzeile Zeile 1 (rechts): Master Vol · Settings · CPU · e-Mode (@dpa 20260713:
+    //    zieht in die vorher fast leere erste Zeile, Zeile 2 bleibt Start·Snapshot·Kette·DC). ──
     const settingsBtn = iconBtn('⚙', 'Einstellungen', () => openSettings());
     settingsBtn.classList.add('settings-btn');
     const arrBtn = iconBtn('⇄', 'Alle Elemente in Gruppen frei anordnen (experimentell) – dann per Drag umsortieren', () => setArranging(!arranging));
     arrBtn.classList.add('arrange-btn');
     const cpuEl = document.createElement('span'); cpuEl.className = 'hdr-cpu'; cpuEl.textContent = 'CPU –';
-    const hdrRight = document.createElement('div'); hdrRight.className = 'hdr-right';
-    hdrRight.appendChild(arrBtn); hdrRight.appendChild(cpuEl); hdrRight.appendChild(settingsBtn);
-    presetBar.element.appendChild(hdrRight);
+    const hdrRight = document.createElement('div'); hdrRight.className = 'topbar-right';
+    hdrRight.appendChild(makeMasterVolBar());
+    hdrRight.appendChild(settingsBtn); hdrRight.appendChild(cpuEl); hdrRight.appendChild(arrBtn);
+    document.querySelector('.topbar').appendChild(hdrRight);
 
     // Audio-Last: echte Render-Kapazität des AudioContext (nur Chrome), sonst grobe UI-Last.
     let cpuLoad = 0, cpuHasAudio = false;
@@ -748,6 +799,9 @@ function boot() {
             const w = new StepSeqUI(state, engine, grp.seq);
             makeMovable(w.element, 'u:seq' + grp.seq);
             seqWidgets.push(w);
+            // Filter-Sequenzer hängt an Env-Trig ('seq') statt einem eigenen Toggle →
+            // generisch über setVis()/ctrlEls sichtbar/unsichtbar (Block B).
+            if (grp.seq === 'filter') ctrlEls.set('filterSeqWidget', w.element);
             body.appendChild(w.element);
         }
         if (grp.debug) {
@@ -1053,7 +1107,15 @@ function boot() {
         arrBtn.classList.toggle('on', on);   // Kopfzeilen-Schalter spiegeln
         // Kein HTML5-Reorder-Drag mehr (Controls werden frei bewegt) → draggable aus.
         for (const { el } of arrangeRows) [...el.children].forEach((c) => { if (c.dataset.ctrl) c.draggable = false; });
-        if (!on) setSelected(null);   // Auswahl beim Verlassen aufheben
+        // Sichtbarkeit sofort neu anwenden (setVis() respektiert `arranging`): beim Betreten
+        // wird ALLES sichtbar, beim Verlassen wieder die reale on/off-Stellung.
+        refreshVisibility();
+        if (on) {
+            // Alle Gruppen SOFORT einfrieren (statt lazy beim ersten Klick) – dadurch misst
+            // freezeGroup() für jedes Control eine echte Position (nichts mehr display:none)
+            // UND es gibt keinen Layout-Sprung mehr beim ersten Anklicken einer Gruppe.
+            for (const name of groupEls.keys()) freezeGroup(name);
+        } else setSelected(null);   // Auswahl beim Verlassen aufheben
         // Sichtbarer Hinweis, dass hier verschoben statt bedient wird.
         if (on && !_arrangeHint) {
             _arrangeHint = document.createElement('div'); _arrangeHint.className = 'arrange-hint';
@@ -1209,7 +1271,10 @@ function boot() {
     applyKnobMeta(state.toJSON()); // initialer Stand
 
     // Modusabhängige Sichtbarkeit der Base-Frq-Controls (Quelle: Freq/Tempo/Ton).
-    const setVis = (key, on) => { const el = ctrlEls.get(key); if (el) el.style.display = on ? '' : 'none'; };
+    // Im e-Mode (arranging) wird die on/off-Stellung optisch ignoriert – ALLES anzeigen,
+    // damit freezeGroup() jedem Control eine echte Position misst (keine überlagerten
+    // display:none-Reste, die beim Wiedereinblenden an (0,0) springen).
+    const setVis = (key, on) => { const el = ctrlEls.get(key); if (el) el.style.display = (arranging || on) ? '' : 'none'; };
     function updateBaseVisibility() {
         const src = state.get('baseSrc');
         setVis('baseHz', src === 'Freq');     // Freq: Grundfrequenz wichtig
@@ -1218,16 +1283,24 @@ function boot() {
         setVis('baseTestLevel', state.get('baseTestOn')); // Test-Vol nur wenn Test-Ton an
         baseSpeed.style.display = src === 'Freq' ? '' : 'none';  // BpM/Hz/P nur im Freq-Modus
     }
-    // Filter: Regler nur sichtbar wenn 'aktiv'. Pole-Select nur beim LP (Steilheit);
-    // Resonanz beim LP erst ab 2p, bei HP/BP/Ladder immer.
+    // Filter: 'aktiv' aus → bis auf Type ALLES ausblenden. 'aktiv' an: Pole-Select immer
+    // (für alle Typen relevant), Resonanz beim LP erst ab 2p, bei HP/BP/Ladder immer.
+    // Env-Trig dreistufig steuert zusätzlich Env/Att/Dec (aus bei 'off') und den
+    // Sequenzer (nur sichtbar bei 'seq').
     const LP_MODES = ['1p', '2p', '3p', '4p'];
     function updateFilterVisibility() {
         const on = state.get('filterEnabled');
         const type = state.get('filterType');
         const poles = LP_MODES.indexOf(state.get('lpMode')) + 1; // 1..4
-        ['lpCutoff', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack'].forEach((k) => setVis(k, on));
+        const envTrig = state.get('filterEnvTrig'); // 'off' | 'each' | 'seq'
+        const envOn = on && envTrig !== 'off';
+        ['lpCutoff', 'lpKeyTrack'].forEach((k) => setVis(k, on));
+        ['lpEnv', 'lpAttack', 'lpDecay'].forEach((k) => setVis(k, envOn));
         setVis('lpMode', on);   // Polzahl jetzt für ALLE Typen relevant (LP/HP/BP/Ladder)
         setVis('lpReso', on && (type !== 'LP' || poles >= 2));
+        setVis('lpGlide', on);
+        setVis('filterEnvTrig', on);
+        setVis('filterSeqWidget', on && envTrig === 'seq');
     }
     // Distortion: Regler nur sichtbar, wenn 'aktiv'.
     function updateDistVisibility() {
@@ -1257,13 +1330,18 @@ function boot() {
         ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revReleaseShape', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'].forEach((k) => setVis(k, on));
         setVis('revView', on);
     }
-    updateBaseVisibility();
-    updateFilterVisibility();
-    updateReverbVisibility();
-    updateOscVisibility();
-    updateDistVisibility();
-    updateMetroVisibility();
-    updatePitchWaveVis();
+    // Alle modusabhängigen Sichtbarkeiten neu anwenden – einmal an einer Stelle, damit
+    // setArranging() sie beim Betreten/Verlassen des e-Mode identisch aufrufen kann.
+    function refreshVisibility() {
+        updateBaseVisibility();
+        updateFilterVisibility();
+        updateReverbVisibility();
+        updateOscVisibility();
+        updateDistVisibility();
+        updateMetroVisibility();
+        updatePitchWaveVis();
+    }
+    refreshVisibility();
 
     // Reflections-Anzeige zeichnen: jede Reflexion = senkrechter Strich (Höhe = Pegel),
     // niedriges Alpha → dichte Wolken werden durch Überlagerung kräftiger.
@@ -1338,13 +1416,7 @@ function boot() {
             applyKnobMeta(data);                              // erst Skala/Kurve …
             for (const [k, knob] of knobsById) knob.value = data[k];   // … dann Werte
             for (const upd of ctrlBindings.values()) upd(data);
-            updateBaseVisibility();
-            updateFilterVisibility();
-            updateReverbVisibility();
-            updateOscVisibility();
-            updateDistVisibility();
-            updateMetroVisibility();
-            updatePitchWaveVis();
+            refreshVisibility();
             applyReflSize();
             applyGroupStyles(data);
             applyGroupPositions();
@@ -1361,7 +1433,7 @@ function boot() {
         } else if (key === 'baseSrc' || key === 'baseTestOn') {
             ctrlBindings.get(key)(data);
             updateBaseVisibility();
-        } else if (key === 'lpMode' || key === 'filterType' || key === 'filterEnabled') {
+        } else if (key === 'lpMode' || key === 'filterType' || key === 'filterEnabled' || key === 'filterEnvTrig') {
             ctrlBindings.get(key)(data);
             updateFilterVisibility();
         } else if (key === 'reverbEnabled') {
@@ -1399,7 +1471,7 @@ function boot() {
         // sofort wieder überschrieben (= „Rate oft nicht recalled"-Bug).
         if (key !== '*' && RATE_QUANT_KEYS.has(key)) syncRateQuant();
         // Sequenzer-Widgets neu zeichnen (Recall oder Edit an Steps/Länge/aktiv).
-        if (key === '*' || key === 'seqStyles' || /^(amp|filter)Seq/.test(key)) { seqWidgets.forEach((w) => w.refresh()); if (key === 'seqStyles') sizePanel(); }
+        if (key === '*' || key === 'seqStyles' || key === 'filterEnvTrig' || /^(amp|filter)Seq/.test(key)) { seqWidgets.forEach((w) => w.refresh()); if (key === 'seqStyles') sizePanel(); }
         // Menü-Auswahlen nachziehen (Recall).
         if (key === '*' || key === 'scaleSel') scaleRefresh();
         if (key === '*' || key === 'layoutSel') layoutRefresh();
