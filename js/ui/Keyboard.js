@@ -72,8 +72,8 @@ export class Keyboard {
         // Base→C: Skala relativ zur Basis (do re mi), Klang folgt der Basis. Neben skal2.
         this._bcBtn = document.createElement('button');
         this._bcBtn.className = 'pb-btn kb-skal2-btn';
-        this._bcBtn.textContent = 'Base→C';
-        this._bcBtn.title = 'Base→C: Skala relativ zur Basis (do re mi); der Klang folgt der BaseFreq.';
+        this._bcBtn.textContent = 'base=c';
+        this._bcBtn.title = 'base=c: Skala relativ zur Basis (do re mi); der Klang folgt der BaseFreq.';
         this._bcBtn.addEventListener('click', () => this.state.set('baseToC', !this.state.get('baseToC')));
         btns.appendChild(this._bcBtn);
 

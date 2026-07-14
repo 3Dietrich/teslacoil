@@ -113,7 +113,7 @@ const TOGGLES = {
     dcBlock:       { label: 'DC-Block' },
     intMultiples:  { label: '×ganze' },   // (nur noch Keyboard-Anzeige; kein globaler Schalter mehr)
     rateQuant:     { label: 'Quant' },     // lokal in Skaler: Rate float ↔ Bruch k/l
-    baseToC:       { label: 'Base→C' },    // Skala relativ zur Basis (do re mi); Klang folgt der Basis
+    baseToC:       { label: 'base=c' },    // Skala relativ zur Basis (do re mi); Klang folgt der Basis
     baseTestOn:    { label: 'Test-Ton' },  // trockener Sinus auf der BaseFrq (Vergleich)
     metroCutoffQuant: { label: 'Quant' },  // Metronom-Cutoff an BaseFrq gerastet (Oktaver statt Hz-Knob)
 };
@@ -363,6 +363,9 @@ function boot() {
         });
         knob._defaultMeta = knob.getMeta();   // Original-Range/Kurve für „Zurücksetzen"
         knob.element.dataset.ctrl = 'k:' + key;   // Kennung für den Arrange-Modus
+        // Rechtsklick = Settings (@dpa 20260711): öffnet den Meta-Editor dieses Reglers (wie
+        // der ⚙ am Knob). stopPropagation, damit NICHT zusätzlich die Gruppen-Settings aufgehen.
+        knob.element.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); metaEditor.open(knob); });
         knobsById.set(key, knob);
         ctrlEls.set(key, knob.element);
         return knob;
@@ -497,14 +500,14 @@ function boot() {
     // Transport-Zeile (Reihenfolge Start·Snapshot·Kette·DC), s. hdrRight-Aufbau unten.
     function makeMasterVolBar() {
         const bar = document.createElement('div'); bar.className = 'master-inline';
-        const title = document.createElement('span'); title.className = 'mi-title'; title.textContent = 'Master'; bar.appendChild(title);
-        // Volume als flacher Slider (statt Knob → spart Höhe)
+        // Volume als flacher Slider (statt Knob → spart Höhe). Label „Master Vol" in EINER
+        // Zeile ÜBER dem Fader (@dpa 20260713) – kein separates „MASTER" mehr davor.
         const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.01;
         vol.className = 'mi-vol'; vol.value = state.get('masterVol');
         vol.addEventListener('input', () => state.set('masterVol', parseFloat(vol.value)));
         ctrlBindings.set('masterVol', (data) => { vol.value = data.masterVol; });
         const volWrap = document.createElement('label'); volWrap.className = 'pb-field';
-        const vlab = document.createElement('span'); vlab.textContent = 'Vol'; volWrap.appendChild(vlab); volWrap.appendChild(vol);
+        const vlab = document.createElement('span'); vlab.className = 'mi-title'; vlab.textContent = 'Master Vol'; volWrap.appendChild(vlab); volWrap.appendChild(vol);
         bar.appendChild(volWrap);
         return bar;
     }
@@ -835,6 +838,14 @@ function boot() {
         // Klappen / Settings
         collapseBtn.addEventListener('click', () => setGroupCollapsed(grp.name, !groupCollapsed(grp.name)));
         setBtn.addEventListener('click', () => openGroupSettings(grp.name, setBtn));
+        // Rechtsklick irgendwo auf der Gruppe = Gruppen-Settings an der Mausposition
+        // (@dpa 20260711: „rechte Maustaste als Settings-Aufruf"). Knobs fangen es selbst ab
+        // (eigener Meta-Editor). Gilt auch im e-Mode.
+        g.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            const at = { getBoundingClientRect: () => ({ left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 }) };
+            openGroupSettings(grp.name, at);
+        });
         // Verschieben per Pointer-Drag an der Titelleiste → FESTE x/y-Position (Optik).
         // Ein Drag, der auf einem Button (⚙/▾) beginnt, wird NICHT gestartet, damit der
         // Button-Klick (auch im e-Mode) erreichbar bleibt.

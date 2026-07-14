@@ -287,7 +287,9 @@ body {
 .keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: fit-content; }
 /* Kopfzeile: Frequenzanzeige/Anker links, skal2-Schalter rechts */
 .kb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.kb-head-btns { display: flex; align-items: center; gap: 5px; }
+/* Button-Cluster (Anker/base=c/skal2) bleibt fest rechts – der Readout darf ihn NICHT
+   verschieben (@dpa 20260714). */
+.kb-head-btns { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 .kb-skal2-btn { font-size: 10px; padding: 1px 7px; }
 .kb-skal2-btn.pb-active { background: rgba(255,159,90,.22); box-shadow: inset 0 0 0 1px rgba(255,159,90,.6); color: var(--accent2); }
 /* Anker-Schalter (Transponier-Modus): eigener, „etwas bläulicher" Schalter links neben
@@ -297,7 +299,9 @@ body {
 /* Anker aktiv: obere Reihe (Zustandsanzeige) bläulich einfärben → Modus klar erkennbar. */
 .keyboard.kb-transpose-mode .kb-ind { background: rgba(90,209,255,.28); }
 .keyboard.kb-transpose-mode .kb-key.kb-on .kb-ind { background: rgba(90,209,255,.52); }
-.kb-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; min-height: 15px; }
+/* Eine Zeile, feste Position: nimmt den Platz links vom Button-Cluster und schneidet bei
+   langen Werten (z.B. ×128.00) hart ab, statt zu wachsen und die Buttons springen zu lassen. */
+.kb-readout { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; min-height: 15px; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: clip; }
 /* Frequenzanzeige als klickbarer Schalter für den Transponier-Modus (MouseOver-Hint) */
 .kb-readout-hint { cursor: pointer; border-radius: 3px; padding: 1px 5px; margin-left: -5px; transition: background .1s, box-shadow .1s; }
 .kb-readout-hint:hover { background: rgba(90,209,255,.12); box-shadow: inset 0 0 0 1px rgba(90,209,255,.4); }
