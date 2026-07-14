@@ -211,6 +211,11 @@ export const DEFAULTS = Object.freeze({
     // Struktur: { [Gruppenname]: { [data-ctrl-Kennung]: { x, y } } } in px. 10px-Raster,
     // Shift=1px. Rein optisch (LAYOUT_KEYS) – kein Sound.
     ctrlPos: {},
+    // Element-Settings der Nicht-Knob-Controls (@dpa 20260714): Selects (MultiSchalter),
+    // Toggles (aktiv/hold) und Readouts (pure Texte) bekommen per Rechtsklick eigene
+    // Optik-Settings. Struktur: { [data-ctrl-Kennung]: { label, labelPos, bg, fg, size,
+    // labelOn, fontSize, boxSize } } – nur gesetzte Felder. Rein optisch (LAYOUT_KEYS).
+    ctrlStyles: {},
     // Step-Sequenzer-Optik – GETRENNT je Seq-Typ (modular: Filter- und Amp-Seq haben
     // eigene Größe/BG/Balkenfarbe, verstellen sich nicht mehr gegenseitig). Struktur:
     // { filter: {w,h,bg,col}, amp: {w,h,bg,col} }. Optik-Ebene (LAYOUT_KEYS) → im Layout

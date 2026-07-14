@@ -14,6 +14,7 @@ import { State } from './core/State.js';
 import { TeslaEngine } from './engine/TeslaEngine.js';
 import { Knob } from './ui/Knob.js';
 import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
+import { ElementSettings } from './ui/ElementSettings.js';
 import { Keyboard } from './ui/Keyboard.js';
 import { StepSeqUI } from './ui/StepSeqUI.js';
 import { Scopes } from './ui/Scopes.js';
@@ -268,6 +269,29 @@ function boot() {
         state.set('knobMeta', { ...state.get('knobMeta'), [key]: knob.getMeta() });
     };
 
+    // Element-Settings für die Nicht-Knob-Controls (Selects/Toggles/Readouts, @dpa 20260714).
+    // styleTargets: id (data-ctrl-Kennung) → { type, el, applyStyle }. applyStyle stylt das
+    // konkrete DOM (typ-spezifisch, s. registerCtrlStyle); das Panel bleibt generisch.
+    const elemSettings = new ElementSettings(state);
+    const styleTargets = new Map();
+    elemSettings.onApply = (id, style) => {
+        const cur = { ...state.get('ctrlStyles') };
+        if (style && Object.keys(style).length) cur[id] = style; else delete cur[id];
+        state.set('ctrlStyles', cur);
+    };
+    // Ein Control als style-bar registrieren + gespeicherten Style sofort anwenden.
+    // Rechtsklick öffnet die Element-Settings (kein Durchfallen auf die Gruppen-Settings,
+    // KEINE Wert-Verstellung). @dpa: „RM darf keine Control Values verstellen."
+    function registerCtrlStyle(id, type, el, applyStyle, defLabel) {
+        styleTargets.set(id, { type, el, applyStyle });
+        const saved = (state.get('ctrlStyles') || {})[id];
+        if (saved) applyStyle(saved);
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            elemSettings.open({ id, type, el, defLabel, applyStyle });
+        });
+    }
+
     const knobsById = new Map();
     const ctrlBindings = new Map();   // key → (data) => UI aktualisieren (Selects/Toggles)
     const ctrlEls = new Map();        // key → DOM-Wrapper (für modusabhängiges Ein-/Ausblenden)
@@ -287,6 +311,7 @@ function boot() {
     function wireLabelDrag(wrap, valueEl, makeApply) {
         wrap.addEventListener('mousedown', (e) => {
             if (arranging) return;
+            if (e.button !== 0) return;   // nur linke Taste zieht – RM ist reiner Settings-Aufruf
             if (e.target === valueEl || valueEl.contains(e.target)) return;
             e.preventDefault();   // keine Text-Selektion beim Ziehen
             const startY = e.clientY;
@@ -331,6 +356,13 @@ function boot() {
         wrap.dataset.ctrl = 's:' + key;   // Kennung für den Arrange-Modus
         ctrlBindings.set(key, (data) => { sel.value = data[key]; applyTitle(); });
         ctrlEls.set(key, wrap);
+        // Element-Settings (Rechtsklick): Label, Schalter-BG/-VG-Farbe, Schriftgröße.
+        registerCtrlStyle('s:' + key, 'select', wrap, (s) => {
+            span.textContent = s.label || cfg.label;
+            sel.style.background = s.bg || '';
+            sel.style.color = s.fg || '';
+            sel.style.fontSize = s.size ? s.size + 'px' : '';
+        }, cfg.label);
         return wrap;
     }
     function makeToggle(key) {
@@ -351,6 +383,12 @@ function boot() {
         wrap.appendChild(chk); wrap.appendChild(span);
         wrap.dataset.ctrl = 't:' + key;   // Kennung für den Arrange-Modus
         ctrlBindings.set(key, (data) => { chk.checked = !!data[key]; });
+        // Element-Settings (Rechtsklick): Label + Label-Position (oben/links/rechts/unten).
+        registerCtrlStyle('t:' + key, 'toggle', wrap, (s) => {
+            span.textContent = s.label || cfg.label;
+            wrap.classList.remove('tgl-label-top', 'tgl-label-bottom', 'tgl-label-left', 'tgl-label-right');
+            if (s.labelPos) wrap.classList.add('tgl-label-' + s.labelPos);
+        }, cfg.label);
         return wrap;
     }
     function makeKnob(key) {
@@ -1509,6 +1547,13 @@ function boot() {
     }
     applyReflSize();
 
+    // Element-Settings (Selects/Toggles/Readouts) beim Recall neu anwenden – jede
+    // registrierte id ihren gespeicherten Style, fehlende → Reset ({}).
+    function applyCtrlStyles(data) {
+        const styles = (data && data.ctrlStyles) || {};
+        for (const [id, t] of styleTargets) t.applyStyle(styles[id] || {});
+    }
+
     state.subscribe((key, value, data) => {
         if (key === '*') {
             applyKnobMeta(data);                              // erst Skala/Kurve …
@@ -1520,6 +1565,7 @@ function boot() {
             applyGroupPositions();
             applyControlOrder(data);
             applyCtrlPos(data);
+            applyCtrlStyles(data);
         } else if (key === 'groupStyles') {
             applyGroupStyles(data);
         } else if (key === 'groupOrder' || key === 'groupPos') {
@@ -1528,6 +1574,8 @@ function boot() {
             applyControlOrder(data);
         } else if (key === 'ctrlPos') {
             applyCtrlPos(data);
+        } else if (key === 'ctrlStyles') {
+            applyCtrlStyles(data);
         } else if (key === 'baseSrc' || key === 'baseTestOn') {
             ctrlBindings.get(key)(data);
             updateBaseVisibility();

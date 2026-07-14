@@ -95,7 +95,7 @@ export class PresetManager {
      * er unbeabsichtigt in den Sound-Snapshot. */
     static LAYOUT_KEYS = [
         'groupOrder', 'groupPos', 'groupStyles', 'groupStylePresets', 'controlOrder', 'ctrlPos',
-        'knobMeta', 'knobColorPresets',
+        'knobMeta', 'knobColorPresets', 'ctrlStyles',
         'reflW', 'reflH', 'reflColL', 'reflColR',
         'scopeOn', 'specOn', 'scopeSync', 'scopeRange', 'specGain',
         'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'knobColorSel', 'groupSnapSel', 'p2Sel',

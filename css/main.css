@@ -83,6 +83,11 @@ body {
 /* ── Selects ── */
 .select-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
 .toggle-field { flex-direction: row; align-items: center; gap: 6px; }
+/* Toggle-Label-Position (@dpa 20260714, Element-Settings). DOM-Reihenfolge = Checkbox, Label. */
+.toggle-field.tgl-label-right { flex-direction: row; }
+.toggle-field.tgl-label-left { flex-direction: row-reverse; }
+.toggle-field.tgl-label-top { flex-direction: column-reverse; align-items: center; gap: 2px; }
+.toggle-field.tgl-label-bottom { flex-direction: column; align-items: center; gap: 2px; }
 /* Label von Controls ohne Knob (Select/Toggle) ist wie ein Regler draggbar (@dpa
    20260713) – Cursor zeigt das an; Klick auf den Value bleibt normale Bedienung. */
 .ctrl-label-drag { cursor: ns-resize; user-select: none; }
