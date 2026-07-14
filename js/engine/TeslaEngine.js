@@ -375,7 +375,14 @@ export class TeslaEngine {
             const suspend = s.get('ampHold') && voiceAlive && envLen > interval + 1e-4;
             this._lastFreq = freq;            // Filter-Keytrack folgt der (neuen) Tonhöhe
             if (suspend) {
-                this.square.retune(freq, time, envLen);   // Pitch-Step + Sustain verlängern
+                // Wellenform-Parameter mitgeben: die gehaltene Voice wird nie neu angeschlagen,
+                // muss Engine/PW/FM aber trotzdem live folgen (sonst wirken die Audio-Osz-Regler
+                // im Hold nie). Amp/Attack/Release bleiben bewusst unberührt – das IST der Hold.
+                const engine = s.get('oscEngine');
+                this.square.retune(freq, time, envLen, 0, {
+                    engine,
+                    param: engine === 'Sine-FM' ? s.get('fmFeedback') : s.get('duty'),
+                });
                 this._ampHoldUntil = time + envLen;       // Hold weiter nach vorn schieben
             } else {
                 const engine = s.get('oscEngine');

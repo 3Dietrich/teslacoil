@@ -69,13 +69,26 @@ export class SquareOsc {
      *  Tonhöhe steppt. Solange retune() nachkommt, erreicht die Note nie ihr Release
      *  (kein wiederkehrender langsamer Attack). Ein laufender Attack wird sanft
      *  fortgeführt (kein Sprung), danach hält sie auf vollem Amp bis zum neuen Len-Ende.
-     *  @param glide 0 = harter Pitch-Sprung, >0 = τ-Glide (s). */
-    retune(freq, time, dur, glide = 0) {
+     *  @param glide 0 = harter Pitch-Sprung, >0 = τ-Glide (s).
+     *  @param wp   {engine,param,startPhase} – Wellenform-Parameter; werden bei JEDEM
+     *              Retune neu angewandt (s.u.). */
+    retune(freq, time, dur, glide = 0, wp = null) {
         const v = this._voices[this._voices.length - 1];
         if (!v) return;
         const f = Math.max(1, freq);
         const t = Math.max(this.ctx.currentTime, time);
         try {
+            // Wellenform live nachziehen (@dpa 20260714): Im Hold wird die Voice NIE neu
+            // angeschlagen – ohne das hier bliebe sie für immer auf der Wellenform vom
+            // Anschlag. Engine/PW/FM wirkten dann gar nicht mehr (der Hold hält endlos:
+            // _ampHoldUntil wird bei jedem Trigger weitergeschoben) → „Umschalten kommt
+            // nie an". setPeriodicWave darf jederzeit gesetzt werden und lässt die
+            // Amp-Env unberührt, der Hold bleibt also erhalten. Die Obertongrenze folgt
+            // dabei der neuen Frequenz (wie beim frischen Anschlag → kein Aliasing).
+            if (wp) {
+                const N = harmonicsForFreq(f, this.ctx.sampleRate, 2048);
+                v.osc.setPeriodicWave(this._wave(wp.engine || 'Square-PW', wp.param, wp.startPhase || 0, N));
+            }
             // Pitch-Step
             const p = v.osc.frequency;
             if (glide > 0) { p.cancelScheduledValues(t); p.setTargetAtTime(f, t, glide); }
