@@ -17,6 +17,7 @@ import { makeSeqSteps, seqAdvance, fillSeq, SEQ_MAX } from '../js/dsp/stepSeq.js
 import { bestFraction, reduce } from '../js/pitch/rateFraction.js';
 import { encodeWav, decodeWav } from '../js/dsp/wavEncoder.js';
 import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
+import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS } from '../js/data/Backup.js';
 
 let pass = 0;
 function t(name, fn) {
@@ -533,6 +534,64 @@ t('Env-Mult: lpEnv>0 öffnet (>1), <0 schließt (<1); ±1 = ±octaves', () => {
     assert.ok(approx(envPeakMult(1, 1, 6), 64));    // +6 Okt = ×2^6
     assert.ok(approx(envPeakMult(-1, 1, 6), 1 / 64)); // −6 Okt
     assert.ok(approx(envPeakMult(0.5, 1, 6), 8));   // +3 Okt
+});
+
+console.log('Backup');
+const MIN = 60e3, HOUR = 3600e3, DAY = 86400e3, WEEK = 7 * DAY;
+t('thin: max 2 innerhalb 1 Min', () => {
+    const now = 1_000_000_000_000;
+    const list = [0, 5e3, 10e3, 20e3, 40e3].map((d) => ({ ts: now - d }));   // 5 in der letzten Minute
+    const keep = thinBackups(list, now);
+    assert.equal(keep.filter((b) => now - b.ts < MIN).length, 2);
+});
+t('thin: max 5 innerhalb 1 Std (inkl. Minuten-Backups)', () => {
+    const now = 2_000_000_000_000;
+    const list = [];
+    for (let i = 0; i < 3; i++) list.push({ ts: now - i * 10e3 });          // 3 in der Minute → nur 2 bleiben
+    for (let i = 1; i <= 10; i++) list.push({ ts: now - (MIN + i * 60e3) }); // 10 in der Stunde
+    const keep = thinBackups(list, now);
+    assert.equal(keep.filter((b) => now - b.ts < HOUR).length, 5);
+});
+t('thin: 1 pro Tag zwischen 1 Std und 1 Woche', () => {
+    const now = 3 * WEEK;   // Tag-Buckets sauber am Epoch-Raster
+    const list = [];
+    for (let d = 0; d < 4; d++) for (let k = 0; k < 3; k++) list.push({ ts: now - (2 * HOUR + d * DAY + k * 1000) });
+    const keep = thinBackups(list, now).filter((b) => { const a = now - b.ts; return a >= HOUR && a < WEEK; });
+    assert.equal(keep.length, 4);   // 4 Tage → 4 Backups
+});
+t('thin: 1 pro Woche ab 1 Woche', () => {
+    const now = 10 * WEEK + 3 * DAY;   // Wochenmitte → Backups liegen sauber je in einem Bucket
+    const list = [];
+    for (let w = 1; w <= 3; w++) for (let k = 0; k < 3; k++) list.push({ ts: now - (w * WEEK + k * 1000) });
+    const keep = thinBackups(list, now).filter((b) => now - b.ts >= WEEK);
+    assert.equal(keep.length, 3);   // 3 Wochen → 3 Backups
+});
+// Fake-Storage für capture/restore/push
+function fakeStorage(init = {}) {
+    const m = new Map(Object.entries(init));
+    return {
+        getItem: (k) => (m.has(k) ? m.get(k) : null),
+        setItem: (k, v) => m.set(k, String(v)),
+        removeItem: (k) => m.delete(k),
+        _map: m,
+    };
+}
+t('capture/restore: Roundtrip aller Keys', () => {
+    const s = fakeStorage({ teslacoil_live: '{"a":1}', teslacoil_snapshots: '[1,2]' });
+    const snap = captureState(s);
+    s.setItem('teslacoil_live', '{"a":2}'); s.setItem('teslacoil_scales', '["x"]');
+    restoreState(s, snap);
+    assert.equal(s.getItem('teslacoil_live'), '{"a":1}');
+    assert.equal(s.getItem('teslacoil_scales'), null);   // war im Backup nicht vorhanden → entfernt
+});
+t('pushBackup: legt Eintrag mit Daten an und dünnt', () => {
+    const s = fakeStorage({ teslacoil_live: '{"v":1}' });
+    pushBackup(s, 100, 'test');
+    const list = readBackups(s);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].label, 'test');
+    assert.equal(list[0].data.teslacoil_live, '{"v":1}');
+    assert.ok(BACKED_UP_KEYS.includes('teslacoil_live'));
 });
 
 console.log(`\n${pass} Tests bestanden${process.exitCode ? ' (mit Fehlern!)' : ' ✅'}`);

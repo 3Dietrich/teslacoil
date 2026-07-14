@@ -70,8 +70,9 @@ body {
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
 .play-btn { font-weight: 600; min-width: 84px; }
 .play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
-/* Sync-Schalter neben Start/Stop (aktiv = grün) – reload-Glyph war zu klein (@dpa 20260713). */
-.sync-btn { font-size: 16px; }
+/* Sync-Schalter neben Start/Stop (aktiv = grün). Nur der Reload-Glyph ist vergrößert,
+   das Wort „Sync" bleibt so groß wie „Start" (@dpa 20260714). */
+.sync-ico { font-size: 18px; line-height: 1; vertical-align: -2px; }
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
@@ -229,7 +230,9 @@ body {
 /* Per-Knob-Farbe über --knob-accent (Fallback = globale Akzentfarbe/Text). */
 .knob-value-arc { stroke: var(--knob-accent, var(--accent)); }
 .knob-indicator { fill: var(--knob-accent, var(--text)); }
-.knob-center { fill: var(--panel2); }
+/* Knob-BG (@dpa 20260714): färbt NICHT den Container, sondern den runden Dial-Innenkreis
+   und die Value-Fläche. Fallback --panel2, wenn keine Knob-BG-Farbe gesetzt ist. */
+.knob-center { fill: var(--knob-bg, var(--panel2)); }
 .knob-value { font-size: 11px; color: var(--knob-accent, var(--text)); margin-top: 2px; }
 /* Ansicht-Größen: groß / mittel (Default 64px) / klein / mini / ohne Knob.
    Die Control-Höhe „berechnet" sich aus der Ansicht mit: weniger/kein Knob → flacher,
@@ -255,8 +258,9 @@ body {
 /* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
 .knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
 .knob-label-off .knob-label { display: none; }
-/* Knob-BG-Farbe: eigener Hintergrund hinter dem Regler (nur .knob-has-bg → kein Layout-Sprung ohne). */
-.knob-has-bg { background: var(--knob-bg); border-radius: 5px; padding: 3px 2px; }
+/* Knob-BG-Farbe (@dpa 20260714): NICHT mehr der ganze Container, sondern nur der runde
+   Dial-Innenkreis (siehe .knob-center) und die Value-Anzeige-Fläche darunter. */
+.knob-has-bg .knob-value { background: var(--knob-bg); border-radius: 3px; padding: 0 4px; }
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 .knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
 .knob-meta-btn:hover { opacity: 1; color: var(--accent); }
@@ -378,7 +382,10 @@ body {
 .sw-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .sw-head span { font-size: 14px; font-weight: 600; margin-right: auto; }
 .sw-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
-.sw-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
+.sw-subhead { font-size: 13px; font-weight: 600; color: var(--text); margin: 6px 0 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.pb-btn-danger { border-color: #6a2b2b; color: #ff9a9a; }
+.pb-btn-danger:hover { background: #3a1e1e; border-color: #ff5a5a; }
 
 .sw-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text); margin-bottom: 12px; cursor: pointer; }
 .sw-toggle input { accent-color: var(--accent); }

@@ -21,6 +21,7 @@ import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { PresetBar } from './ui/PresetBar.js';
 import { PresetManager } from './data/PresetManager.js';
+import { pushBackup, readBackups, restoreState } from './data/Backup.js';
 import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
@@ -245,6 +246,19 @@ function boot() {
         }, 150);
     };
     state.subscribe(persistLive);
+
+    // ── Auto-Backups: nach Ruhephasen (20 s nach der letzten Änderung) den kompletten
+    // Zustand aller Keys sichern. Die gestaffelte Retention (max 2/min, 5/h, 1/Tag,
+    // 1/Woche) dünnt beim Schreiben aus – so bleiben Bursts klein, ältere Stände lange
+    // erhalten. Rettungsnetz gegen versehentliches „Werkeinstellung zurücksetzen". ──
+    let _backupTimer = null;
+    const scheduleBackup = () => {
+        clearTimeout(_backupTimer);
+        _backupTimer = setTimeout(() => {
+            try { pushBackup(localStorage, Date.now()); } catch { /* Quota o.ä. */ }
+        }, 20000);
+    };
+    state.subscribe(scheduleBackup);
 
     const engine = new TeslaEngine(state);
     const presets = new PresetManager(state, engine);
@@ -718,14 +732,55 @@ function boot() {
             + 'gesichert und beim Neuladen/Aktualisieren wiederhergestellt.';
         win.appendChild(note);
 
+        // ── Backups (@dpa 20260714): vollständige Sicherungen aller Keys, gestaffelt
+        // aufbewahrt. Auswahl + Laden (setzt ALLES zurück auf den Stand) + manuelles Sichern. ──
+        const bkHead = document.createElement('div'); bkHead.className = 'sw-subhead'; bkHead.textContent = 'Backups';
+        win.appendChild(bkHead);
+        const bkNote = document.createElement('p'); bkNote.className = 'sw-note';
+        bkNote.textContent = 'Automatisch nach jeder Ruhephase gesichert (max. 2/Min, 5/Std, 1/Tag, 1/Woche). '
+            + 'Ein Backup zu laden ersetzt den KOMPLETTEN Zustand (Sound, Optik, Snapshots, Skalen, Layouts).';
+        win.appendChild(bkNote);
+
+        const bkRow = document.createElement('div'); bkRow.className = 'sw-actions';
+        const bkSel = document.createElement('select'); bkSel.className = 'pb-select'; bkSel.style.flex = '1';
+        const fmtTs = (ts) => new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'medium' });
+        const refreshBackups = () => {
+            bkSel.innerHTML = '';
+            const list = readBackups(localStorage).slice().sort((a, b) => b.ts - a.ts);   // neueste zuerst
+            if (!list.length) { const o = document.createElement('option'); o.textContent = '— keine Backups —'; o.value = ''; bkSel.appendChild(o); bkSel.disabled = true; return; }
+            bkSel.disabled = false;
+            const ph = document.createElement('option'); ph.textContent = '— Backup wählen —'; ph.value = ''; bkSel.appendChild(ph);
+            list.forEach((b) => { const o = document.createElement('option'); o.value = String(b.ts); o.textContent = fmtTs(b.ts) + (b.label ? '  · ' + b.label : ''); bkSel.appendChild(o); });
+        };
+        refreshBackups();
+        const bkLoad = document.createElement('button'); bkLoad.className = 'pb-btn'; bkLoad.textContent = 'Laden';
+        bkLoad.title = 'Gewähltes Backup wiederherstellen (ersetzt alles) und neu laden';
+        bkLoad.addEventListener('click', () => {
+            const ts = Number(bkSel.value); if (!ts) return;
+            const b = readBackups(localStorage).find((x) => x.ts === ts); if (!b) return;
+            if (!confirm('Backup vom ' + fmtTs(ts) + ' laden?\n\nDer AKTUELLE Zustand wird ersetzt (es wird vorher gesichert).')) return;
+            try { pushBackup(localStorage, Date.now(), 'vor Restore'); } catch { /* Quota */ }
+            restoreState(localStorage, b.data);
+            location.reload();   // sauberer Boot aus dem wiederhergestellten teslacoil_live
+        });
+        const bkSave = document.createElement('button'); bkSave.className = 'pb-btn'; bkSave.textContent = 'Jetzt sichern';
+        bkSave.title = 'Sofort ein Backup des aktuellen Zustands anlegen';
+        bkSave.addEventListener('click', () => { try { pushBackup(localStorage, Date.now(), 'manuell'); refreshBackups(); } catch { alert('Backup fehlgeschlagen (Speicher voll?).'); } });
+        bkRow.appendChild(bkSel); bkRow.appendChild(bkLoad); bkRow.appendChild(bkSave);
+        win.appendChild(bkRow);
+
+        // ── Werkseinstellung: doppelte Warnung + Auto-Backup davor (@dpa 20260714). ──
         const acts = document.createElement('div'); acts.className = 'sw-actions';
-        const reset = document.createElement('button'); reset.className = 'pb-btn';
+        const reset = document.createElement('button'); reset.className = 'pb-btn pb-btn-danger';
         reset.textContent = 'Auf Werkseinstellung zurücksetzen';
-        reset.title = 'Gesicherten Live-Zustand verwerfen und Defaults laden';
+        reset.title = 'ALLES verwerfen und Defaults laden (vorher wird automatisch gesichert)';
         reset.addEventListener('click', () => {
-            if (!confirm('Aktuellen Zustand verwerfen und auf Werkseinstellung zurücksetzen?')) return;
+            if (!confirm('ACHTUNG: Das setzt ALLES zurück – Sound, Optik, Snapshots, Skalen und Layouts.\n\nEs wird vorher automatisch ein Backup angelegt. Fortfahren?')) return;
+            if (!confirm('Wirklich ALLES auf Werkseinstellung zurücksetzen?\n\nLetzte Warnung – nur das automatische Backup bleibt erhalten.')) return;
+            try { pushBackup(localStorage, Date.now(), 'vor Werkseinstellung'); } catch { /* Quota */ }
             try { localStorage.removeItem(LIVE_KEY); } catch { /* noop */ }
             state.loadFromJSON({});   // → DEFAULTS, UI folgt über '*' (Auto-Save sichert die Defaults neu)
+            refreshBackups();
             closeSettings();
         });
         acts.appendChild(reset);

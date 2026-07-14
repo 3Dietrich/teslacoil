@@ -23,7 +23,10 @@ export class PresetBar {
         this.element.appendChild(this._playBtn);
 
         // Sync: bei aktivem Schalter beginnen bei jedem Start alle Sequenzer bei Step 1.
-        this._syncBtn = this._btn('⟲ Sync', () => this._toggleSync(), 'sync-btn');
+        this._syncBtn = this._btn('', () => this._toggleSync(), 'sync-btn');
+        // Icon separat vom Wort (@dpa 20260714): nur der Reload-Glyph darf größer werden,
+        // die Schrift „Sync" bleibt so groß wie „Start".
+        this._syncBtn.innerHTML = '<span class="sync-ico">⟲</span> Sync';
         this._syncBtn.title = 'Sync: bei jedem Start alle Sequenzer wieder bei Step 1 beginnen';
         this.element.appendChild(this._syncBtn);
         this._updateSyncBtn();
