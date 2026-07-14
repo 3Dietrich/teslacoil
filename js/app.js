@@ -402,6 +402,9 @@ function boot() {
         wrap.appendChild(chk); wrap.appendChild(span);
         wrap.dataset.ctrl = 't:' + key;   // Kennung für den Arrange-Modus
         ctrlBindings.set(key, (data) => { chk.checked = !!data[key]; });
+        // Wie bei Selects/Knobs: ohne diesen Eintrag findet setVis() das Element nicht und
+        // jede Sichtbarkeitsregel auf einen Schalter verpufft still (@dpa 20260714).
+        ctrlEls.set(key, wrap);
         // Element-Settings (Rechtsklick): Label + Label-Position (oben/links/rechts/unten).
         registerCtrlStyle('t:' + key, 'toggle', wrap, (s) => {
             span.textContent = s.label || cfg.label;
