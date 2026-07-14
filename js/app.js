@@ -1201,25 +1201,31 @@ function boot() {
             // so bleiben die relativen px-Abstände zwischen den Selektierten exakt erhalten.
             let minX = Infinity, minY = Infinity;
             for (const st of starts.values()) { minX = Math.min(minX, st.x); minY = Math.min(minY, st.y); }
-            const aStart = starts.get(el) || { x: 0, y: 0 };
             const sx = e.clientX, sy = e.clientY;
-            let remX = mod(aStart.x, GRID), remY = mod(aStart.y, GRID);
             // Drag-Slop (@dpa 20260714): Ein Selektier-Klick bewegt die Maus unvermeidlich ein
-            // paar Pixel; ohne Schwelle rastet snapAxis (round(3.5)=4) schon dabei aufs nächste
-            // 10er-Raster → das Element sprang beim bloßen Anklicken um 10px und verlor seinen
-            // px-Offset. Erst ab >4px echter Bewegung beginnt das Verschieben; darunter bleibt
+            // paar Pixel; erst ab >4px echter Bewegung beginnt das Verschieben, darunter bleibt
             // es ein reiner Klick (nur Auswahl, keine Positionsänderung, kein _pend).
             let started = false;
             movers.forEach((m) => m.classList.add('ctrl-moving'));
             const onMove = (ev) => {
-                if (!started && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+                const rdx = ev.clientX - sx, rdy = ev.clientY - sy;
+                if (!started && Math.hypot(rdx, rdy) < 4) return;
                 started = true;
-                // Delta am Anker rastern (Shift = 1px), dann auf ALLE anwenden.
-                let ax = aStart.x + (ev.clientX - sx), ay = aStart.y + (ev.clientY - sy);
-                if (ev.shiftKey) { ax = Math.round(ax); ay = Math.round(ay); remX = mod(ax, GRID); remY = mod(ay, GRID); }
-                else { ax = snapAxis(ax, remX, false); ay = snapAxis(ay, remY, false); }
-                let dx = ax - aStart.x, dy = ay - aStart.y;
-                dx = Math.max(dx, -minX); dy = Math.max(dy, -minY);   // Gruppe als Ganzes klemmen
+                // 10-Off/px-Off (@dpa 20260714): Nicht die Absolut-Position rastern, sondern das
+                // DELTA und es auf jede Start-Position addieren. Grob = ganze 10er-Schritte → jede
+                // Einheit behält ihren eigenen px-Off (Phase) EXAKT, es wandert nur die 10er-
+                // Adresse. Fein (Shift) = 1px → px-Off ändert sich gezielt. Dadurch kann ein
+                // (verwackelter) Klick nicht mehr auf ein fremdes 10er-Raster springen.
+                let dx, dy;
+                if (ev.shiftKey) {
+                    dx = Math.max(Math.round(rdx), -minX);           // 1px, Klemme exakt auf 0
+                    dy = Math.max(Math.round(rdy), -minY);
+                } else {
+                    // Grob-Klemme ebenfalls auf ein 10er-Vielfaches runden – sonst ginge am
+                    // 0-Rand die Phase verloren (z.B. −10 auf −7 gekappt = kein 10er mehr).
+                    dx = Math.max(Math.round(rdx / GRID) * GRID, -Math.floor(minX / GRID) * GRID);
+                    dy = Math.max(Math.round(rdy / GRID) * GRID, -Math.floor(minY / GRID) * GRID);
+                }
                 for (const [m, st] of starts) {
                     const x = st.x + dx, y = st.y + dy;
                     m.style.left = x + 'px'; m.style.top = y + 'px'; m._pend = { x, y };
@@ -1266,9 +1272,11 @@ function boot() {
         const groups = new Set();
         for (const el of ctrls) { const nm = el.closest('.group') && el.closest('.group').dataset.group; if (nm) { if (!freeGroups.has(nm)) freezeGroup(nm); groups.add(nm); } }
         // Gemeinsames Delta klemmen, damit kein Element unter 0 rutscht → relative Abstände bleiben.
+        // Grob (step=10) auf ein 10er-Vielfaches klemmen, damit am 0-Rand die px-Off-Phase bleibt.
         let minX = Infinity, minY = Infinity;
         for (const el of ctrls) { minX = Math.min(minX, parseFloat(el.style.left) || 0); minY = Math.min(minY, parseFloat(el.style.top) || 0); }
-        const mx = Math.max(dx * step, -minX), my = Math.max(dy * step, -minY);
+        const lo = (m) => fine ? -m : -Math.floor(m / GRID) * GRID;
+        const mx = Math.max(dx * step, lo(minX)), my = Math.max(dy * step, lo(minY));
         const all = { ...state.get('ctrlPos') };
         for (const el of ctrls) {
             const name = el.closest('.group') && el.closest('.group').dataset.group; if (!name) continue;
