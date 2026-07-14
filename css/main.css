@@ -216,7 +216,9 @@ body {
 .mi-vol { width: 90px; accent-color: var(--accent); }
 
 /* Knob (aus octaver) */
-.knob-container { display: flex; flex-direction: column; align-items: center; width: 64px; position: relative; outline: none; }
+.knob-container { display: flex; flex-direction: column; align-items: center; width: 64px; position: relative; outline: none; user-select: none; }
+/* Wert/Label sind ziehbar (Wert ändern, @dpa 20260714) → ns-resize signalisiert das. */
+.knob-value, .knob-label { cursor: ns-resize; }
 .knob-svg { cursor: ns-resize; }
 .knob-track { stroke: var(--line); }
 /* Per-Knob-Farbe über --knob-accent (Fallback = globale Akzentfarbe/Text). */

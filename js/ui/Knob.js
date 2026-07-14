@@ -232,6 +232,37 @@ export class Knob {
         svg.addEventListener('mousedown', (e) => this._onDragStart(e));
         svg.addEventListener('touchstart', (e) => this._onDragStart(e), { passive: false });
 
+        // Wert-Drag auf dem GANZEN Knob-Element (@dpa 20260714, „volles Modell"): auch auf
+        // Value, Label und der leeren Fläche ziehen = Wert ändern – nicht nur auf dem Dial.
+        // Für Knobs OHNE Dial (viewSize:'none', z.B. „I max") ist das der EINZIGE Weg zu
+        // ziehen; vorher selektierte ein Drag dort nur den Text. Ablauf:
+        //   • Meta-Button (⚙) und das Dial (eigener Sofort-Drag) sind ausgenommen.
+        //   • preventDefault → keine Text-Selektion beim Ziehen.
+        //   • Slop (>4px): ein reiner Klick bleibt Klick (Value-Auswahl / Doppelklick-Eingabe,
+        //     Label-Doppelklick = nichts); erst echtes Ziehen startet den Wert-Drag – relativ
+        //     zum echten Startpunkt (nicht zum Slop-Punkt), damit nichts springt.
+        container.addEventListener('mousedown', (e) => {
+            if (this._dragging) return;
+            if (e.target.closest('.knob-meta-btn')) return;   // ⚙ öffnet Settings
+            if (e.target.closest('svg')) return;               // Dial: eigener Sofort-Drag oben
+            e.preventDefault();
+            const startEvt = e, sx = e.clientX, sy = e.clientY;
+            const slopMove = (ev) => {
+                if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+                document.removeEventListener('mousemove', slopMove);
+                document.removeEventListener('mouseup', slopUp);
+                this._onDragStart(startEvt);   // Drag relativ zum echten Start
+                this._onDragMove(ev);          // erste Bewegung sofort anwenden
+            };
+            const slopUp = () => {
+                document.removeEventListener('mousemove', slopMove);
+                document.removeEventListener('mouseup', slopUp);
+                // unter dem Slop → reiner Klick: die click/dblclick-Handler haben gegriffen.
+            };
+            document.addEventListener('mousemove', slopMove);
+            document.addEventListener('mouseup', slopUp);
+        });
+
         // Double-click on SVG to reset to center
         svg.addEventListener('dblclick', (e) => {
             e.stopPropagation();
