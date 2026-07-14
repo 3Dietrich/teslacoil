@@ -848,6 +848,15 @@ function boot() {
             baseReadout.className = 'group-extra base-readout';
             baseSpeed.className = 'group-extra base-speed';
             body.appendChild(makeMovable(baseReadout, 'u:baseRead')); body.appendChild(makeMovable(baseSpeed, 'u:baseSpeed'));
+            // Element-Settings (Rechtsklick) für die puren Text-Readouts: Textgröße/-farbe,
+            // Feldbreite. Style bleibt am Element, nur der textContent wird live überschrieben.
+            const readoutStyle = (el) => (s) => {
+                el.style.fontSize = s.fontSize ? s.fontSize + 'px' : '';
+                el.style.width = s.boxSize ? s.boxSize + 'px' : '';
+                el.style.color = s.fg || '';
+            };
+            registerCtrlStyle('u:baseRead', 'readout', baseReadout, readoutStyle(baseReadout), 'Base-Readout');
+            registerCtrlStyle('u:baseSpeed', 'readout', baseSpeed, readoutStyle(baseSpeed), 'Base-Speed');
         }
         if (grp.reverb) {
             reflCanvas.className = 'refl-canvas';

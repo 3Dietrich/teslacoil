@@ -112,7 +112,10 @@ export class ElementSettings {
   _fieldsFor(type) {
     if (type === 'select') return ['label', 'bg', 'fg', 'size'];
     if (type === 'toggle') return ['label', 'labelPos'];
-    if (type === 'readout') return ['label', 'labelOn', 'fontSize', 'boxSize', 'fg'];
+    // Readouts tragen Live-Text (textContent wird laufend gesetzt) → nur Optik ohne
+    // Struktur-Umbau: Textgröße, Feldbreite, Textfarbe. (Label/Label-an/aus würde jeden
+    // Readout-Update umbauen – bewusst weggelassen, s. Commit.)
+    if (type === 'readout') return ['fontSize', 'boxSize', 'fg'];
     return ['label'];
   }
 

@@ -92,6 +92,14 @@ export class StepSeqUI {
         this._wire(cv);
 
         box.appendChild(head); box.appendChild(cv);
+        // Rechtsklick irgendwo auf dem Seq-Widget (auch dem Canvas) = Settings öffnen
+        // (@dpa 20260714), ohne Step-Werte zu verstellen (button-Check im _wire) und ohne
+        // auf die Gruppen-Settings durchzufallen. Anker = Mausposition.
+        box.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            const anchor = { getBoundingClientRect: () => ({ left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 }) };
+            this._openSettings(anchor);
+        });
         this.refresh();
         return box;
     }
@@ -130,6 +138,7 @@ export class StepSeqUI {
             start = null; dragging = false;
         };
         cv.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;   // nur linke Taste editiert Steps – RM ist Settings-Aufruf
             e.preventDefault();
             const p = at(e);
             start = p; dragging = false; idx0 = this._stepAtX(p.x);
