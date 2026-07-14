@@ -145,7 +145,9 @@ const GROUPS = [
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
     { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
     // Gate-Reverb: Effekt-Slot mit Umschalter; Regler nur sichtbar wenn aktiv.
-    { name: 'Gate Reverb', selects: ['revView'], toggles: ['reverbEnabled'], knobs: ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revReleaseShape', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'], reverb: true },
+    // revView ist fest auf 'Beide' verdrahtet (@dpa 20260714) – der Schalter ist raus,
+    // die Migration in boot() zieht alte gespeicherte 'L'/'R'-Stände nach.
+    { name: 'Gate Reverb', toggles: ['reverbEnabled'], knobs: ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revReleaseShape', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'], reverb: true },
     // Debug-Werkzeug (C7): KEIN Sound-Parameter – Audio/Screenshot/Zustand/Prompt
     // auf Klick bündeln, für @dpa zum Hochladen an die KI.
     { name: 'Debug', debug: true },
@@ -210,6 +212,9 @@ function boot() {
             state.set('baseOct', 0); state.set('tempoOct', 0);
         }
     }
+    // Migration: Reverb-Ansicht ist fest 'Beide' (@dpa 20260714, Schalter entfernt) – ein
+    // gespeichertes 'L'/'R' liesse den Graph sonst für immer halbiert, ohne Bedienelement.
+    if (state.get('revView') !== 'Beide') state.set('revView', 'Beide');
     // Migration: altes flaches seqStyles {w,h,bg,colFilter,colAmp} → per-Typ getrennt
     // {filter:{w,h,bg,col}, amp:{w,h,bg,col}}. Größe/BG waren früher geteilt, sie werden
     // in BEIDE Typen kopiert; die je Typ eigene Balkenfarbe bleibt erhalten.
@@ -921,6 +926,7 @@ function boot() {
             const rBtn = iconBtn('⚙', 'Reflections-Anzeige: Größe & Farben', (e) => openReflSettings(e.currentTarget));
             rBtn.classList.add('refl-settings-btn');
             wrap.appendChild(reflCanvas); wrap.appendChild(rBtn);
+            ctrlEls.set('reflWrap', wrap);   // → setVis: Graph folgt dem Reverb-Bypass
             body.appendChild(makeMovable(wrap, 'u:refl'));
         }
         if (grp.seq) {
@@ -1517,6 +1523,7 @@ function boot() {
         const on = state.get('metroEnabled');
         const quant = state.get('metroCutoffQuant');
         ['metroLevel', 'metroMorph', 'metroReso'].forEach((k) => setVis(k, on));
+        setVis('metroCutoffQuant', on);   // inaktiv → Quant unsichtbar (@dpa 20260714)
         setVis('metroCutoff', on && !quant);
         setVis('metroCutBand', on && quant);
     }
@@ -1528,11 +1535,13 @@ function boot() {
         setVis('duty', !fm);
         setVis('fmFeedback', fm);
     }
-    // Reverb: Regler nur sichtbar, wenn 'aktiv'.
+    // Reverb: Regler nur sichtbar, wenn 'aktiv'. Ausnahme Dry/Wet – der bleibt AUCH inaktiv
+    // sichtbar (@dpa 20260714), weil er den Anteil beschreibt, den man beim Einschalten
+    // erwartet. Der Reflections-Graph verschwindet dagegen mit dem Bypass.
     function updateReverbVisibility() {
         const on = state.get('reverbEnabled');
-        ['revMix', 'revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revReleaseShape', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'].forEach((k) => setVis(k, on));
-        setVis('revView', on);
+        ['revWet', 'revDensity', 'revLenPct', 'revAttack', 'revRelease', 'revReleaseShape', 'revShelfFreq', 'revShelfGain', 'revPreDelay', 'revSeed'].forEach((k) => setVis(k, on));
+        setVis('reflWrap', on);   // Graph weg, wenn inaktiv
     }
     // Alle modusabhängigen Sichtbarkeiten neu anwenden – einmal an einer Stelle, damit
     // setArranging() sie beim Betreten/Verlassen des e-Mode identisch aufrufen kann.

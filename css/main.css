@@ -258,9 +258,9 @@ body {
 /* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
 .knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
 .knob-label-off .knob-label { display: none; }
-/* Knob-BG-Farbe (@dpa 20260714): NICHT mehr der ganze Container, sondern nur der runde
-   Dial-Innenkreis (siehe .knob-center) und die Value-Anzeige-Fläche darunter. */
-.knob-has-bg .knob-value { background: var(--knob-bg); border-radius: 3px; padding: 0 4px; }
+/* Knob-BG-Farbe (@dpa 20260714): NUR der runde Dial-Innenkreis – die einzige Fläche am
+   Knob, die #232833 (--panel2) ist. Siehe .knob-center. KEIN Value-BG (@dpa ausdrücklich),
+   kein Container-Hintergrund. */
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 .knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
 .knob-meta-btn:hover { opacity: 1; color: var(--accent); }
