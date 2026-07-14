@@ -31,6 +31,8 @@ export class Knob {
         this._decimals = config.decimals ?? 2;
         this._viewSize = config.viewSize ?? 'medium';   // 'medium'|'small'|'large'|'none'
         this._color = config.color ?? '';               // '' = Standardfarbe
+        this._labelPos = config.labelPos ?? 'bottom';   // 'bottom'|'top'|'off' – Label-Platzierung
+        this._bg = config.bg ?? '';                      // '' = kein Hintergrund (Knob-BG-Farbe, z.B. #232833)
         this._hideValue = !!config.hideValue;            // true = Zahlen-Anzeige weg (nur Dial+Label, spart Platz)
         this.formatValue = config.formatValue || null;
         this.onChange = config.onChange || null;
@@ -394,6 +396,14 @@ export class Knob {
         // Farbe als CSS-Variable → Wertbogen/Indikator/Value nutzen sie (Fallback = Default).
         if (this._color) this.element.style.setProperty('--knob-accent', this._color);
         else this.element.style.removeProperty('--knob-accent');
+        // Label-Position (@dpa 20260714): top = über dem Dial, off = ausgeblendet, sonst unten.
+        this.element.classList.remove('knob-label-top', 'knob-label-off');
+        if (this._labelPos === 'top') this.element.classList.add('knob-label-top');
+        else if (this._labelPos === 'off') this.element.classList.add('knob-label-off');
+        // Knob-BG-Farbe: eigener Hintergrund hinter dem Regler (nur wenn gesetzt → kein Layout-Sprung).
+        this.element.classList.toggle('knob-has-bg', !!this._bg);
+        if (this._bg) this.element.style.setProperty('--knob-bg', this._bg);
+        else this.element.style.removeProperty('--knob-bg');
     }
 
     /* ──────────────── Visual Update ──────────────── */
@@ -483,6 +493,8 @@ export class Knob {
             label: this.label,
             viewSize: this._viewSize,
             color: this._color,
+            labelPos: this._labelPos,
+            bg: this._bg,
         };
     }
 
@@ -501,6 +513,8 @@ export class Knob {
         if (meta.label !== undefined) { this.label = meta.label; if (this._labelEl) this._labelEl.textContent = meta.label; }
         if (meta.viewSize !== undefined) this._viewSize = meta.viewSize;
         if (meta.color !== undefined) this._color = meta.color;
+        if (meta.labelPos !== undefined) this._labelPos = meta.labelPos;
+        if (meta.bg !== undefined) this._bg = meta.bg;
 
         this._normValue = this._valueToNorm(
             Math.max(this._min, Math.min(this._max, currentValue))

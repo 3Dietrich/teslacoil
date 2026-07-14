@@ -76,6 +76,19 @@ export class KnobMetaEditor {
           </select>
         </div>
         <div class="kme-row">
+          <label>Label</label>
+          <select class="kme-labelpos" title="Label-Position">
+            <option value="bottom">Unten</option>
+            <option value="top">Oben</option>
+            <option value="off">Aus</option>
+          </select>
+        </div>
+        <div class="kme-row">
+          <label>Knob-BG</label>
+          <input type="color" class="kme-bg" value="#232833" />
+          <button class="kme-bg-clear" title="Hintergrund entfernen">✕</button>
+        </div>
+        <div class="kme-row">
           <label>Farbe</label>
           <input type="color" class="kme-color" value="#5ad1ff" />
           <select class="kme-color-preset" title="Farbe wählen (Standard = zurücksetzen) – Tab/Pfeiltasten"></select>
@@ -111,6 +124,12 @@ export class KnobMetaEditor {
     // Farbe: eigenes Editieren markiert „custom".
     this._colorCustom = false;
     panel.querySelector('.kme-color').addEventListener('input', () => { this._colorCustom = true; });
+    // Knob-BG: eigenes Editieren aktiviert den Hintergrund, ✕ entfernt ihn wieder.
+    this._bgCustom = false;
+    panel.querySelector('.kme-bg').addEventListener('input', () => { this._bgCustom = true; this._apply(); });
+    panel.querySelector('.kme-bg-clear').addEventListener('click', () => { this._bgCustom = false; this._apply(); });
+    // Label-Position sofort anwenden.
+    panel.querySelector('.kme-labelpos').addEventListener('change', () => this._apply());
     // Farb-Preset-Menü: „Standard" (Index 0) verwirft die Farbe, sonst Preset anwenden.
     // Auswahl greift SOFORT (übernimmt am Regler) – rein per Tastatur bedienbar.
     panel.querySelector('.kme-color-preset').addEventListener('change', (e) => {
@@ -156,6 +175,9 @@ export class KnobMetaEditor {
     this._panel.querySelector('.kme-view').value = meta.viewSize || 'medium';
     this._colorCustom = !!meta.color;
     this._panel.querySelector('.kme-color').value = meta.color || '#5ad1ff';
+    this._panel.querySelector('.kme-labelpos').value = meta.labelPos || 'bottom';
+    this._bgCustom = !!meta.bg;
+    this._panel.querySelector('.kme-bg').value = meta.bg || '#232833';
     this._fillColorPresets();
     this._panel.querySelector('.kme-title').textContent = `⚙ ${meta.label}`;
 
@@ -244,6 +266,8 @@ export class KnobMetaEditor {
       unit: this._panel.querySelector('.kme-unit').value,
       viewSize: this._panel.querySelector('.kme-view').value,
       color: this._colorCustom ? this._panel.querySelector('.kme-color').value : '',
+      labelPos: this._panel.querySelector('.kme-labelpos').value,
+      bg: this._bgCustom ? this._panel.querySelector('.kme-bg').value : '',
     });
     this._panel.querySelector('.kme-title').textContent = `⚙ ${this._currentKnob.label}`;
     if (this.onApply) this.onApply(this._currentKnob);   // Meta in State persistieren

@@ -247,6 +247,11 @@ body {
 /* Zahlen-Anzeige weg (Dial+Label bleiben) – spart rechts Platz, z.B. Opaque-Regler in Popups. */
 .knob-hide-value .knob-value { display: none; }
 .knob-label { font-size: 10px; color: var(--muted); margin-top: 1px; text-align: center; }
+/* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
+.knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
+.knob-label-off .knob-label { display: none; }
+/* Knob-BG-Farbe: eigener Hintergrund hinter dem Regler (nur .knob-has-bg → kein Layout-Sprung ohne). */
+.knob-has-bg { background: var(--knob-bg); border-radius: 5px; padding: 3px 2px; }
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 .knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
 .knob-meta-btn:hover { opacity: 1; color: var(--accent); }
