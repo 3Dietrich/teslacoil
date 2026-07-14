@@ -281,12 +281,14 @@ function boot() {
     // Label-Drag für Controls OHNE Knob (@dpa 20260713): auf dem GANZEN Feld vertikal ziehen
     // ändert den Wert wie ein Regler. Ausgenommen ist das Value-Element selbst (Select/Checkbox
     // → normale Bedienung bleibt) und der e-Mode (dort verschiebt wireCtrlMove die Position).
-    // Ein reiner Klick (Bewegung < Slop) bleibt ein Klick; nach echtem Ziehen wird der sonst
-    // vom <label> ausgelöste Folge-Klick einmalig geschluckt.
+    // WICHTIG (@dpa 20260714): e.preventDefault() im mousedown – sonst startet der Drag eine
+    // TEXT-Selektion des Labels statt einer Wert-Änderung (genau der gemeldete Fehler). Der
+    // sonst vom <label> ausgelöste Folge-Klick wird nach echtem Ziehen einmalig geschluckt.
     function wireLabelDrag(wrap, valueEl, makeApply) {
         wrap.addEventListener('mousedown', (e) => {
             if (arranging) return;
             if (e.target === valueEl || valueEl.contains(e.target)) return;
+            e.preventDefault();   // keine Text-Selektion beim Ziehen
             const startY = e.clientY;
             const apply = makeApply();
             let dragged = false;
@@ -1100,8 +1102,16 @@ function boot() {
             const aStart = starts.get(el) || { x: 0, y: 0 };
             const sx = e.clientX, sy = e.clientY;
             let remX = mod(aStart.x, GRID), remY = mod(aStart.y, GRID);
+            // Drag-Slop (@dpa 20260714): Ein Selektier-Klick bewegt die Maus unvermeidlich ein
+            // paar Pixel; ohne Schwelle rastet snapAxis (round(3.5)=4) schon dabei aufs nächste
+            // 10er-Raster → das Element sprang beim bloßen Anklicken um 10px und verlor seinen
+            // px-Offset. Erst ab >4px echter Bewegung beginnt das Verschieben; darunter bleibt
+            // es ein reiner Klick (nur Auswahl, keine Positionsänderung, kein _pend).
+            let started = false;
             movers.forEach((m) => m.classList.add('ctrl-moving'));
             const onMove = (ev) => {
+                if (!started && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+                started = true;
                 // Delta am Anker rastern (Shift = 1px), dann auf ALLE anwenden.
                 let ax = aStart.x + (ev.clientX - sx), ay = aStart.y + (ev.clientY - sy);
                 if (ev.shiftKey) { ax = Math.round(ax); ay = Math.round(ay); remX = mod(ax, GRID); remY = mod(ay, GRID); }

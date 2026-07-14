@@ -44,16 +44,16 @@ body {
 /* Aktions-Farben: gleiche Glyph-Sprache in allen Clustern, aber klar unterscheidbar
    (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export). Icons etwas größer als der Rest von
    .pb-icon – die Vierecke bleiben normal (@dpa 20260713: "Icon oft zu klein im Viereck"). */
-.pb-ic-load   { color: #7fc8ff; font-size: 15px; }
-.pb-ic-save   { color: #ffcf7a; font-size: 15px; }
-.pb-ic-new    { color: #8fe388; font-size: 15px; }
-.pb-ic-export { color: #9aa4b2; font-size: 15px; }
-.pb-ic-del    { color: #ff7a7a; font-size: 15px; }
+.pb-ic-load   { color: #7fc8ff; font-size: 17px; }
+.pb-ic-save   { color: #ffcf7a; font-size: 17px; }
+.pb-ic-new    { color: #8fe388; font-size: 17px; }
+.pb-ic-export { color: #9aa4b2; font-size: 17px; }
+.pb-ic-del    { color: #ff7a7a; font-size: 17px; }
 .pb-icon:hover { border-color: var(--accent); }
 /* Master Vol/Settings/CPU/e-Mode sitzen jetzt in .topbar-right (Kopfzeile Zeile 1).
    „Alles zeigen" an der Kette (fx-showall-btn) bekommt dieselbe Icon+Viereck-Größe. */
 .hdr-cpu { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; min-width: 52px; text-align: right; }
-.settings-btn, .arrange-btn, .fx-showall-btn { padding: 6px 9px; min-width: 30px; font-size: 15px; }
+.settings-btn, .arrange-btn, .fx-showall-btn { padding: 6px 9px; min-width: 30px; font-size: 18px; }
 .arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 
 /* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
@@ -71,7 +71,7 @@ body {
 .play-btn { font-weight: 600; min-width: 84px; }
 .play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
 /* Sync-Schalter neben Start/Stop (aktiv = grün) – reload-Glyph war zu klein (@dpa 20260713). */
-.sync-btn { font-size: 13px; }
+.sync-btn { font-size: 16px; }
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
@@ -103,8 +103,11 @@ body {
 }
 .group.dragging { opacity: .85; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
 
-/* Kette / Patchbay (Kopfzeile): Quellen · Effekte · Ziele mit Ports; ziehbar. */
-.fx-chain-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 320px; }
+/* Kette / Patchbay (Kopfzeile): Quellen · Effekte · Ziele mit Ports; ziehbar.
+   Eigener, leicht dunklerer BG mit Rahmen (@dpa 20260714) → hebt den Kette-Bereich optisch
+   vom Rest der Transport-Zeile ab. */
+.fx-chain-wrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 320px;
+    background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.06); border-radius: 7px; padding: 3px 7px; }
 .fx-chain { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; padding: 2px 0; min-width: 0; }
 .fx-chain-wrap.fx-showall .fx-chain { flex-wrap: wrap; overflow-x: visible; }
 .fx-chain-lab { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
@@ -289,8 +292,10 @@ body {
 .kb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 /* Button-Cluster (Anker/base=c/skal2) bleibt fest rechts – der Readout darf ihn NICHT
    verschieben (@dpa 20260714). */
-.kb-head-btns { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
-.kb-skal2-btn { font-size: 10px; padding: 1px 7px; }
+.kb-head-btns { display: flex; align-items: center; gap: 1px; flex: 0 0 auto; }
+/* Drei feste, gleich große Buttons (@dpa 20260714): min-width + zentriert → Anker/base=c/
+   skal2 gleich breit, keine springenden Lücken (gap 1px). */
+.kb-skal2-btn { font-size: 10px; padding: 1px 7px; min-width: 52px; text-align: center; }
 .kb-skal2-btn.pb-active { background: rgba(255,159,90,.22); box-shadow: inset 0 0 0 1px rgba(255,159,90,.6); color: var(--accent2); }
 /* Anker-Schalter (Transponier-Modus): eigener, „etwas bläulicher" Schalter links neben
    Base→C. Muss das orange .kb-skal2-btn.pb-active überschreiben → steht danach. */

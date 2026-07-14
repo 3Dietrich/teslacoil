@@ -64,7 +64,7 @@ export class Keyboard {
         // durch einen sichtbaren Schalter; die Anzeige bleibt zusätzlich klickbar.
         this._ankBtn = document.createElement('button');
         this._ankBtn.className = 'pb-btn kb-skal2-btn kb-anchor-btn';
-        this._ankBtn.textContent = '⚓ Anker';
+        this._ankBtn.textContent = 'Anker';
         this._ankBtn.title = 'Anker: Skala auf der Frequenzachse verschieben (Transponier-Modus).';
         this._ankBtn.addEventListener('click', () => this._toggleTranspose());
         btns.appendChild(this._ankBtn);
