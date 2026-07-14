@@ -31,7 +31,7 @@ export class Knob {
         this._decimals = config.decimals ?? 2;
         this._viewSize = config.viewSize ?? 'medium';   // 'medium'|'small'|'large'|'none'
         this._color = config.color ?? '';               // '' = Standardfarbe
-        this._labelPos = config.labelPos ?? 'bottom';   // 'bottom'|'top'|'off' – Label-Platzierung
+        this._labelPos = config.labelPos ?? 'bottom';   // 'bottom'|'top'|'left'|'right'|'off'
         this._bg = config.bg ?? '';                      // '' = kein Hintergrund (Knob-BG-Farbe, z.B. #232833)
         this._hideValue = !!config.hideValue;            // true = Zahlen-Anzeige weg (nur Dial+Label, spart Platz)
         this.formatValue = config.formatValue || null;
@@ -396,10 +396,13 @@ export class Knob {
         // Farbe als CSS-Variable → Wertbogen/Indikator/Value nutzen sie (Fallback = Default).
         if (this._color) this.element.style.setProperty('--knob-accent', this._color);
         else this.element.style.removeProperty('--knob-accent');
-        // Label-Position (@dpa 20260714): top = über dem Dial, off = ausgeblendet, sonst unten.
-        this.element.classList.remove('knob-label-top', 'knob-label-off');
+        // Label-Position (@dpa 20260714): top = über dem Dial, left/right = seitlich neben
+        // Dial+Value (Grid, s. CSS), off = ausgeblendet, sonst unten.
+        this.element.classList.remove('knob-label-top', 'knob-label-off', 'knob-label-left', 'knob-label-right');
         if (this._labelPos === 'top') this.element.classList.add('knob-label-top');
         else if (this._labelPos === 'off') this.element.classList.add('knob-label-off');
+        else if (this._labelPos === 'left') this.element.classList.add('knob-label-left');
+        else if (this._labelPos === 'right') this.element.classList.add('knob-label-right');
         // Knob-BG-Farbe: eigener Hintergrund hinter dem Regler (nur wenn gesetzt → kein Layout-Sprung).
         this.element.classList.toggle('knob-has-bg', !!this._bg);
         if (this._bg) this.element.style.setProperty('--knob-bg', this._bg);

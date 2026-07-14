@@ -258,6 +258,20 @@ body {
 /* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
 .knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
 .knob-label-off .knob-label { display: none; }
+/* Label seitlich (@dpa 20260714): Grid statt Spalte – Dial und Value bleiben gestapelt,
+   das Label sitzt in einer eigenen Spalte daneben. Die Breite wächst mit (width:auto),
+   damit im Layout nichts überlappt. Kein DOM-Umbau nötig. */
+.knob-label-left, .knob-label-right {
+  display: grid; align-items: center; justify-items: center;
+  width: auto; grid-template-columns: auto auto; grid-template-rows: auto auto;
+}
+.knob-label-left  .knob-label { grid-column: 1; grid-row: 1 / span 2; text-align: right; }
+.knob-label-left  .knob-svg   { grid-column: 2; grid-row: 1; }
+.knob-label-left  .knob-value { grid-column: 2; grid-row: 2; }
+.knob-label-right .knob-svg   { grid-column: 1; grid-row: 1; }
+.knob-label-right .knob-value { grid-column: 1; grid-row: 2; }
+.knob-label-right .knob-label { grid-column: 2; grid-row: 1 / span 2; text-align: left; }
+.knob-label-left .knob-label, .knob-label-right .knob-label { margin: 0 3px; white-space: nowrap; }
 /* Knob-BG-Farbe (@dpa 20260714): NUR der runde Dial-Innenkreis – die einzige Fläche am
    Knob, die #232833 (--panel2) ist. Siehe .knob-center. KEIN Value-BG (@dpa ausdrücklich),
    kein Container-Hintergrund. */

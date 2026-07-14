@@ -80,6 +80,8 @@ export class KnobMetaEditor {
           <select class="kme-labelpos" title="Label-Position">
             <option value="bottom">Unten</option>
             <option value="top">Oben</option>
+            <option value="left">Links</option>
+            <option value="right">Rechts</option>
             <option value="off">Aus</option>
           </select>
         </div>
