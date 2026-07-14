@@ -35,6 +35,9 @@ class LadderProcessor extends AudioWorkletProcessor {
             // einem Umschalten aus einem instabilen Zustand.
             if (e.data.poles != null) { this.poles = Math.max(1, Math.min(4, e.data.poles | 0)); this._reset(); }
             if (e.data.type != null) { this.type = e.data.type; this._reset(); }
+            // Panic/Stop: Filter-Speicher nullen → ein resonanter Filter kann nach dem
+            // Stop nicht weiter nachklingen (hängender Ton). Ohne Input hörbar folgenlos.
+            if (e.data.reset) this._reset();
         };
     }
 

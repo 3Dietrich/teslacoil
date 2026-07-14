@@ -66,6 +66,9 @@ export class LadderFilter {
         if (this.node) this.node.parameters.get('q').setValueAtTime(Math.max(0.05, q), this.ctx.currentTime);
     }
 
+    /** Filter-Speicher nullen (beim Stop/Panic → kein resonantes Nachklingen). */
+    reset() { if (this.node) this.node.port.postMessage({ reset: true }); }
+
     /** Statischer Cutoff (wenn keine Hüllkurve aktiv). */
     setCutoff(hz) {
         if (this.node) this.node.parameters.get('cutoff').setValueAtTime(Math.max(20, hz), this.ctx.currentTime);

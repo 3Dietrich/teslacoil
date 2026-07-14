@@ -453,6 +453,8 @@ export class TeslaEngine {
         this.clock.stop();
         this.metroClock.stop();
         this.square.panic();
+        // Resonanten Filter-Speicher nullen, damit nichts nachklingt (hängender Ton).
+        try { this.ladder.reset(); } catch { /* Filter evtl. noch nicht gebaut */ }
     }
     get running() { return this.clock.running; }
 
