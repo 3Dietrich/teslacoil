@@ -278,6 +278,30 @@ function boot() {
     const reflCanvas = document.createElement('canvas'); // Reverb-Reflections-Anzeige
 
     // ── Control-Builder (registrieren sich für den Recall) ──
+    // Label-Drag für Controls OHNE Knob (@dpa 20260713): auf dem GANZEN Feld vertikal ziehen
+    // ändert den Wert wie ein Regler. Ausgenommen ist das Value-Element selbst (Select/Checkbox
+    // → normale Bedienung bleibt) und der e-Mode (dort verschiebt wireCtrlMove die Position).
+    // Ein reiner Klick (Bewegung < Slop) bleibt ein Klick; nach echtem Ziehen wird der sonst
+    // vom <label> ausgelöste Folge-Klick einmalig geschluckt.
+    function wireLabelDrag(wrap, valueEl, makeApply) {
+        wrap.addEventListener('mousedown', (e) => {
+            if (arranging) return;
+            if (e.target === valueEl || valueEl.contains(e.target)) return;
+            const startY = e.clientY;
+            const apply = makeApply();
+            let dragged = false;
+            const onMove = (ev) => {
+                const dy = startY - ev.clientY;
+                if (!dragged && Math.abs(dy) < 4) return;   // Slop: kurzer Klick bleibt Klick
+                dragged = true; apply(dy);
+            };
+            const onUp = () => {
+                window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp);
+                if (dragged) { const kill = (ce) => { ce.stopPropagation(); ce.preventDefault(); wrap.removeEventListener('click', kill, true); }; wrap.addEventListener('click', kill, true); }
+            };
+            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        });
+    }
     function makeSelect(key) {
         const cfg = SELECTS[key];
         const wrap = document.createElement('label');
@@ -291,22 +315,15 @@ function boot() {
         const applyTitle = () => { if (cfg.optionTitles) sel.title = cfg.optionTitles[sel.value] || ''; };
         applyTitle();
         sel.addEventListener('change', () => { state.set(key, sel.value); applyTitle(); });
-        // Label-Drag (@dpa 20260713, „Controls ohne Knob wie Knobs draggbar"): vertikal
-        // ziehen wechselt die Option. Klick auf den Value (sel) bleibt normale Bedienung.
-        // Im e-Mode (arranging) nichts tun → Event blubbert zum wrap, wireCtrlMove
-        // übernimmt dort das Verschieben (Position statt Wert).
+        // Vertikal ziehen wechselt die Option (Trefferzone = ganzes Feld außer dem Select).
         span.classList.add('ctrl-label-drag');
-        span.addEventListener('mousedown', (e) => {
-            if (arranging) return;
-            e.preventDefault();
-            const startY = e.clientY;
+        wrap.classList.add('ctrl-label-drag');
+        wireLabelDrag(wrap, sel, () => {
             const baseIdx = cfg.options.indexOf(sel.value);
-            const onMove = (ev) => {
-                const idx = Math.max(0, Math.min(cfg.options.length - 1, baseIdx + Math.round((startY - ev.clientY) / 18)));
+            return (dy) => {
+                const idx = Math.max(0, Math.min(cfg.options.length - 1, baseIdx + Math.round(dy / 18)));
                 if (cfg.options[idx] !== sel.value) { sel.value = cfg.options[idx]; state.set(key, sel.value); applyTitle(); }
             };
-            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
         });
         wrap.appendChild(span); wrap.appendChild(sel);
         wrap.dataset.ctrl = 's:' + key;   // Kennung für den Arrange-Modus
@@ -321,20 +338,13 @@ function boot() {
         const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = state.get(key);
         chk.addEventListener('change', () => state.set(key, chk.checked));
         const span = document.createElement('span'); span.textContent = cfg.label;
-        // Label-Drag: nach oben ziehen = an, nach unten = aus (wie ein Regler). Klick auf
-        // die Checkbox selbst bleibt normale Bedienung. Im e-Mode → wireCtrlMove (Bubble).
+        // Nach oben ziehen = an, nach unten = aus (wie ein Regler); Trefferzone = ganzes Feld
+        // außer der Checkbox. Klick auf die Checkbox bleibt normale Bedienung.
         span.classList.add('ctrl-label-drag');
-        span.addEventListener('mousedown', (e) => {
-            if (arranging) return;
-            e.preventDefault();
-            const startY = e.clientY, THRESH = 10;
-            const onMove = (ev) => {
-                const dy = startY - ev.clientY;
-                const want = dy > THRESH ? true : dy < -THRESH ? false : chk.checked;
-                if (want !== chk.checked) { chk.checked = want; state.set(key, want); }
-            };
-            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        wrap.classList.add('ctrl-label-drag');
+        wireLabelDrag(wrap, chk, () => (dy) => {
+            const want = dy > 10 ? true : dy < -10 ? false : chk.checked;
+            if (want !== chk.checked) { chk.checked = want; state.set(key, want); }
         });
         wrap.appendChild(chk); wrap.appendChild(span);
         wrap.dataset.ctrl = 't:' + key;   // Kennung für den Arrange-Modus
@@ -1002,6 +1012,14 @@ function boot() {
                     for (const c of [...child.children]) if (c.dataset.ctrl) flat.push(c);
                 } else if (child.dataset.ctrl) { flat.push(child); }
             }
+            // Versteckte Einheiten (display:none, z.B. Filter/Distortion 'aktiv' aus) VOR dem
+            // Messen einblenden – sonst liefert getBoundingClientRect 0,0 und sie stapeln beim
+            // Einfrieren links oben. Nach dem Positionieren wird der Versteckt-Zustand exakt
+            // wiederhergestellt. So bekommt JEDES Control eine echte Flow-Position, unabhängig
+            // von der momentanen on/off-Sichtbarkeit (dieselbe Isolation-Kante wie im e-Mode,
+            // nur greift sie auch auf dem Boot-/Recall-Pfad). (@dpa 20260714)
+            const wasHidden = new Set();
+            flat.forEach((u) => { if (u.offsetParent === null) { wasHidden.add(u); u.style.display = ''; } });
             const br = body.getBoundingClientRect();
             const nat = new Map();
             flat.forEach((u) => { const r = u.getBoundingClientRect(); nat.set(u, { x: Math.round(r.left - br.left), y: Math.round(r.top - br.top) }); });
@@ -1018,6 +1036,9 @@ function boot() {
                 const p = stored[u.dataset.ctrl] || nat.get(u) || { x: 0, y: 0 };
                 u.style.position = 'absolute'; u.style.left = Math.max(0, p.x) + 'px'; u.style.top = Math.max(0, p.y) + 'px';
             });
+            // Versteckte wieder verstecken – sie tragen jetzt eine gültige left/top und
+            // erscheinen beim Wiedereinblenden (Einschalten / e-Mode) am richtigen Platz.
+            wasHidden.forEach((u) => { u.style.display = 'none'; });
             freeGroups.add(name);
         } else {
             unitList(name).forEach((u) => { const p = stored[u.dataset.ctrl]; if (p) { u.style.left = Math.max(0, p.x) + 'px'; u.style.top = Math.max(0, p.y) + 'px'; } });
