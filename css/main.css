@@ -226,12 +226,15 @@ body {
 /* Wert/Label sind ziehbar (Wert ändern, @dpa 20260714) → ns-resize signalisiert das. */
 .knob-value, .knob-label { cursor: ns-resize; }
 .knob-svg { cursor: ns-resize; }
-.knob-track { stroke: var(--line); }
+/* Der INAKTIVE Ring-Rest (@dpa 20260714): der dunkelgraue Bogen "über" dem aktiven
+   Wertbogen. Gehört zur Knob-BG-Farbe. Achtung: der ist --line/#2a2f3a, NICHT #232833
+   (das ist der Mittelpunkt unten) – daher hat er die Farbe bisher nie bekommen. */
+.knob-track { stroke: var(--knob-bg, var(--line)); }
 /* Per-Knob-Farbe über --knob-accent (Fallback = globale Akzentfarbe/Text). */
 .knob-value-arc { stroke: var(--knob-accent, var(--accent)); }
 .knob-indicator { fill: var(--knob-accent, var(--text)); }
-/* Knob-BG (@dpa 20260714): färbt NICHT den Container, sondern den runden Dial-Innenkreis
-   und die Value-Fläche. Fallback --panel2, wenn keine Knob-BG-Farbe gesetzt ist. */
+/* Knob-BG (@dpa 20260714): der Punkt in der Mitte – zusammen mit dem inaktiven Ring-Rest
+   (.knob-track oben) ist das der "graue Teil des Knopfes", der gefärbt wird. */
 .knob-center { fill: var(--knob-bg, var(--panel2)); }
 .knob-value { font-size: 11px; color: var(--knob-accent, var(--text)); margin-top: 2px; }
 /* Ansicht-Größen: groß / mittel (Default 64px) / klein / mini / ohne Knob.
