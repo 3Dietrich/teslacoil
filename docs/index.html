@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teslacoil – Getakteter Puls-Synth</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel2: #232833;
+      --text: #c9d1d9;
+      --accent: #58a6ff;
+      --orange: #d29922;
+      --green: #3fb950;
+      --border: #30363d;
+    }
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    header {
+      background: linear-gradient(135deg, var(--panel) 0%, var(--bg) 100%);
+      padding: 4rem 2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    h1 {
+      font-size: 3.5rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(90deg, var(--accent), var(--orange));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
+    .tagline {
+      font-size: 1.3rem;
+      opacity: 0.8;
+      margin-bottom: 2rem;
+    }
+    
+    .hero-quote {
+      font-style: italic;
+      font-size: 1.1rem;
+      max-width: 600px;
+      margin: 0 auto;
+      opacity: 0.9;
+    }
+    
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    
+    section {
+      margin-bottom: 4rem;
+    }
+    
+    h2 {
+      font-size: 2rem;
+      margin-bottom: 1.5rem;
+      color: var(--accent);
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    
+    h3 {
+      font-size: 1.4rem;
+      margin: 2rem 0 1rem;
+      color: var(--orange);
+    }
+    
+    p {
+      margin-bottom: 1rem;
+      font-size: 1.05rem;
+    }
+    
+    blockquote {
+      border-left: 4px solid var(--accent);
+      padding-left: 1.5rem;
+      margin: 1.5rem 0;
+      font-style: italic;
+      opacity: 0.9;
+      background: var(--panel);
+      padding: 1rem 1.5rem;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .flow-diagram {
+      background: var(--panel);
+      padding: 2rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+      overflow-x: auto;
+    }
+    
+    .flow-diagram pre {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.95rem;
+      line-height: 1.8;
+    }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin: 2rem 0;
+    }
+    
+    .feature-card {
+      background: var(--panel);
+      padding: 1.5rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    
+    .feature-card h4 {
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+      font-size: 1.2rem;
+    }
+    
+    .feature-card p {
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+    
+    .tech-stack {
+      background: var(--panel);
+      padding: 2rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+    }
+    
+    .tech-stack ul {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    
+    .tech-stack li {
+      padding: 0.5rem;
+      border-left: 3px solid var(--green);
+      padding-left: 1rem;
+    }
+    
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin: 3rem 0;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      display: inline-block;
+      padding: 1rem 2rem;
+      background: var(--accent);
+      color: var(--bg);
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(88, 166, 255, 0.3);
+    }
+    
+    .btn-secondary {
+      background: transparent;
+      border: 2px solid var(--accent);
+      color: var(--accent);
+    }
+    
+    .btn-secondary:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    
+    footer {
+      text-align: center;
+      padding: 3rem 2rem;
+      border-top: 1px solid var(--border);
+      opacity: 0.7;
+      font-size: 0.9rem;
+    }
+    
+    .highlight {
+      color: var(--orange);
+      font-weight: 600;
+    }
+    
+    code {
+      background: var(--panel2);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.9em;
+    }
+    
+    pre {
+      background: var(--panel);
+      padding: 1.5rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 1rem 0;
+    }
+    
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 2rem;
+      margin: 3rem 0;
+    }
+    
+    .stat-item {
+      text-align: center;
+    }
+    
+    .stat-number {
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    
+    .stat-label {
+      font-size: 0.95rem;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚡ Teslacoil</h1>
+    <p class="tagline">Ein getakteter Puls-Synth im Browser</p>
+    <p class="hero-quote">
+      "Musik mit KI selber bauen" – Von der Tesla-Spule zum modularen Web-Audio-Synth
+    </p>
+  </header>
+
+  <main>
+    <section>
+      <h2>🌩️ Die Geschichte</h2>
+      <p>
+        Teslacoil begann als experimentelles Projekt: Eine echte <strong>Tesla-Coil</strong> (Hochfrequenz-Transformator), 
+        die bei hohen Tönen laute Funken schlägt. Der ursprüngliche Plan war einfach – einen Sound einspielen 
+        und die physikalische Reaktion der Spule musikalisch nutzen.
+      </p>
+      <p>
+        Das funktionierte hervorragend. Es entstand sogar ein Video davon. Aber die Tesla-Spule ist ein sehr lautes, 
+        <em>"solistisches"</em> Instrument. Über <strong>Lautsprecher</strong> wurde das System vielseitiger – 
+        und plötzlich konnten Ideen und Wünschen freierer Lauf gegeben werden.
+      </p>
+      <p>
+        Aus dem physikalischen Experiment wurde ein <strong>vollständiger Browser-Synth</strong> – modular, getaktet, 
+        und mit einer eigenen musikalischen Philosophie.
+      </p>
+    </section>
+
+    <section>
+      <h2>🎵 Die Vision</h2>
+      <blockquote>
+        "Mein Traum ist es, die Frequenzen zueinander anders ordnen zu können."
+      </blockquote>
+      <p>
+        Die üblichen <strong>temperierten Akkorde</strong> wirken abgedroschen – nicht weil sie uninteressant wären, 
+        sondern weil sie zu wenig <span class="highlight">Stimmungsfreiheit</span> bieten. Die 12-Ton-Teilung ist 
+        für den Bereich 40 Hz bis ~5 kHz hervorragend, aber die gleichstufige Temperatur ist eine unfreie Einstellung.
+      </p>
+      <p>
+        <strong>Harmonisch</strong> bedeutet hier: Bei Höhepunkten oder aneinander reibenden Obertongeflechten – 
+        genau das ist das Magische, wie etwa bei <em>Angine de Poitrine</em>.
+      </p>
+      <p>
+        Der <strong>Skalar</strong> in Teslacoil ist der erste Schritt in diese Richtung: Frequenzen können anders 
+        zueinander geordnet werden, über Skalen, Harmonisierung und den Traum von echter Stimmungsfreiheit.
+      </p>
+    </section>
+
+    <section>
+      <h2>🎛️ Das Konzept</h2>
+      <p>
+        Teslacoil ist ein <strong>getakteter Puls-Synth</strong> im Browser. Bei jedem Takt-Tick fällt ein Ton – 
+        gefiltert, verzerrt, verhallt. Kein Installieren, kein Speichern-Zwang. Alles läuft im Browser 
+        und merkt sich selbst, wo du aufgehört hast.
+      </p>
+
+      <h3>Signalfluss</h3>
+      <div class="flow-diagram">
+<pre><strong>Clock</strong> ─▶ <strong>Gate?</strong> → <strong>PitchOsc</strong> (S&H) → <strong>Scaler</strong> (Skala+Harmonize) → <strong>SquareOsc</strong>
+          ↓
+          <strong>Bus:</strong> Voices → <strong>LadderFilter</strong> → <strong>DistortionFx</strong> → <strong>GateReverb</strong> → <strong>Master</strong></pre>
+      </div>
+
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-number">111+</div>
+          <div class="stat-label">Unit Tests</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">≥45</div>
+          <div class="stat-label">FPS Render-Loop</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">3</div>
+          <div class="stat-label">Snapshot-Ebenen</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">0</div>
+          <div class="stat-label">Build-Step</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>✨ Features</h2>
+      <div class="features">
+        <div class="feature-card">
+          <h4>🕐 Clock-getriggert</h4>
+          <p>Metronom mit freiem l/m-Verhältnis (nicht nur 2er-Potenzen), Tab-Tempo-Funktion</p>
+        </div>
+        <div class="feature-card">
+          <h4>🎼 Scaler</h4>
+          <p>12-Ton-Skala mit Anker, Skal2-Presets, Harmonisierung auf Base-Frequenz</p>
+        </div>
+        <div class="feature-card">
+          <h4>🎹 Oszillatoren</h4>
+          <p>Square mit Phasen-Distortion, Sine mit FM-Feedback (von Sine zu "saw"-ähnlich)</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔊 Filter</h4>
+          <p>Vadims Ladder-Filter (LP/BP/HP), polyphon/monophon mit KeyTrack, Sequenzer</p>
+        </div>
+        <div class="feature-card">
+          <h4>🎚️ Effekte</h4>
+          <p>Distortion (Hard/Soft Clip), Gate Reverb mit sichtbaren Reflections</p>
+        </div>
+        <div class="feature-card">
+          <h4>📊 Snapshots</h4>
+          <p>Sound, Optik und Skala in drei unabhängigen Ebenen</p>
+        </div>
+        <div class="feature-card">
+          <h4>🎨 Layout</h4>
+          <p>Gruppen und Controls frei anordbar (e-Mode), per Rechtsklick konfigurierbar</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔧 Debug</h4>
+          <p>Oscilloscope, Spectrum Analyzer, Audio-Aufnahme, Screenshot</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>🛠️ Technische Umsetzung</h2>
+      <div class="tech-stack">
+        <h3>Technologie-Stack</h3>
+        <ul>
+          <li>Reines ES-Modul-JS (kein Build-Step)</li>
+          <li>Web Audio API (alle DSP-Module)</li>
+          <li>Single Source of Truth (State)</li>
+          <li>Generische UI-Binding</li>
+          <li>Headless-Tests (Playwright)</li>
+          <li>111+ Unit Tests (Logic)</li>
+        </ul>
+      </div>
+
+      <h3>Dateistruktur</h3>
+<pre><code>teslacoil/
+├── js/
+│   ├── app.js                    # UI-Aufbau, bidirektionale Binding
+│   ├── core/                     # State, Clock, keyRoute
+│   ├── engine/                   # TeslaEngine (Audio-Verdrahtung)
+│   ├── audio/                    # LadderFilter, DistortionFx...
+│   ├── dsp/                      # Reine DSP-Logik
+│   ├── pitch/                    # Scaler, ScaleModel
+│   ├── ui/                       # Knob, Keyboard, Scopes
+│   └── data/                     # PresetManager, Backup
+├── css/main.css                  # Dark-Theme
+├── index.html                    # Einstiegspunkt
+└── test/                         # Testsuite</code></pre>
+    </section>
+
+    <section>
+      <h2>🎮 Bedienung</h2>
+      <h3>Starten</h3>
+      <ol style="margin-left: 1.5rem; margin-bottom: 1.5rem;">
+        <li>Lokalen Server starten: <code>python3 -m http.server 8000</code></li>
+        <li>Browser öffnen: <a href="http://localhost:8000/" style="color: var(--accent);">http://localhost:8000/</a></li>
+        <li><strong>Leertaste</strong> drücken – Start/Stop</li>
+      </ol>
+
+      <h3>Tastenkürzel</h3>
+      <ul style="margin-left: 1.5rem;">
+        <li><strong>Space</strong> – Start/Stop (immer)</li>
+        <li><strong>'e'</strong> – e-Mode (freies Anordnen)</li>
+        <li><strong>Tab</strong> – Durch Controls navigieren</li>
+        <li><strong>Pfeiltasten</strong> – Control-Werte ändern</li>
+        <li><strong>Rechtsklick</strong> – Settings öffnen</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>🚀 Ausblick</h2>
+      <p>Teslacoil ist lebendige Entwicklung. Die Vision von <strong>Stimmungsfreiheit</strong> jenseits der temperierten Stimmung ist ein langer Weg – der Skalar ist der erste Schritt.</p>
+      
+      <ul style="margin-left: 1.5rem;">
+        <li><strong>Werkbank</strong> – Ein Ort, um Gruppen zu bauen und zu verfeinern</li>
+        <li><strong>Debug</strong> – Audio-Aufnahme, Screenshot, geteilte Debug-Sessions</li>
+        <li><strong>MIDI</strong> – Fernsteuerung von Skala, Base-Freq, Snapshots</li>
+        <li><strong>Export</strong> – WAV-Export von Snapshots, Audio-Tables</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>👨‍💻 Entwickelt mit KI</h2>
+      <p>
+        Teslacoil wurde <strong>komplett per Prompt</strong> mit verschiedenen KI-Modellen entwickelt – 
+        von der ersten Idee bis zum modularen Synth. Die gesamte Entwicklungsgeschichte steht in 
+        <a href="dd.md" style="color: var(--accent);">dd.md</a> – über 1300 Zeilen an Prompts, Fixes, Tests und Commits.
+      </p>
+      <p>
+        <strong>Modelle im Einsatz:</strong> Claude Opus 4.8, Sonnet, DeepSeek, Qwen 3.5
+      </p>
+    </section>
+
+    <div class="cta-buttons">
+      <a href="index.html" class="btn">🚀 Teslacoil starten</a>
+      <a href="https://github.com/3Dietrich/teslacoil" class="btn btn-secondary" target="_blank">📦 GitHub Repo</a>
+      <a href="anleitung.md" class="btn btn-secondary">📖 Anleitung</a>
+    </div>
+  </main>
+
+  <footer>
+    <p><strong>Teslacoil</strong> – by DD mit Claude Code</p>
+    <p>Letzte Aktualisierung: 2026-07-15</p>
+    <p style="margin-top: 1rem; opacity: 0.6;">
+      <a href="README.md" style="color: var(--accent);">README</a> • 
+      <a href="howto.md" style="color: var(--accent);">How-to</a> • 
+      <a href="CLAUDE.md" style="color: var(--accent);">CLAUDE.md</a>
+    </p>
+  </footer>
+</body>
+</html>

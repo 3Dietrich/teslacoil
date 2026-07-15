@@ -75,10 +75,11 @@ export const DEFAULTS = Object.freeze({
                          // ERREICHT. 0 = harter Sprung (das alte Verhalten). Nur im Hold
                          // wirksam – @dpa 20260715: „hold nur für Amp aussetzen, für
                          // freq = sliden".
-    ampHoldCurve: 0.5,   // Form des Slides (0..1): einpoliger LP auf ein überhöhtes Ziel,
-                         // am echten Ziel gekappt (@dpa: „das ziel höher setzen und dann
-                         // limiten"). 0 = fast gerade, 1 = deutlich „ungerader" LP-Bauch.
-                         // Ändert NUR die Krümmung – die Ankunftszeit bleibt ampHoldGlide.
+    ampHoldCurve: 0,     // DEPRECATED (@dpa 20260715: „den logarithmischen [Slide] will ich,
+                         // der andere fest auf 0 und weg"). Der Regler ist raus, die Slide-Form
+                         // liegt fest bei 0 = fast gerade (SquareOsc: L = 0.2). Der Key bleibt
+                         // nur, damit alte Snapshots/Backups mit ampHoldCurve: 0.5 weiter laden –
+                         // gelesen wird er nicht mehr.
     ampHold: false,      // Hold: Amp-Env NICHT neu triggern, solange die laufende Note (envLen)
                          // über den nächsten Trigger hinausreicht → gehaltene Note klingt durch.
     envPercent: 0.6,     // Länge = Anteil des Trigger-Intervalls (globaler Master)

@@ -20,12 +20,28 @@ import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
 import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS, serializeBackup, parseBackupFile, FILE_KIND } from '../js/data/Backup.js';
 import { PresetManager } from '../js/data/PresetManager.js';
 import { safeFilename, fileStamp } from '../js/core/fileIO.js';
+import { hasUserState, fetchFactory } from '../js/data/factory.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 
 let pass = 0;
 function t(name, fn) {
+    // Wächter: async an t() zu geben wäre ein Scheinerfolg – t() bekäme sofort ein
+    // Promise, hakte ✓ ab und sähe ein Fehlschlagen nie. Für async gibt es ta().
+    if (fn.constructor.name === 'AsyncFunction') {
+        console.error(`  ✗ ${name}\n    async-Test an t() übergeben – ta() nehmen (t() kann nicht fehlschlagen)`);
+        process.exitCode = 1;
+        return;
+    }
     try { fn(); pass++; console.log(`  ✓ ${name}`); }
     catch (e) { console.error(`  ✗ ${name}\n    ${e.message}`); process.exitCode = 1; }
+}
+/** async-Test: wird gesammelt und am Ende abgewartet (sonst zählt niemand das Ergebnis). */
+const asyncTests = [];
+function ta(name, fn) {
+    asyncTests.push(Promise.resolve().then(fn).then(
+        () => { pass++; console.log(`  ✓ ${name}`); },
+        (e) => { console.error(`  ✗ ${name}\n    ${e.message}`); process.exitCode = 1; },
+    ));
 }
 const approx = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
@@ -665,6 +681,32 @@ t('Optik-Snapshot-Datei mit NUR Optik-Keys → leerer Sound-State, klare Absage'
     assert.throws(() => PresetManager.parseSnapshotFile(JSON.stringify({ name: 'NurOptik', state: { groupOrder: ['a'] } })), /leer/);
 });
 
+console.log('Werkseinstellung (@dpa 20260715)');
+t('hasUserState: leerer Speicher = Erstbesuch', () => {
+    assert.equal(hasUserState(fakeStorage()), false);
+});
+t('hasUserState: EIN bekannter Key genügt → kein Erstbesuch', () => {
+    assert.equal(hasUserState(fakeStorage({ teslacoil_live: '{}' })), true);
+    assert.equal(hasUserState(fakeStorage({ teslacoil_snapshots: '[]' })), true);
+});
+t('hasUserState: fremde Keys zählen NICHT als Zustand', () => {
+    assert.equal(hasUserState(fakeStorage({ irgendwas: 'x', teslacoil_backups: '[]' })), false);
+});
+ta('fetchFactory: liefert geprüfte Daten', async () => {
+    const file = JSON.stringify({ kind: FILE_KIND, version: 1, ts: 7, label: 'Werkseinstellung', data: { teslacoil_live: '{"bpm":91}' } });
+    const got = await fetchFactory('x.json', async () => ({ ok: true, text: async () => file }));
+    assert.equal(got.data.teslacoil_live, '{"bpm":91}');
+});
+ta('fetchFactory: 404 → null (Synth bootet trotzdem)', async () => {
+    assert.equal(await fetchFactory('x.json', async () => ({ ok: false })), null);
+});
+ta('fetchFactory: Netzfehler → null', async () => {
+    assert.equal(await fetchFactory('x.json', async () => { throw new Error('offline'); }), null);
+});
+ta('fetchFactory: kaputte Datei → null (kein halber Zustand)', async () => {
+    assert.equal(await fetchFactory('x.json', async () => ({ ok: true, text: async () => '{kaputt' })), null);
+});
+
 console.log('fileIO (Namens-Helfer)');
 t('safeFilename entschärft Sonderzeichen', () => {
     assert.equal(safeFilename('Mein Fiep/Sound!'), 'Mein_Fiep_Sound');
@@ -724,4 +766,5 @@ t('Pfeile gehören global bei Checkbox/Button/Body (BaseFrq-Fernsteuerung)', () 
     assert.equal(arrowKeyOk(el('BODY')), true);
 });
 
+await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind
 console.log(`\n${pass} Tests bestanden${process.exitCode ? ' (mit Fehlern!)' : ' ✅'}`);

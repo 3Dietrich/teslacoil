@@ -385,7 +385,7 @@ export class TeslaEngine {
                 this.square.retune(freq, time, envLen, s.get('ampHoldGlide'), {
                     engine,
                     param: engine === 'Sine-FM' ? s.get('fmFeedback') : s.get('duty'),
-                }, s.get('ampHoldCurve'));
+                });
                 this._ampHoldUntil = time + envLen;       // Hold weiter nach vorn schieben
             } else {
                 const engine = s.get('oscEngine');

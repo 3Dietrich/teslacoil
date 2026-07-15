@@ -24,6 +24,7 @@ import { PresetBar } from './ui/PresetBar.js';
 import { PresetManager } from './data/PresetManager.js';
 import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
 import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
+import { hasUserState, fetchFactory } from './data/factory.js';
 import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
@@ -58,7 +59,6 @@ const KNOBS = {
     envPitchHi:   { label: 'P→Len hoch', min: 1, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
     ampPitchAmt:  { label: 'P→Amp', min: 0, max: 100, step: 1, curve: 'linear', unit: '%', decimals: 0 },
     ampHoldGlide: { label: 'Slide', min: 0, max: 1, curve: 'log', unit: 's', decimals: 3 },
-    ampHoldCurve: { label: 'Slide-Form', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     lpCutoff:     { label: 'Cutoff', min: 20, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
     lpReso:       { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
     lpEnv:        { label: 'Env', min: -1, max: 1, curve: 'linear', unit: '', decimals: 2 },
@@ -150,7 +150,7 @@ const GROUPS = [
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
     // 'Slide' (ampHoldGlide) sitzt neben dem Hold-Schalter und zeigt sich nur bei hold=on –
     // ohne Hold hat er keine Bedeutung (@dpa 20260715: „nur sichtbar bei hold=on").
-    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampHoldGlide', 'ampHoldCurve', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
+    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampHoldGlide', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
     // Gate-Reverb: Effekt-Slot mit Umschalter; Regler nur sichtbar wenn aktiv.
     // revView ist fest auf 'Beide' verdrahtet (@dpa 20260714) – der Schalter ist raus,
     // die Migration in boot() zieht alte gespeicherte 'L'/'R'-Stände nach.
@@ -189,7 +189,27 @@ const dirtyMark = (d) => (!d || !d.changed) ? '' : (d.frac > 0.6 ? '‼' : '*');
 /** localStorage-Key für den automatisch gesicherten Live-Zustand (Sound + Optik). */
 const LIVE_KEY = 'teslacoil_live';
 
-function boot() {
+/**
+ * Werkseinstellung einspielen – NUR wenn dieser Browser noch keinen eigenen Zustand
+ * hat (@dpa 20260715). Danach läuft der normale Auto-Restore-Pfad unverändert: die
+ * Datei schreibt dieselben localStorage-Keys, die er ohnehin liest.
+ *
+ * Bewusst hier VOR dem State: ein Reload (auch cmd+shift+r) findet dann einen
+ * Zustand vor und lässt ihn in Ruhe – die Werkseinstellung kann nie eine
+ * gewachsene User-Arbeit überschreiben.
+ */
+async function installFactoryIfFirstVisit() {
+    try {
+        if (hasUserState(localStorage)) return false;
+        const f = await fetchFactory();
+        if (!f) return false;            // fehlt/offline/kaputt → Code-Defaults, kein Drama
+        restoreState(localStorage, f.data);
+        return true;
+    } catch { return false; }            // z.B. Storage gesperrt (Privatmodus)
+}
+
+async function boot() {
+    await installFactoryIfFirstVisit();
     const state = new State();
 
     // ── Auto-Restore: letzten Live-Zustand wiederherstellen (sonst Default) ──
@@ -830,15 +850,26 @@ function boot() {
         flRow.appendChild(flExp); flRow.appendChild(flImp);
         win.appendChild(flRow);
 
-        // ── Werkseinstellung: doppelte Warnung + Auto-Backup davor (@dpa 20260714). ──
+        // ── Werkseinstellung: doppelte Warnung + Auto-Backup davor (@dpa 20260714).
+        // Zielt seit 20260715 auf die AUSGELIEFERTE Werkseinstellung (presets/factory.json)
+        // – dieselbe, die ein neuer Besucher bekommt. Nur wenn die nicht erreichbar ist,
+        // bleiben die Code-Defaults als Rückfalllinie. ──
         const acts = document.createElement('div'); acts.className = 'sw-actions';
         const reset = document.createElement('button'); reset.className = 'pb-btn pb-btn-danger';
         reset.textContent = 'Auf Werkseinstellung zurücksetzen';
-        reset.title = 'ALLES verwerfen und Defaults laden (vorher wird automatisch gesichert)';
-        reset.addEventListener('click', () => {
+        reset.title = 'ALLES verwerfen und die ausgelieferte Werkseinstellung laden (vorher wird automatisch gesichert)';
+        reset.addEventListener('click', async () => {
             if (!confirm('ACHTUNG: Das setzt ALLES zurück – Sound, Optik, Snapshots, Skalen und Layouts.\n\nEs wird vorher automatisch ein Backup angelegt. Fortfahren?')) return;
             if (!confirm('Wirklich ALLES auf Werkseinstellung zurücksetzen?\n\nLetzte Warnung – nur das automatische Backup bleibt erhalten.')) return;
             try { pushBackup(localStorage, Date.now(), 'vor Werkseinstellung'); } catch { /* Quota */ }
+            const f = await fetchFactory();
+            if (f) {
+                restoreState(localStorage, f.data);
+                location.reload();      // sauberer Boot aus der Werkseinstellung
+                return;
+            }
+            // Werkseinstellung nicht erreichbar → wie bisher: nackte Code-Defaults.
+            alert('Die Werkseinstellung ist gerade nicht erreichbar.\n\nEs werden die Grund-Defaults geladen.');
             try { localStorage.removeItem(LIVE_KEY); } catch { /* noop */ }
             state.loadFromJSON({});   // → DEFAULTS, UI folgt über '*' (Auto-Save sichert die Defaults neu)
             refreshBackups();
@@ -1596,12 +1627,15 @@ function boot() {
     // Envelope: der Hold-Slide zeigt sich nur bei eingeschaltetem Hold – ohne Hold wird
     // nie retune() gerufen, der Regler wäre wirkungslos (@dpa 20260715).
     function updateHoldVisibility() {
-        ['ampHoldGlide', 'ampHoldCurve'].forEach((k) => setVis(k, state.get('ampHold')));
+        ['ampHoldGlide'].forEach((k) => setVis(k, state.get('ampHold')));
     }
-    // Distortion: Regler nur sichtbar, wenn 'aktiv'.
+    // Distortion: 'aktiv' aus → bis auf Dry/Wet ALLES weg, auch das Kennlinien-Menü
+    // (@dpa 20260715). Dry/Wet bleibt bewusst stehen: es ist der Regler, der auch im
+    // Bypass noch etwas zu sagen hat (Crossfade zum trockenen Signal).
     function updateDistVisibility() {
         const on = state.get('distEnabled');
-        ['distDrive', 'distOut', 'distMix'].forEach((k) => setVis(k, on));
+        ['distDrive', 'distOut', 'distMode'].forEach((k) => setVis(k, on));
+        setVis('distMix', true);
     }
     // Metronom: Regler nur sichtbar, wenn 'aktiv'. Cutoff-Knob vs. Oktaver je nach
     // 'Quant' (AN = Oktaver an der BaseFrq, AUS = freier Cutoff-Knob wie bisher).

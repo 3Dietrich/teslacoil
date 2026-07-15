@@ -70,11 +70,9 @@ export class SquareOsc {
      *  (kein wiederkehrender langsamer Attack). Ein laufender Attack wird sanft
      *  fortgeführt (kein Sprung), danach hält sie auf vollem Amp bis zum neuen Len-Ende.
      *  @param glide 0 = harter Pitch-Sprung, >0 = Slide-Dauer (s) bis zur Ankunft.
-     *  @param glideCurve 0..1 – Form des Slides: 0 = fast gerade, 1 = deutlich LP-krumm.
-     *              Ändert NUR die Krümmung, nie die Ankunftszeit (s.u.).
      *  @param wp   {engine,param,startPhase} – Wellenform-Parameter; werden bei JEDEM
      *              Retune neu angewandt (s.u.). */
-    retune(freq, time, dur, glide = 0, wp = null, glideCurve = 0) {
+    retune(freq, time, dur, glide = 0, wp = null) {
         const v = this._voices[this._voices.length - 1];
         if (!v) return;
         const f = Math.max(1, freq);
@@ -99,15 +97,15 @@ export class SquareOsc {
             // ENDLICHER Zeit exakt an (ein blankes setTargetAtTime käme nie an und würde die
             // eingestellte Zeit nur als Zeitkonstante deuten).
             //
-            // Geregelt wird direkt L = die Anzahl DURCHLAUFENER ZEITKONSTANTEN bis zum
-            // Kappen – das ist das eigentliche Maß für die Krümmung:
-            //   L ≈ 0.2 → nur der (fast gerade) Anfang der e-Kurve
-            //   L ≈ 3   → fast die ganze e-Kurve → deutlich „ungerader" LP-Bauch
-            // Daraus folgt alles andere: τ = glide/L, und die nötige Überhöhung ist
-            // k = e^L/(e^L−1)  [aus f(glide) = f0 + k·(f−f0)·(1−e^(−L)) ≟ f].
-            // Ankunft damit IMMER exakt nach `glide` Sekunden – der Form-Regler ändert
-            // nur die Krümmung, nie die Zeit. (L linear zu regeln fühlt sich gleichmäßig
-            // an; k linear zu regeln nicht: dort passiert fast alles am oberen Ende.)
+            // L = Anzahl DURCHLAUFENER ZEITKONSTANTEN bis zum Kappen – das Maß für die
+            // Krümmung. Daraus folgt alles andere: τ = glide/L, und die nötige Überhöhung
+            // ist k = e^L/(e^L−1)  [aus f(glide) = f0 + k·(f−f0)·(1−e^(−L)) ≟ f].
+            // Ankunft damit IMMER exakt nach `glide` Sekunden.
+            //
+            // L liegt FEST bei 0.2 = nur der fast gerade Anfang der e-Kurve (@dpa 20260715:
+            // „ich will den logarithmischen, der andere fest auf 0 und weg"). Vorher war
+            // das ein Regler (ampHoldCurve, 0..1 → L = 0.2..3); der ist raus, der Slide
+            // ist jetzt immer diese eine Form. Die Zeit macht weiter `ampHoldGlide`.
             //
             // setTargetAtTime ist selbst-verankernd (startet beim Ist-Wert) – anders als
             // linearRampToValueAtTime, das ab dem VORHERIGEN Ereignis rampt und den Slide
@@ -115,7 +113,7 @@ export class SquareOsc {
             const p = v.osc.frequency;
             if (glide > 0) {
                 const from = v.freq ?? f;
-                const L = 0.2 + Math.max(0, Math.min(1, glideCurve)) * 2.8;
+                const L = 0.2;
                 const k = Math.exp(L) / (Math.exp(L) - 1);
                 if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else p.cancelScheduledValues(t);
                 p.setTargetAtTime(from + k * (f - from), t, glide / L);
