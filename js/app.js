@@ -11,6 +11,7 @@
  * dem State neu gesetzt → der octaver-Recall-Bug kann hier nicht auftreten.
  */
 import { State } from './core/State.js';
+import { globalKeyOk, arrowKeyOk } from './core/keyRoute.js';
 import { TeslaEngine } from './engine/TeslaEngine.js';
 import { Knob } from './ui/Knob.js';
 import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
@@ -1136,17 +1137,38 @@ function boot() {
                     for (const c of [...child.children]) if (c.dataset.ctrl) flat.push(c);
                 } else if (child.dataset.ctrl) { flat.push(child); }
             }
-            // Versteckte Einheiten (display:none, z.B. Filter/Distortion 'aktiv' aus) VOR dem
-            // Messen einblenden – sonst liefert getBoundingClientRect 0,0 und sie stapeln beim
-            // Einfrieren links oben. Nach dem Positionieren wird der Versteckt-Zustand exakt
-            // wiederhergestellt. So bekommt JEDES Control eine echte Flow-Position, unabhängig
-            // von der momentanen on/off-Sichtbarkeit (dieselbe Isolation-Kante wie im e-Mode,
-            // nur greift sie auch auf dem Boot-/Recall-Pfad). (@dpa 20260714)
-            const wasHidden = new Set();
-            flat.forEach((u) => { if (u.offsetParent === null) { wasHidden.add(u); u.style.display = ''; } });
-            const br = body.getBoundingClientRect();
+            // Messen in ZWEI Pässen (@dpa 20260715). Der alte Einpass-Weg blendete die
+            // versteckten Einheiten (Filter/Distortion 'aktiv' aus) VOR dem Messen ein –
+            // das verschiebt aber den Fluss ALLER anderen, und die sichtbaren wurden auf
+            // einer Position eingefroren, die nie auf dem Schirm stand (= der gemeldete
+            // Sprung). Versteckte brauchen trotzdem eine echte Position, sonst liefert
+            // getBoundingClientRect 0,0 und sie stapeln links oben.
+            //
+            // Pass 1: die SICHTBAREN im unangetasteten Fluss messen. Das ist die Wahrheit,
+            // die auf dem Schirm steht – sie darf sich durch das Einfrieren nicht bewegen.
             const nat = new Map();
-            flat.forEach((u) => { const r = u.getBoundingClientRect(); nat.set(u, { x: Math.round(r.left - br.left), y: Math.round(r.top - br.top) }); });
+            const hidden = [];
+            {
+                const br = body.getBoundingClientRect();
+                flat.forEach((u) => {
+                    if (u.offsetParent === null) { hidden.push(u); return; }
+                    const r = u.getBoundingClientRect();
+                    nat.set(u, { x: Math.round(r.left - br.left), y: Math.round(r.top - br.top) });
+                });
+            }
+            // Pass 2: nur für die VERSTECKTEN eine brauchbare Position holen. Das Einblenden
+            // verschiebt den Fluss – deshalb wird aus diesem Durchgang AUSSCHLIESSLICH der
+            // Wert der versteckten selbst übernommen; die sichtbaren behalten Pass 1.
+            const wasHidden = new Set(hidden);
+            if (hidden.length) {
+                hidden.forEach((u) => { u.style.display = ''; });
+                const br2 = body.getBoundingClientRect();
+                hidden.forEach((u) => {
+                    const r = u.getBoundingClientRect();
+                    nat.set(u, { x: Math.round(r.left - br2.left), y: Math.round(r.top - br2.top) });
+                });
+                hidden.forEach((u) => { u.style.display = 'none'; });
+            }
             // … dann Wrapper-Reihen auflösen (Einheiten direkt in den body hängen) …
             for (const child of [...body.children]) {
                 if (child.classList.contains('knob-row') || child.classList.contains('group-ctrls')) {
@@ -1316,15 +1338,20 @@ function boot() {
         arrBtn.classList.toggle('on', on);   // Kopfzeilen-Schalter spiegeln
         // Kein HTML5-Reorder-Drag mehr (Controls werden frei bewegt) → draggable aus.
         for (const { el } of arrangeRows) [...el.children].forEach((c) => { if (c.dataset.ctrl) c.draggable = false; });
-        // Sichtbarkeit sofort neu anwenden (setVis() respektiert `arranging`): beim Betreten
-        // wird ALLES sichtbar, beim Verlassen wieder die reale on/off-Stellung.
-        refreshVisibility();
+        // REIHENFOLGE ist der Knackpunkt (@dpa 20260715): ERST einfrieren, DANN einblenden.
+        // Andersherum (der alte Weg) blendet refreshVisibility() die versteckten Controls ein,
+        // der Fluss rechnet sich neu – und freezeGroup() nagelt die sichtbaren auf dieser
+        // frisch verschobenen Position fest. Gemessen: 16 Controls sprangen allein durch 'e',
+        // bevor überhaupt jemand geklickt hat. Eingefroren wird jetzt gegen den Fluss, den
+        // @dpa wirklich vor sich sieht; das Einblenden danach kann nichts mehr verschieben,
+        // weil alle Einheiten dann schon absolut positioniert sind.
         if (on) {
-            // Alle Gruppen SOFORT einfrieren (statt lazy beim ersten Klick) – dadurch misst
-            // freezeGroup() für jedes Control eine echte Position (nichts mehr display:none)
-            // UND es gibt keinen Layout-Sprung mehr beim ersten Anklicken einer Gruppe.
             for (const name of groupEls.keys()) freezeGroup(name);
-        } else setSelected(null);   // Auswahl beim Verlassen aufheben
+            refreshVisibility();   // im e-Mode wird ALLES sichtbar (setVis() respektiert `arranging`)
+        } else {
+            refreshVisibility();   // beim Verlassen zurück auf die reale on/off-Stellung
+            setSelected(null);     // Auswahl beim Verlassen aufheben
+        }
         // Sichtbarer Hinweis, dass hier verschoben statt bedient wird.
         if (on && !_arrangeHint) {
             _arrangeHint = document.createElement('div'); _arrangeHint.className = 'arrange-hint';
@@ -1717,12 +1744,12 @@ function boot() {
 
     // ── Tastatur: Space = Start/Stop, Pfeile = BaseFrq-Fernsteuerung (Ton-Modus) ──
     window.addEventListener('keydown', (e) => {
-        // Textarea (Debug-Prompt) & contenteditable ausdrücklich ausnehmen: sonst
-        // schluckt der Space-Transport-Toggle jedes Leerzeichen beim Tippen (startStop
-        // muss vom Debug-Editor entkoppelt sein).
-        const onBody = !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)
-            && !(e.target instanceof HTMLTextAreaElement) && !e.target.isContentEditable
-            && !(e.target.classList && e.target.classList.contains('knob-container'));
+        // Tasten-Zuständigkeit nach EINER Regel (js/core/keyRoute.js, @dpa 20260715):
+        // nicht „welcher Tag ist das Ziel?", sondern „braucht das Ziel genau DIESE
+        // Taste selbst?". Nur echte Texteingabe schluckt Space/'e'; die Pfeile behält
+        // zusätzlich, wer mit ihnen bedient wird (Select, Range-Slider, Knob).
+        const globalOk = globalKeyOk(e.target);   // Space / 'e'
+        const arrowOk = arrowKeyOk(e.target);     // Pfeile
         if (e.key === 'Escape') {
             // Esc räumt auf: Overlays zu UND den Fokus abgeben – Eingabe verlassen,
             // Controls (v.a. Switches) deselektieren. Danach schaltet Space wieder
@@ -1733,15 +1760,21 @@ function boot() {
             if (ae && ae !== document.body && typeof ae.blur === 'function') ae.blur();
             return;
         }
-        if (e.code === 'Space' && onBody) { e.preventDefault(); presetBar.toggle(); return; }
-        // 'e' = Anordnen-Modus („Alle Elemente frei anordnen") an/aus. Nur auf dem Body
-        // (nicht beim Tippen in Feldern) und ohne Modifier, damit Cmd/Ctrl+E unberührt bleiben.
-        if (onBody && (e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        // Space = Start/Stop, so oft wie möglich (@dpa 870). preventDefault ist hier
+        // doppelt wichtig: es verhindert, dass eine fokussierte Checkbox/ein Button
+        // ZUSÄTZLICH schaltet und dass die Seite scrollt.
+        if (e.code === 'Space' && globalOk) { e.preventDefault(); presetBar.toggle(); return; }
+        // 'e' = Anordnen-Modus an/aus. Ohne Modifier, damit Cmd/Ctrl+E unberührt bleiben.
+        // Auf einem fokussierten Select gewinnt 'e' bewusst gegen die native
+        // Options-Schnellsuche (@dpa: „'e' soll e-mode aufrufen").
+        if (globalOk && (e.key === 'e' || e.key === 'E') && !e.metaKey && !e.ctrlKey && !e.altKey) {
             e.preventDefault(); setArranging(!arranging); return;
         }
         // e-Mode + ausgewähltes Element: Pfeiltasten bewegen es im 10px-Raster (Shift = 1px).
         // Hat Vorrang vor der BaseFrq-Fernsteuerung, solange etwas ausgewählt ist.
-        if (arranging && selected.size && e.key.startsWith('Arrow')) {
+        // Bewusst nur `globalOk` (nicht `arrowOk`): im e-Mode werden Controls angeordnet,
+        // nicht bedient – eine Auswahl ist eindeutige Absicht, nur Tippen geht vor.
+        if (arranging && selected.size && globalOk && e.key.startsWith('Arrow')) {
             const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
             if (d) { e.preventDefault(); nudgeSelected(d[0], d[1], e.shiftKey); return; }
         }
@@ -1749,13 +1782,13 @@ function boot() {
         // BaseFrq-Fernsteuerung (Band-Regler für ALLE Quellen):
         //   ↑/↓ = Band oktavweise (×2 / ÷2) verschieben, in JEDEM Modus.
         //   ←/→ = Tonklasse (nur im Ton-Modus).
-        if (onBody && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (arrowOk && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
             e.preventDefault();
             const f = e.key === 'ArrowUp' ? 2 : 0.5;
             state.set('baseBand', Math.max(0.05, Math.min(8000, state.get('baseBand') * f)));
             return;
         }
-        if (state.get('baseSrc') === 'Ton' && onBody) {
+        if (state.get('baseSrc') === 'Ton' && arrowOk) {
             const pc = Math.max(0, NOTE_NAMES.indexOf(state.get('baseNote')));
             if (e.key === 'ArrowRight') { e.preventDefault(); state.set('baseNote', NOTE_NAMES[(pc + 1) % 12]); }
             else if (e.key === 'ArrowLeft') { e.preventDefault(); state.set('baseNote', NOTE_NAMES[(pc + 11) % 12]); }

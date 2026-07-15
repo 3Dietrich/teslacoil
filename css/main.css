@@ -186,7 +186,12 @@ body {
 .group-ctrls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 7px; align-items: flex-start; }
 /* Freies Gruppen-Canvas: Einheiten absolut, Rahmen (body) umschließt exakt die Fläche. */
 .group-body.free-canvas { position: relative; }
-.group-body.free-canvas > [data-ctrl] { position: absolute; }
+/* margin:0 ist Pflicht, nicht Kosmetik (@dpa 20260715): bei position:absolute setzt `top`
+   die MARGIN-Box, gemessen wird per getBoundingClientRect aber die BORDER-Box. Jedes
+   Control mit margin-top (.group-extra 7px, .base-speed 4px, Keyboard 7px) landete sonst
+   um exakt seinen Margin zu tief – der Rest des „Sprungs beim Anclicken". Im Canvas ist
+   der Margin ohnehin sinnlos, weil jede Position explizit gesetzt wird. */
+.group-body.free-canvas > [data-ctrl] { position: absolute; margin: 0; }
 /* zusätzliche Widgets in einer Gruppe (Keyboard, Skala-Bar) */
 .group-extra { margin-top: 7px; }
 .group .keyboard { border: none; background: transparent; padding: 0; margin-top: 7px; width: auto; }

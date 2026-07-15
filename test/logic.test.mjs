@@ -18,6 +18,7 @@ import { bestFraction, reduce } from '../js/pitch/rateFraction.js';
 import { encodeWav, decodeWav } from '../js/dsp/wavEncoder.js';
 import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
 import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS } from '../js/data/Backup.js';
+import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 
 let pass = 0;
 function t(name, fn) {
@@ -592,6 +593,55 @@ t('pushBackup: legt Eintrag mit Daten an und dünnt', () => {
     assert.equal(list[0].label, 'test');
     assert.equal(list[0].data.teslacoil_live, '{"v":1}');
     assert.ok(BACKED_UP_KEYS.includes('teslacoil_live'));
+});
+
+console.log('keyRoute (Tasten-Zuständigkeit)');
+// Duck-typed Fakes – genau das, was targetKind() liest.
+const el = (tag, extra = {}) => ({ tagName: tag, ...extra });
+const withClass = (...cls) => ({ classList: { contains: (c) => cls.includes(c) } });
+
+t('Texteingabe schluckt alles: input[text], number, textarea, contenteditable', () => {
+    assert.equal(targetKind(el('INPUT', { type: 'text' })), 'text');
+    assert.equal(targetKind(el('INPUT', { type: 'number' })), 'text');
+    assert.equal(targetKind(el('INPUT')), 'text');            // type fehlt → default 'text'
+    assert.equal(targetKind(el('TEXTAREA')), 'text');
+    assert.equal(targetKind(el('DIV', { isContentEditable: true })), 'text');
+});
+t('pfeil-bediente Elemente: select, input[range], Knob', () => {
+    assert.equal(targetKind(el('SELECT')), 'arrows');
+    assert.equal(targetKind(el('INPUT', { type: 'range' })), 'arrows');
+    assert.equal(targetKind(el('DIV', withClass('knob-container'))), 'arrows');
+});
+t('tastenlose Elemente: Checkbox, Button, Body', () => {
+    assert.equal(targetKind(el('INPUT', { type: 'checkbox' })), 'none');
+    assert.equal(targetKind(el('BUTTON')), 'none');
+    assert.equal(targetKind(el('BODY')), 'none');
+    assert.equal(targetKind(null), 'none');
+});
+// Der eigentliche Fehler aus dd.md 870: Menu-Switch/'aktiv' stellten Space+'e' tot.
+t('870: Space/e leben auf fokussiertem Select (Menu-Switch)', () => {
+    assert.equal(globalKeyOk(el('SELECT')), true);
+});
+t('870: Space/e leben auf fokussierter Checkbox (aktiv)', () => {
+    assert.equal(globalKeyOk(el('INPUT', { type: 'checkbox' })), true);
+});
+t('870: Space/e leben auf fokussiertem Knob', () => {
+    assert.equal(globalKeyOk(el('DIV', withClass('knob-container'))), true);
+});
+t('Space/e schweigen NUR beim echten Tippen', () => {
+    assert.equal(globalKeyOk(el('INPUT', { type: 'text' })), false);
+    assert.equal(globalKeyOk(el('TEXTAREA')), false);
+});
+t('Pfeile bleiben lokal bei Tippen UND bei Select/Slider/Knob', () => {
+    assert.equal(arrowKeyOk(el('INPUT', { type: 'text' })), false);
+    assert.equal(arrowKeyOk(el('SELECT')), false);
+    assert.equal(arrowKeyOk(el('INPUT', { type: 'range' })), false);
+    assert.equal(arrowKeyOk(el('DIV', withClass('knob-container'))), false);
+});
+t('Pfeile gehören global bei Checkbox/Button/Body (BaseFrq-Fernsteuerung)', () => {
+    assert.equal(arrowKeyOk(el('INPUT', { type: 'checkbox' })), true);
+    assert.equal(arrowKeyOk(el('BUTTON')), true);
+    assert.equal(arrowKeyOk(el('BODY')), true);
 });
 
 console.log(`\n${pass} Tests bestanden${process.exitCode ? ' (mit Fehlern!)' : ' ✅'}`);
