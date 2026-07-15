@@ -1,4 +1,4 @@
-# ⚡ Teslacoil – die (fast) unterhaltsame Anleitung
+# ⚡ Teslacoil – Anleitung
 
 Willkommen an der Blitzmaschine. Teslacoil ist ein **getakteter Puls-Synth** im Browser:
 eine Uhr tickt, bei jedem Tick fällt ein Ton – gefiltert, verzerrt, verhallt. Kein
