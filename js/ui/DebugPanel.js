@@ -5,6 +5,15 @@
  * Begleit-Prompt zu Dateien `teslacoil_debug_<name>.*` – zum Hochladen an
  * die KI ("hörst du das Zwitschern bei Step 3?").
  *
+ * NUR LOGIK, kein DOM (@dpa 20260715_223000: „es wäre schön wenn sich dieser Control
+ * auflöst und alles in eigenen Control (typen) dann in der Gruppe steht"). Die
+ * Bedienelemente baut app.js jetzt aus denselben generischen Fabriken wie alle
+ * anderen Controls – damit sind sie einzeln verschiebbar, beschriftbar und stylbar.
+ *
+ * ZWEI Aufnahme-Slots (@dpa: „neben Rec soll ein zweites Rec2 hin, zum Vergleich von
+ * vorher nachher"): 'a' und 'b' laufen unabhängig und landen als getrennte WAVs im
+ * Bündel (…_a.wav / …_b.wav).
+ *
  * debugName/debugPrompt liegen in der OPTIK-Ebene (LAYOUT_KEYS): kein
  * Sound-Snapshot-Recall, überleben aber einen Reload.
  */
@@ -16,61 +25,31 @@ export class DebugPanel {
     constructor(state, engine) {
         this.state = state;
         this.engine = engine;
-        this.recorder = new DebugRecorder(engine.ctx, engine.master.volume);
-        this._lastRecording = null;   // Float32Array | null – letzte gestoppte Aufnahme
-        this.element = this._build();
+        // Pro Slot ein eigener Recorder + die letzte gestoppte Aufnahme.
+        this.slots = {
+            a: { rec: new DebugRecorder(engine.ctx, engine.master.volume), last: null },
+            b: { rec: new DebugRecorder(engine.ctx, engine.master.volume), last: null },
+        };
     }
 
-    _build() {
-        const box = document.createElement('div'); box.className = 'debug-panel';
+    /** @param {'a'|'b'} slot */
+    recording(slot) { return this.slots[slot].rec.recording; }
 
-        const nameRow = document.createElement('label'); nameRow.className = 'select-field';
-        const nameLab = document.createElement('span'); nameLab.textContent = 'Name';
-        const nameIn = document.createElement('input'); nameIn.type = 'text'; nameIn.className = 'gs-text';
-        nameIn.placeholder = 'z.B. filter-bug'; nameIn.value = this.state.get('debugName');
-        nameIn.addEventListener('input', () => this.state.set('debugName', nameIn.value));
-        nameRow.appendChild(nameLab); nameRow.appendChild(nameIn);
+    /** Aufnahme dieses Slots starten/stoppen. @returns {number|null} Sekunden nach dem Stopp. */
+    toggle(slot) {
+        const s = this.slots[slot];
+        if (s.rec.recording) {
+            s.last = s.rec.stop();
+            return s.last.length / this.engine.ctx.sampleRate;
+        }
+        s.rec.start();
+        return null;
+    }
 
-        const promptLab = document.createElement('div'); promptLab.className = 'gs-lab'; promptLab.textContent = 'Begleit-Prompt an die KI';
-        const prompt = document.createElement('textarea'); prompt.className = 'debug-prompt gs-text';
-        prompt.rows = 3; prompt.placeholder = 'z.B. "hörst du das Zwitschern bei Step 3?"';
-        prompt.value = this.state.get('debugPrompt');
-        prompt.addEventListener('input', () => this.state.set('debugPrompt', prompt.value));
-
-        const recBtn = document.createElement('button'); recBtn.className = 'pb-btn';
-        const status = document.createElement('span'); status.className = 'debug-status';
-        const setRecUI = () => {
-            recBtn.textContent = this.recorder.recording ? '⏹ Stop' : '⏺ Rec';
-            recBtn.classList.toggle('debug-rec-on', this.recorder.recording);
-        };
-        recBtn.title = 'Audio parallel am Master abgreifen (Hörweg unberührt) – Start/Stop';
-        recBtn.addEventListener('click', () => {
-            if (this.recorder.recording) {
-                this._lastRecording = this.recorder.stop();
-                const secs = this._lastRecording.length / this.engine.ctx.sampleRate;
-                status.textContent = `${secs.toFixed(1)} s aufgenommen`;
-            } else {
-                this.recorder.start();
-                status.textContent = 'nimmt auf …';
-            }
-            setRecUI();
-        });
-        setRecUI();
-
-        const saveBtn = document.createElement('button'); saveBtn.className = 'pb-btn pb-ic-new';
-        saveBtn.textContent = 'Debug speichern';
-        saveBtn.title = 'Audio (WAV) + Screenshot (PNG) + Zustand (JSON) + Prompt (TXT) einzeln herunterladen';
-        saveBtn.addEventListener('click', () => this._saveBundle());
-
-        const row1 = document.createElement('div'); row1.className = 'debug-row';
-        row1.appendChild(recBtn); row1.appendChild(status);
-        const row2 = document.createElement('div'); row2.className = 'debug-row';
-        row2.appendChild(saveBtn);
-
-        box.appendChild(nameRow);
-        box.appendChild(promptLab); box.appendChild(prompt);
-        box.appendChild(row1); box.appendChild(row2);
-        return box;
+    /** Länge der letzten Aufnahme dieses Slots in s (0 = noch keine). */
+    lastSeconds(slot) {
+        const l = this.slots[slot].last;
+        return l && l.length ? l.length / this.engine.ctx.sampleRate : 0;
     }
 
     /** Alle sichtbaren Canvas-Elemente (Scopes/Reflections/Seq/Meter) zu EINEM PNG stapeln.
@@ -96,7 +75,7 @@ export class DebugPanel {
         setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
 
-    _saveBundle() {
+    saveBundle() {
         const name = (this.state.get('debugName') || 'debug').trim().replace(/[^a-z0-9_-]+/gi, '_') || 'debug';
 
         // Zustand: state.toJSON() – für die KI direkt lesbar (wertvollster Teil).
@@ -119,12 +98,13 @@ export class DebugPanel {
             this._download(new Blob([arr], { type: 'image/png' }), `teslacoil_debug_${name}.png`);
         }
 
-        // Audio: letzte gestoppte Aufnahme (falls vorhanden) als WAV.
-        if (this._lastRecording && this._lastRecording.length) {
-            const wav = encodeWav(this._lastRecording, this.engine.ctx.sampleRate);
-            this._download(new Blob([wav], { type: 'audio/wav' }), `teslacoil_debug_${name}.wav`);
+        // Audio: beide Slots einzeln (a = vorher, b = nachher) – getrennte Dateien, damit
+        // sich der Vergleich in der KI nicht erst aus einer Datei schneiden lässt.
+        for (const slot of ['a', 'b']) {
+            const buf = this.slots[slot].last;
+            if (!buf || !buf.length) continue;
+            const wav = encodeWav(buf, this.engine.ctx.sampleRate);
+            this._download(new Blob([wav], { type: 'audio/wav' }), `teslacoil_debug_${name}_${slot}.wav`);
         }
     }
-
-    mount(parent) { parent.appendChild(this.element); }
 }

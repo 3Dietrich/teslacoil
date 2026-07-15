@@ -474,9 +474,23 @@ body {
 .group.drop-before { box-shadow: -4px 0 0 -1px var(--accent), 0 -4px 0 -1px var(--accent); }
 .group.drop-after  { box-shadow:  4px 0 0 -1px var(--accent), 0  4px 0 -1px var(--accent); }
 
-/* ── Debug-Panel (C7): Audio/Screenshot/Zustand/Prompt bündeln ── */
-.debug-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.debug-prompt { width: 100%; resize: vertical; font-family: inherit; font-size: 12px; padding: 6px 8px; }
-.debug-row { display: flex; align-items: center; gap: 8px; }
-.debug-status { color: var(--muted); font-size: 11px; }
+/* ── Debug (C7): Audio/Screenshot/Zustand/Prompt bündeln. Seit 20260715_223000 kein
+   eigener Panel-Block mehr, sondern normale Controls (Text/Note/Button) in einer Zeile. ── */
+.debug-ctrls { align-items: flex-end; }
 .debug-rec-on { border-color: var(--accent2); color: var(--accent2); }
+
+/* ── Schrift-Eingabe (TEXTS) ── */
+.text-field .gs-text { flex: none; }
+/* Der Vergrößerungs-Zipfel (@dpa 20260715_223000): frei in BEIDE Richtungen ziehbar,
+   „den Text beliebig groß machen können". Das Minimum hält ihn erreichbar – wer ihn ganz
+   klein zieht, kommt noch an den Zipfel, um ihn wieder aufzuziehen. */
+.text-multiline { resize: both; overflow: auto; font-family: inherit; font-size: 12px; padding: 6px 8px;
+    min-width: 40px; min-height: 20px; width: 180px; }
+
+/* ── Reines Text-Element (NOTES) ── */
+.note-field { color: var(--muted); font-size: 11px; align-self: flex-end; }
+
+/* ── Button-Control (BUTTONS) ── */
+.btn-field { display: flex; align-items: flex-end; }
+/* flex, damit Label-Pos (justify/align) im Button überhaupt etwas bewegen kann. */
+.ctrl-btn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }

@@ -10,6 +10,13 @@
  * Dry/Wet-Crossfade (@dpa 20260715): dry = 1−mix, wet = mix – dieselbe lineare
  * Konvention wie im GateReverb, damit sich beide Regler gleich anfühlen. Der Dry-Pfad
  * läuft parallel am Shaper vorbei; bei mix=1 klingt es exakt wie vorher (reines Wet).
+ *
+ * Dry-Delay in SAMPLES (@dpa 20260715_223000, „Experiment"): der Versatz zwischen
+ * trockenem und verzerrtem Signal, in Samples statt ms – bei so kurzen Zeiten hört man
+ * Kammfilter/Phasen, keine Echos. Weil ein DelayNode nur VORHALTEN kann, sitzt in
+ * BEIDEN Zweigen einer: positiv verzögert dry, negativ verzögert wet (= dry relativ
+ * früher). Hörbar wird das nur zwischen den Extremen (mix ≈ 0.5), wo sich beide Pfade
+ * mischen – bei mix = 1 (reines Wet) tut der Regler nichts.
  */
 
 /** Foldback-Distortion: Werte außerhalb [-1,1] zurückfalten. */
@@ -29,15 +36,22 @@ export class DistortionFx {
         this.post = ctx.createGain();
         this.dry = ctx.createGain();   // parallel am Shaper vorbei
         this.wet = ctx.createGain();   // hinter Shaper+Out-Pegel
+        // Sample-Versatz zwischen den Zweigen. maxDelayTime großzügig (0.1 s) – der
+        // Regler bleibt weit darunter, die Grenze kostet nur Puffer, keine Latenz.
+        this.dryDelay = ctx.createDelay(0.1);
+        this.wetDelay = ctx.createDelay(0.1);
 
         this.active = false;
         this.mode = 'Saturation';
         this.drive = 1;
         this.mix = 1;                  // 1 = reines Wet → Default klingt wie vor dem Regler
+        this.dryDelaySamples = 0;      // >0 = dry später, <0 = wet später
 
         this.shaper.connect(this.post);
-        this.post.connect(this.wet);
+        this.post.connect(this.wetDelay);
+        this.wetDelay.connect(this.wet);
         this.wet.connect(this.output);
+        this.dryDelay.connect(this.dry);
         this.dry.connect(this.output);
         this.buildCurve();
         this._route();
@@ -50,7 +64,7 @@ export class DistortionFx {
      *  komplett aus der Kette, nicht nur auf 0 gedreht (kein Rest-Rechenaufwand). */
     _route() {
         try { this.input.disconnect(); } catch { /* noop */ }
-        if (this.active) { this.input.connect(this.shaper); this.input.connect(this.dry); }
+        if (this.active) { this.input.connect(this.shaper); this.input.connect(this.dryDelay); }
         else this.input.connect(this.output);
     }
 
@@ -58,6 +72,27 @@ export class DistortionFx {
     setDrive(d) { this.drive = Math.max(0.1, d); this.buildCurve(); }
     setOut(o) { this.post.gain.setTargetAtTime(Math.max(0, o), this.ctx.currentTime, 0.01); }
     setMix(m) { this.mix = Math.max(0, Math.min(1, m)); this._applyGains(); }
+
+    /** Versatz in SAMPLES: positiv = dry verzögern, negativ = wet verzögern.
+     *  Immer nur EIN Zweig verzögert, der andere steht auf 0 → der Regler bleibt
+     *  bei 0 exakt der bisherige Zustand (beide Delays neutral). */
+    setDryDelaySamples(n) {
+        this.dryDelaySamples = Math.round(n) || 0;
+        this._applyDelays();
+    }
+
+    _applyDelays() {
+        const sr = this.ctx.sampleRate;
+        const n = this.dryDelaySamples;
+        // Auf die Puffergrenze klemmen, damit ein per Meta aufgezogener Regler nicht
+        // still am maxDelayTime hängen bleibt.
+        const secs = Math.min(0.1, Math.abs(n) / sr);
+        const now = this.ctx.currentTime;
+        // Sprungfrei umsetzen: eine kurze Rampe statt eines harten Sprungs (der knackt
+        // im Delay hörbar). 5 ms ist kurz genug, um beim Drehen unmittelbar zu wirken.
+        this.dryDelay.delayTime.setTargetAtTime(n > 0 ? secs : 0, now, 0.005);
+        this.wetDelay.delayTime.setTargetAtTime(n < 0 ? secs : 0, now, 0.005);
+    }
 
     /** Linearer Crossfade wie im GateReverb. Bei 'aus' zählt nur der direkte Pfad.
      *  `immediate` (nur beim Aufbau) setzt hart statt zu gleiten – sonst startet der

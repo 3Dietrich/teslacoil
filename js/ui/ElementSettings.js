@@ -9,6 +9,12 @@
  *   • toggle   (Schalter wie aktiv/hold): Label, Label-Position (oben/links/rechts/unten).
  *   • readout  (pure Texte, z.B. base-readout): Label, Label an/aus, Textgröße,
  *              Textfeld-Größe, Textfarbe.
+ *   • text     (Schrift-Eingabe, z.B. Debug-Name/-Prompt): wie select + Feldhöhe.
+ *              Breite/Höhe teilt sie sich mit dem Vergrößerungs-Zipfel der textarea –
+ *              beide schreiben denselben ctrlStyles-Eintrag.
+ *   • note     (reines Text-Element): sein Inhalt IST das Label.
+ *   • button   (Rec/Debug speichern …): Label, Label-Position (Mitte = Default),
+ *              VG/BG, Breite/Höhe.
  *
  * Das Panel ist rein optisch – es verstellt NIE einen Control-Wert (@dpa: „RM darf keine
  * Control Values verstellen."). Die eigentliche DOM-Anwendung liegt beim Aufrufer
@@ -43,6 +49,7 @@ export class ElementSettings {
         <div class="kme-row" data-f="labelPos">
           <label>Label-Pos</label>
           <select class="es-labelpos">
+            <option value="center">Mitte</option>
             <option value="top">Oben</option>
             <option value="left">Links</option>
             <option value="right">Rechts</option>
@@ -69,7 +76,11 @@ export class ElementSettings {
         </div>
         <div class="kme-row" data-f="boxSize">
           <label>Feldbreite</label>
-          <input type="number" class="es-boxsize" min="20" max="400" step="2" />
+          <input type="number" class="es-boxsize" min="20" max="1200" step="2" />
+        </div>
+        <div class="kme-row" data-f="boxH">
+          <label>Feldhöhe</label>
+          <input type="number" class="es-boxh" min="16" max="1200" step="2" />
         </div>
         <div class="kme-actions">
           <button class="es-reset">Zurücksetzen</button>
@@ -82,7 +93,7 @@ export class ElementSettings {
     // Alle Felder wenden sofort an (live), wie beim Knob-Editor die Farbe/Ansicht.
     // Die Farbfelder brauchen dedizierte Handler: erst „aktiv"-Flag setzen, DANN _apply –
     // sonst sammelt _apply die Farbe noch vor dem Flag ein (Reihenfolge-Bug).
-    const live = ['.es-label', '.es-labelon', '.es-labelpos', '.es-size', '.es-fontsize', '.es-boxsize'];
+    const live = ['.es-label', '.es-labelon', '.es-labelpos', '.es-size', '.es-fontsize', '.es-boxsize', '.es-boxh'];
     live.forEach((sel) => {
       const el = panel.querySelector(sel);
       const ev = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
@@ -119,6 +130,14 @@ export class ElementSettings {
     // Struktur-Umbau: Textgröße, Feldbreite, Textfarbe. (Label/Label-an/aus würde jeden
     // Readout-Update umbauen – bewusst weggelassen, s. Commit.)
     if (type === 'readout') return ['fontSize', 'boxSize', 'fg'];
+    // Schrift-Eingabe: wie ein Select, dazu die Höhe – Breite/Höhe schreibt auch der
+    // Vergrößerungs-Zipfel hierher, das Panel ist der zweite Weg zur selben Größe.
+    if (type === 'text') return ['label', 'labelOn', 'bg', 'fg', 'size', 'boxSize', 'boxH'];
+    // Reines Text-Element: sein Inhalt IST das Label (@dpa 20260715_223000).
+    if (type === 'note') return ['label', 'fontSize', 'boxSize', 'fg'];
+    // Button (@dpa 20260715_223000): „Label, Label position (zusätzlich: mitte =
+    // default), VG, BG, höhe, Breite".
+    if (type === 'button') return ['label', 'labelPos', 'fg', 'bg', 'boxSize', 'boxH'];
     return ['label'];
   }
 
@@ -136,7 +155,11 @@ export class ElementSettings {
 
     this._panel.querySelector('.es-label').value = style.label ?? (target.defLabel || '');
     this._panel.querySelector('.es-labelon').checked = style.labelOn !== false;   // default an
-    this._panel.querySelector('.es-labelpos').value = style.labelPos || 'top';
+    // 'Mitte' gibt es nur beim Button (Text IM Button) – bei einem Schalter, dessen Label
+    // neben der Box sitzt, wäre die Option sinnlos. Default entsprechend: Button = Mitte.
+    const posSel = this._panel.querySelector('.es-labelpos');
+    posSel.querySelector('option[value="center"]').hidden = target.type !== 'button';
+    posSel.value = style.labelPos || (target.type === 'button' ? 'center' : 'top');
     this._bgOn = !!style.bg;
     this._panel.querySelector('.es-bg').value = style.bg || '#222222';
     this._fgOn = !!style.fg;
@@ -144,6 +167,7 @@ export class ElementSettings {
     this._panel.querySelector('.es-size').value = style.size || '';
     this._panel.querySelector('.es-fontsize').value = style.fontSize || '';
     this._panel.querySelector('.es-boxsize').value = style.boxSize || '';
+    this._panel.querySelector('.es-boxh').value = style.boxH || '';
     this._panel.querySelector('.kme-title').textContent = '⚙ ' + (style.label ?? target.defLabel ?? 'Element');
 
     const rect = target.el.getBoundingClientRect();
@@ -173,6 +197,7 @@ export class ElementSettings {
     if (fields.has('size')) { const v = parseInt(P('.es-size').value); if (v) s.size = v; }
     if (fields.has('fontSize')) { const v = parseInt(P('.es-fontsize').value); if (v) s.fontSize = v; }
     if (fields.has('boxSize')) { const v = parseInt(P('.es-boxsize').value); if (v) s.boxSize = v; }
+    if (fields.has('boxH')) { const v = parseInt(P('.es-boxh').value); if (v) s.boxH = v; }
     return s;
   }
 

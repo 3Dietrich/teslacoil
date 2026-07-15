@@ -68,8 +68,9 @@ def main():
         check("Dist aus: Drive weg", not vis("distDrive"))
         check("Dist aus: Out weg", not vis("distOut"))
         check("Dist aus: Kennlinien-Menü weg", not vis("distMode"))
+        check("Dist aus: Dry-Delay weg", not vis("distDryDelay"))
         set_state({"distEnabled": True})
-        for k in ("distDrive", "distOut", "distMode", "distMix"):
+        for k in ("distDrive", "distOut", "distMode", "distMix", "distDryDelay"):
             check(f"Dist an: {k} da", vis(k))
 
         # ── Hold-Slide: nur bei Hold. 'Slide-Form' ist raus (@dpa 20260715) ──
@@ -80,6 +81,55 @@ def main():
         check("Slide-Form existiert nicht mehr",
               pg.evaluate("()=>![...document.querySelectorAll('[data-ctrl]')]"
                           ".some(e=>e.dataset.ctrl.endsWith(':ampHoldCurve'))"))
+
+        # ── Skaler: Quant ist raus (@dpa 20260715_224643), die ×…Base-Anzeige bleibt ──
+        for k in ("rateQuant", "rateNumMax", "rateDenMax"):
+            check(f"Skaler: {k} existiert nicht mehr",
+                  pg.evaluate("(k)=>![...document.querySelectorAll('[data-ctrl]')]"
+                              ".some(e=>e.dataset.ctrl.split(':')[1]===k)", k))
+        check("Skaler: ×…Base-Anzeige da", pg.evaluate(
+            "()=>{const e=document.querySelector(\"[data-ctrl='u:rate']\");"
+            "return !!e && / Base$/.test(e.textContent.trim());}"))
+
+        # ── Debug: aufgelöst in einzelne Controls (@dpa 20260715_223000) ──
+        check("Debug: kein Sammel-Control mehr",
+              pg.evaluate("()=>!document.querySelector(\"[data-ctrl='u:debug']\")"))
+        for sel, name in [("x:debugName", "Name (Schrift-Eingabe)"),
+                          ("n:debugNote", "Text"),
+                          ("x:debugPrompt", "Text-Eingabe"),
+                          ("b:debugRec", "Rec"),
+                          ("b:debugRec2", "Rec2"),
+                          ("b:debugSave", "Debug speichern")]:
+            check(f"Debug: {name} ist ein eigenes Control",
+                  pg.evaluate("(s)=>!!document.querySelector(`[data-ctrl='${s}']`)", sel))
+
+        # Reihenfolge = Tab-Reihenfolge (@dpa: „mach zwischen Name und Rec den Text mit dazu").
+        # NICHT über die .debug-ctrls-Zeile suchen: im e-Mode-Canvas ist die aufgelöst und
+        # die Controls hängen direkt im Gruppen-Body (die DOM-Reihenfolge bleibt dabei).
+        order = pg.evaluate(
+            "()=>[...document.querySelectorAll(\"[data-group='Debug'] [data-ctrl]\")].map(e=>e.dataset.ctrl)")
+        check("Debug: Text steht zwischen Name und Rec",
+              order == ["x:debugName", "n:debugNote", "x:debugPrompt",
+                        "b:debugRec", "b:debugRec2", "b:debugSave"], f"ist: {order}")
+
+        # Tab in eine Schrift-Eingabe selektiert deren ganzen Inhalt. Start auf dem
+        # ⚙-Knopf der Gruppe – das Element DAVOR in der Tab-Kette (ein <div> lässt sich
+        # nicht fokussieren, von dort startete Tab wieder ganz vorn).
+        pg.evaluate("()=>{const i=document.querySelector(\"[data-ctrl='x:debugName'] input\");"
+                    "i.value='alter-inhalt'; i.dispatchEvent(new Event('input',{bubbles:true}));"
+                    "document.querySelector(\"[data-group='Debug'] .group-settings-btn\").focus();}")
+        pg.keyboard.press("Tab")
+        act = pg.evaluate("()=>{const i=document.activeElement; return {tag:i.tagName, "
+                          "val:i.value||'', sel:(i.selectionEnd??0)-(i.selectionStart??0)};}")
+        check("Debug: Tab landet auf der Name-Eingabe", act["val"] == "alter-inhalt", str(act))
+        check("Debug: Tab selektiert den ganzen Textinhalt", act["sel"] == len("alter-inhalt"), str(act))
+
+        # Der Vergrößerungs-Zipfel: frei in beide Richtungen, Minimum bleibt erreichbar.
+        css = pg.evaluate("()=>{const t=document.querySelector(\"[data-ctrl='x:debugPrompt'] textarea\");"
+                          "const s=getComputedStyle(t); return {r:s.resize, mw:s.minWidth, mh:s.minHeight};}")
+        check("Debug: Text-Eingabe hat den Zipfel in beide Richtungen", css["r"] == "both", str(css))
+        check("Debug: Text-Eingabe behält ein Minimum (~40x20)",
+              css["mw"] == "40px" and css["mh"] == "20px", str(css))
 
         br.close()
     srv.shutdown()

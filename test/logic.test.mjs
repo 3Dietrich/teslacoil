@@ -22,6 +22,7 @@ import { PresetManager } from '../js/data/PresetManager.js';
 import { safeFilename, fileStamp } from '../js/core/fileIO.js';
 import { hasUserState, fetchFactory } from '../js/data/factory.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
+import { slidePlan, slideFreqAt, SLIDE_L } from '../js/dsp/holdSlide.js';
 
 let pass = 0;
 function t(name, fn) {
@@ -764,6 +765,52 @@ t('Pfeile gehören global bei Checkbox/Button/Body (BaseFrq-Fernsteuerung)', () 
     assert.equal(arrowKeyOk(el('INPUT', { type: 'checkbox' })), true);
     assert.equal(arrowKeyOk(el('BUTTON')), true);
     assert.equal(arrowKeyOk(el('BODY')), true);
+});
+
+console.log('holdSlide (Pitch-Slide im Amp-Hold)');
+t('startet exakt bei from und kommt nach glide exakt bei to an', () => {
+    const p = slidePlan(100, 200, 0.1);
+    assert.equal(slideFreqAt(p, 0), 100);
+    assert.equal(slideFreqAt(p, 0.1), 200);
+    assert.equal(slideFreqAt(p, 0.5), 200);   // danach bleibt er dort (gekappt)
+});
+t('die LP-Kurve trifft das Ziel am Kapp-Punkt (das Kappen springt nicht)', () => {
+    const p = slidePlan(100, 200, 0.1);
+    // Das ist der ganze Sinn der Überhöhung k: die ungekappte e-Kurve steht bei t=glide
+    // bereits AUF dem Ziel – setValueAtTime schneidet dort nichts ab, es setzt nur fest.
+    const ungekappt = p.target + (p.from - p.target) * Math.exp(-p.glide / p.tau);
+    assert.ok(Math.abs(ungekappt - 200) < 1e-9, `Sprung beim Kappen: ${ungekappt}`);
+});
+t('läuft monoton und liegt bei halber Zeit über der Hälfte (LP-Form, nicht linear)', () => {
+    const p = slidePlan(100, 200, 0.1);
+    let prev = -Infinity;
+    for (let i = 0; i <= 10; i++) { const v = slideFreqAt(p, i * 0.01); assert.ok(v >= prev); prev = v; }
+    assert.ok(slideFreqAt(p, 0.05) > 150);
+});
+t('abwärts genauso (Vorzeichen ist egal)', () => {
+    const p = slidePlan(400, 100, 0.2);
+    assert.equal(slideFreqAt(p, 0.2), 100);
+    assert.ok(slideFreqAt(p, 0.1) < 250 && slideFreqAt(p, 0.1) > 100);
+});
+t('Retune MITTEN im Slide startet beim Ist-Wert, nicht beim alten Ziel', () => {
+    // Der Fehler, der „Slide funktioniert nicht mehr" verursachte (@dpa 20260715_224643):
+    // Anker war das alte ZIEL. Kommt der nächste Trigger vor dem Ende des Slides, ist der
+    // Ton dort noch gar nicht – der Folge-Slide startete also von einem falschen Ort.
+    const first = slidePlan(100, 200, 0.4);
+    const ist = slideFreqAt(first, 0.1);                 // 1/4 durch → deutlich unter 200
+    assert.ok(ist < 200 && ist > 100);
+    const richtig = slidePlan(ist, 300, 0.4);            // neuer Slide ab Ist-Wert
+    const falsch = slidePlan(first.to, 300, 0.4);        // alter Fehler: ab dem Ziel 200
+    assert.equal(slideFreqAt(richtig, 0), ist);          // lückenlos an den Ton angeschlossen
+    assert.ok(richtig.from < falsch.from);               // der falsche Anker sprang voraus
+});
+t('L liegt fest bei 0.2 (Slide-Form ist kein Regler mehr)', () => {
+    assert.equal(SLIDE_L, 0.2);
+    const p = slidePlan(100, 200, 0.1);
+    assert.ok(Math.abs(p.tau - 0.1 / 0.2) < 1e-12);
+});
+t('glide 0 wird nicht gerechnet (harter Sprung ist Sache des Aufrufers)', () => {
+    assert.equal(slideFreqAt(null, 0.1), null);
 });
 
 await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind

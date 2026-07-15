@@ -54,11 +54,14 @@ export const DEFAULTS = Object.freeze({
     // FX-Kette). Zum Vergleichs-Hören der Grundfrequenz zuschaltbar (Wunsch @dpa).
     baseTestOn: false,
     baseTestLevel: 0.2,
-    // Rate↔Base als Bruch k/l: bei aktivem 'intMultiples' wird die Rate auf den besten
-    // Bruch des Verhältnisses gerastet, mit einstellbaren Maxima für Zähler/Nenner.
-    rateNumMax: 8,       // max. Zähler k
-    rateDenMax: 8,       // max. Nenner l
-    rateQuant: false,    // Skaler-Rate auf besten Bruch k/l quantisieren (AN = k/l, AUS = float)
+    // DEPRECATED (@dpa 20260715_224643: „Skaler: quant fest auf aus. die zahler nenner
+    // controls alle raus. nur noch die ×… Base anzeige"). Die Rate wird nicht mehr auf
+    // einen Bruch k/l der BaseFrq gerastet; Schalter und k max/l max-Regler sind weg.
+    // Die Keys bleiben nur, damit alte Snapshots/Backups weiter laden – gelesen wird
+    // keiner mehr (bestFraction lebt weiter in js/pitch/rateFraction.js).
+    rateNumMax: 8,
+    rateDenMax: 8,
+    rateQuant: false,
     // Audio-Oszillator – zwei Engines
     oscEngine: 'Square-PW', // 'Square-PW' | 'Sine-FM'
     duty: 0.5,          // Square-PW: Pulsweite (PW)
@@ -129,6 +132,8 @@ export const DEFAULTS = Object.freeze({
     distDrive: 2,        // Vorverstärkung in die Kennlinie
     distOut: 1,          // Ausgangspegel
     distMix: 1,          // Dry/Wet-Crossfade (1 = reines Wet = Verhalten vor dem Regler)
+    distDryDelay: 0,     // Versatz dry↔wet in SAMPLES (@dpa 20260715_223000, „Experiment"):
+                         // >0 = dry später, <0 = wet später, 0 = beide Zweige neutral.
     // Gate-Reverb (fester Effekt; 'aktiv'-Haken = Bypass)
     reverbEnabled: false, // 'aktiv'-Haken (aus = Bypass)
     revMix: 0.35,        // Dry/Wet 0..1

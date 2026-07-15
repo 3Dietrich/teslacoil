@@ -29,7 +29,6 @@ import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
 import { freqToMidi, midiToName, foldToBand } from './pitch/Scaler.js';
-import { bestFraction } from './pitch/rateFraction.js';
 
 /** 'von'-Anzeige: passende Note + Frequenz (P · F). */
 const fromHzFormat = (hz) => `${midiToName(Math.round(freqToMidi(hz)))}·${Math.round(hz)}`;
@@ -42,8 +41,6 @@ const KNOBS = {
     pitchRate:    { label: 'Rate', min: 0.05, max: 100, curve: 'log', unit: 'Hz', decimals: 2 },
     fromHz:       { label: 'Von', min: 20, max: 1000, curve: 'log', unit: 'Hz', decimals: 1, formatValue: fromHzFormat },
     pitchRange:   { label: 'Range', min: 1, max: 36, step: 1, curve: 'linear', unit: 'P', decimals: 0 },
-    rateNumMax:   { label: 'k max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
-    rateDenMax:   { label: 'l max', min: 1, max: 32, step: 1, curve: 'linear', unit: '', decimals: 0 },
     pitchRandSeed:{ label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
     baseHz:       { label: 'Base-Frq', min: 1, max: 500, curve: 'log', unit: 'Hz', decimals: 1 },
     baseBand:     { label: 'Band', min: 0.05, max: 8000, curve: 'log', unit: 'Hz', decimals: 2, formatValue: (v) => { const d = v < 20 ? 2 : 0; return `${v.toFixed(d)}–${(v * 2).toFixed(d)}`; } },
@@ -69,6 +66,9 @@ const KNOBS = {
     distDrive:    { label: 'Drive', min: 0.5, max: 50, curve: 'log', unit: '×', decimals: 1 },
     distOut:      { label: 'Out', min: 0, max: 2, curve: 'linear', unit: '', decimals: 2 },
     distMix:      { label: 'Dry/Wet', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    // Versatz dry↔wet in Samples: ± um 0 herum, deshalb linear (eine log-Kurve kann
+    // kein Vorzeichen). Bei 48 kHz sind ±512 Samples gut ±10 ms = Kammfilter-Bereich.
+    distDryDelay: { label: 'Dry-Delay', min: -512, max: 512, step: 1, curve: 'linear', unit: 'sm', decimals: 0 },
     revMix:       { label: 'Dry/Wet', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     revWet:       { label: 'Wet-Vol', min: 0, max: 4, curve: 'linear', unit: '×', decimals: 2 },
     revDensity:   { label: 'Density', min: 0, max: 1, curve: 'linear', unit: '', decimals: 4 },
@@ -109,6 +109,30 @@ const SELECTS = {
     distMode:  { label: 'Distortion', options: ['Saturation', 'Hard Clip', 'Foldback'] },
     revView:    { label: 'Ansicht', options: ['L', 'R', 'Beide'] },
 };
+/** Schrift-Eingaben (State-Key → Konfiguration). `lines` > 0 = mehrzeilig (textarea).
+ *  @dpa 20260715_223000: eigene Control-Sorte, damit das Debug-Bündel sich in normale,
+ *  einzeln verschiebbare Controls auflöst. */
+const TEXTS = {
+    debugName:   { label: 'Name', placeholder: 'z.B. filter-bug' },
+    // Label per Default AUS: die Überschrift trägt daneben das eigene Text-Element
+    // (debugNote) – zwei Beschriftungen übereinander wären doppelt gemoppelt.
+    debugPrompt: { label: 'Text', labelOn: false, lines: 3, placeholder: 'z.B. "hörst du das Zwitschern bei Step 3?"' },
+};
+
+/** Reine Text-Elemente: tragen KEINEN Wert – ihr Inhalt ist das Label (in den
+ *  Element-Settings frei änderbar). Für Überschriften/Notizen in einer Gruppe. */
+const NOTES = {
+    debugNote: { label: 'Begleit-Prompt an die KI' },
+};
+
+/** Buttons. Die Aktion hängt an der Gruppe, die den Button baut (hier: Debug) –
+ *  Label/Optik sind wie bei jedem Control über die Element-Settings einstellbar. */
+const BUTTONS = {
+    debugRec:  { label: 'Rec',  title: 'Audio parallel am Master abgreifen (Hörweg unberührt) – Start/Stop' },
+    debugRec2: { label: 'Rec2', title: 'Zweite Aufnahme zum Vergleich (vorher/nachher) – Start/Stop' },
+    debugSave: { label: 'Debug speichern', title: 'Audio (WAV, beide Aufnahmen) + Screenshot (PNG) + Zustand (JSON) + Prompt (TXT) einzeln herunterladen' },
+};
+
 const TOGGLES = {
     gateEnabled:   { label: 'aktiv' },
     metroEnabled:  { label: 'aktiv' },
@@ -119,7 +143,6 @@ const TOGGLES = {
     reverbEnabled: { label: 'aktiv' },
     dcBlock:       { label: 'DC-Block' },
     intMultiples:  { label: '×ganze' },   // (nur noch Keyboard-Anzeige; kein globaler Schalter mehr)
-    rateQuant:     { label: 'Quant' },     // lokal in Skaler: Rate float ↔ Bruch k/l
     baseToC:       { label: 'base=c' },    // Skala relativ zur Basis (do re mi); Klang folgt der Basis
     baseTestOn:    { label: 'Test-Ton' },  // trockener Sinus auf der BaseFrq (Vergleich)
     metroCutoffQuant: { label: 'Quant' },  // Metronom-Cutoff an BaseFrq gerastet (Oktaver statt Hz-Knob)
@@ -136,7 +159,10 @@ const GROUPS = [
     // bestimmt das Einspeisen). @dpa 20260713.
     { name: 'Metronom', toggles: ['metroEnabled', 'metroCutoffQuant'], knobs: ['metroL', 'metroM', 'metroLevel', 'metroMorph', 'metroCutoff', 'metroCutBand', 'metroReso'], metro: true },
     // Seed sitzt inline neben dem Pitch-Wave-Select (nur bei 'random' sichtbar).
-    { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange', 'rateNumMax', 'rateDenMax'], scale: true },
+    // Rate-Quantisierung (k/l-Bruch der BaseFrq) ist raus (@dpa 20260715_224643: „quant fest
+    // auf aus. die zahler nenner controls alle raus. nur noch die ×… Base anzeige").
+    // Geblieben ist die reine Anzeige (u:rate) als Text-Control.
+    { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange'], scale: true },
     // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
     { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
@@ -144,7 +170,7 @@ const GROUPS = [
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
     { name: 'Filter', selects: ['filterType', 'lpMode', 'filterEnvTrig'], toggles: ['filterEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
     // Distortion: Effekt-Slot vor dem Reverb.
-    { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut', 'distMix'], dist: true },
+    { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut', 'distMix', 'distDryDelay'], dist: true },
     // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
     // Länge + P→Len sind jetzt NORMALE Controls (Satelliten-Untergruppe aufgelöst, @dpa
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
@@ -445,6 +471,126 @@ async function boot() {
         }, cfg.label);
         return wrap;
     }
+    // Wurde der Fokus per TAB gesetzt? (@dpa 20260715_223000: „wenn dieser durch tab
+    // aktiviert wird: den ganzen Textinhalt selektieren"). Ein Maus-Klick soll die
+    // Einfügemarke dagegen genau dort lassen, wo geklickt wurde – deshalb reicht
+    // 'focus' allein nicht, es braucht die Herkunft des Fokus.
+    let focusByTab = false;
+    window.addEventListener('keydown', (e) => { if (e.key === 'Tab') focusByTab = true; }, true);
+    window.addEventListener('mousedown', () => { focusByTab = false; }, true);
+
+    /** Schrift-Eingabe (einzeilig = input, mehrzeilig = textarea). */
+    function makeText(key) {
+        const cfg = TEXTS[key];
+        const wrap = document.createElement('label');
+        wrap.className = 'select-field text-field';
+        const span = document.createElement('span'); span.textContent = cfg.label;
+        const inp = document.createElement(cfg.lines ? 'textarea' : 'input');
+        if (cfg.lines) inp.rows = cfg.lines; else inp.type = 'text';
+        inp.className = 'gs-text' + (cfg.lines ? ' text-multiline' : '');
+        inp.placeholder = cfg.placeholder || '';
+        inp.value = state.get(key) ?? '';
+        inp.addEventListener('input', () => state.set(key, inp.value));
+        // Tab-Fokus → ganzen Inhalt selektieren (überschreiben statt anhängen).
+        inp.addEventListener('focus', () => { if (focusByTab) inp.select(); });
+        wrap.appendChild(span); wrap.appendChild(inp);
+        wrap.dataset.ctrl = 'x:' + key;   // Kennung für den Arrange-Modus
+        // KEIN wireLabelDrag: der Wert ist Text, „hoch/runter ziehen" hat hier keinen Sinn.
+        ctrlBindings.set(key, (data) => { const v = data[key] ?? ''; if (inp.value !== v) inp.value = v; });
+        ctrlEls.set(key, wrap);
+        // Die per Zipfel gezogene Größe ist OPTIK und landet deshalb im selben
+        // ctrlStyles-Eintrag wie der Rest (boxSize/boxH) – nicht am Element.
+        const applyStyle = (s) => {
+            span.textContent = s.label || cfg.label;
+            span.style.display = (s.labelOn ?? cfg.labelOn ?? true) === false ? 'none' : '';
+            inp.style.background = s.bg || '';
+            inp.style.color = s.fg || '';
+            inp.style.fontSize = s.size ? s.size + 'px' : '';
+            inp.style.width = s.boxSize ? s.boxSize + 'px' : '';
+            inp.style.height = s.boxH ? s.boxH + 'px' : '';
+        };
+        applyStyle({});   // Defaults der cfg greifen auch OHNE gespeicherten Style (labelOn)
+        registerCtrlStyle('x:' + key, 'text', wrap, applyStyle, cfg.label);
+        // Der Vergrößerungs-Zipfel (CSS resize) ändert nur das DOM – ohne das hier wäre
+        // die Größe beim nächsten Reload wieder weg. Erst am ENDE des Ziehens sichern
+        // (mouseup), sonst schreibt jeder Pixel in den State.
+        if (cfg.lines) {
+            // Die Gruppe geht mit (@dpa: „bis zu einem gewissen Maß"): sie ist ohnehin
+            // width:max-content, nur ihr 380er-Deckel steht im Weg – der fällt, sobald
+            // das Feld ihn sprengt. Im e-Mode-Canvas hugt der Rahmen die Bounding-Box
+            // der Einheiten, dort muss sie neu gemessen werden.
+            const refit = () => {
+                const g = wrap.closest('.group');
+                if (g && inp.offsetWidth + 40 > 380) g.style.maxWidth = 'none';
+                if (g && g.dataset.group) sizeFreeGroup(g.dataset.group);
+                sizePanel();
+            };
+            const persist = () => {
+                const w = Math.round(inp.offsetWidth), h = Math.round(inp.offsetHeight);
+                const cur = { ...((state.get('ctrlStyles') || {})['x:' + key] || {}) };
+                if (cur.boxSize === w && cur.boxH === h) return;
+                cur.boxSize = w; cur.boxH = h;
+                const all = { ...state.get('ctrlStyles') }; all['x:' + key] = cur;
+                state.set('ctrlStyles', all);   // Größe ist Optik → ctrlStyles, nicht Sound
+            };
+            inp.addEventListener('mouseup', persist);
+            // Live mitwachsen, WÄHREND gezogen wird – ohne das stünde der Gruppenrahmen
+            // erst nach dem Loslassen richtig (und beim Recall gar nicht).
+            if (window.ResizeObserver) new ResizeObserver(refit).observe(inp);
+            else refit();
+        }
+        return wrap;
+    }
+
+    /** Reines Text-Element (Überschrift/Notiz) – kein Wert, nur Optik. */
+    function makeNote(key) {
+        const cfg = NOTES[key];
+        const wrap = document.createElement('div');
+        wrap.className = 'group-extra note-field';
+        wrap.textContent = cfg.label;
+        wrap.dataset.ctrl = 'n:' + key;
+        registerCtrlStyle('n:' + key, 'note', wrap, (s) => {
+            wrap.textContent = s.label || cfg.label;
+            wrap.style.color = s.fg || '';
+            wrap.style.fontSize = s.fontSize ? s.fontSize + 'px' : '';
+            wrap.style.width = s.boxSize ? s.boxSize + 'px' : '';
+        }, cfg.label);
+        return wrap;
+    }
+
+    /**
+     * Button-Control. `dynamicLabel` (optional) darf den Text abhängig vom Zustand
+     * überschreiben (z.B. Rec → „⏹ Rec · 2.3 s") und bekommt das eingestellte Label
+     * herein – so bleibt ein umbenannter Button umbenannt.
+     */
+    function makeButton(key, onClick, dynamicLabel = null) {
+        const cfg = BUTTONS[key];
+        const wrap = document.createElement('div'); wrap.className = 'btn-field';
+        const btn = document.createElement('button'); btn.className = 'pb-btn ctrl-btn';
+        btn.title = cfg.title || '';
+        wrap.appendChild(btn);
+        wrap.dataset.ctrl = 'b:' + key;
+        let label = cfg.label;
+        const paint = () => { btn.textContent = dynamicLabel ? dynamicLabel(label) : label; };
+        paint();
+        btn.refresh = paint;   // der Besitzer (z.B. Debug) stößt Neuzeichnen an
+        btn.addEventListener('click', () => { onClick(); paint(); });
+        // Settings (@dpa 20260715_223000): „Label, Label position (zusätzlich: mitte =
+        // default), VG, BG, höhe, Breite".
+        registerCtrlStyle('b:' + key, 'button', wrap, (s) => {
+            label = s.label || cfg.label;
+            paint();
+            btn.style.background = s.bg || '';
+            btn.style.color = s.fg || '';
+            btn.style.width = s.boxSize ? s.boxSize + 'px' : '';
+            btn.style.height = s.boxH ? s.boxH + 'px' : '';
+            // Label-Position = wohin der Text im Button rückt; 'center' ist der Default.
+            btn.style.justifyContent = s.labelPos === 'left' ? 'flex-start' : s.labelPos === 'right' ? 'flex-end' : 'center';
+            btn.style.alignItems = s.labelPos === 'top' ? 'flex-start' : s.labelPos === 'bottom' ? 'flex-end' : 'center';
+        }, cfg.label);
+        return wrap;
+    }
+
     function makeKnob(key) {
         const def = KNOBS[key];
         const knob = new Knob({
@@ -479,42 +625,22 @@ async function boot() {
         icons.forEach(([g, t, fn, kind]) => box.appendChild(iconBtn(g, t, fn, kind)));
         return box;
     }
-    // Skaler-Rate als Bruch k/l der BaseFrq: bestFraction findet das k/l (mit den
-    // Maxima rateNumMax/rateDenMax), das rate/base am besten trifft → rate = base·k/l,
-    // im Rate-Bereich 0.05..4 Hz geklemmt. Idempotent (self-stabilisierend).
-    function rateFrac(base, rate) {
-        return bestFraction(rate / base, state.get('rateNumMax'), state.get('rateDenMax'));
-    }
-    function quantRate(base, rate) {
-        if (!base || base <= 0) return rate;
-        const { k, l } = rateFrac(base, rate);
-        // Auf die AKTUELLE Rate-Regler-Range klemmen (via Meta erweiterbar), nicht auf
-        // die feste Default-Range – sonst sprang die Rate bei Quant hart auf 4 Hz.
-        const knob = knobsById.get('pitchRate');
-        const lo = knob ? knob.min : KNOBS.pitchRate.min;
-        const hi = knob ? knob.max : KNOBS.pitchRate.max;
-        return Math.min(hi, Math.max(lo, base * k / l));
-    }
-    // ≈-Knopf: einmalig auf den besten Bruch des Verhältnisses rasten.
-    function snapRateToBase() { state.set('pitchRate', quantRate(engine.baseFreq, state.get('pitchRate'))); }
-    // ×ganze aktiv: den WERT (nicht nur die Anzeige) fortlaufend gerastet halten –
-    // bei jeder Base- oder Rate-Änderung. Behebt „Anzeige ganzzahlig, Wert float".
-    function syncRateQuant() {
-        if (!state.get('rateQuant')) return;
-        state.set('pitchRate', quantRate(engine.baseFreq, state.get('pitchRate')));
-    }
-    // Keys, die das Rate↔Base-Verhältnis beeinflussen → Nachrasten auslösen.
-    const RATE_QUANT_KEYS = new Set(['pitchRate', 'rateQuant', 'rateNumMax', 'rateDenMax', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm']);
     // Keys, deren Umschalten Controls ein-/ausblendet → Gruppenhöhe ändert sich.
     const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn', 'ampHold']);
+    // Skaler-Rate als Vielfaches der BaseFrq – reine ANZEIGE (@dpa 20260715_224643:
+    // „quant fest auf aus … nur noch die ×… Base anzeige"). Die Rate-Quantisierung auf
+    // einen Bruch k/l samt 'Quant'-Schalter und den k max/l max-Reglern ist ersatzlos
+    // raus; die Rate bleibt immer frei. Als 'readout' registriert → Rechtsklick gibt ihr
+    // dieselben Text-Settings wie den Base-Anzeigen (Textgröße/-farbe, Feldbreite).
     function makeRateReadout() {
         const bar = document.createElement('div'); bar.className = 'group-extra rate-readout';
         rateReadout.className = 'rate-mult';
-        // 'Quant'-Schalter (ersetzt den ≈-Button): AN = Rate auf besten Bruch k/l rasten
-        // und als k/l anzeigen, AUS = freie Rate als Dezimal-Vielfaches.
-        const q = makeToggle('rateQuant');
-        q.title = 'Rate auf den besten Bruch k/l der BaseFrq quantisieren (Maxima: k max / l max)';
-        bar.appendChild(rateReadout); bar.appendChild(q);
+        bar.appendChild(rateReadout);
+        registerCtrlStyle('u:rate', 'readout', bar, (s) => {
+            rateReadout.style.fontSize = s.fontSize ? s.fontSize + 'px' : '';
+            rateReadout.style.width = s.boxSize ? s.boxSize + 'px' : '';
+            rateReadout.style.color = s.fg || '';
+        }, 'Rate ×Base');
         return bar;
     }
     // Refresh-Hooks der Preset-Menüs (vom Recall aufrufbar). Bewusst HIER früh
@@ -1026,9 +1152,38 @@ async function boot() {
             body.appendChild(w.element);
         }
         if (grp.debug) {
+            // @dpa 20260715_223000: „es wäre schön wenn sich dieser Control auflöst und
+            // alles in eigenen Control (typen) dann in der Gruppe steht". Also kein
+            // Debug-Panel-Block mehr, sondern sechs normale Controls in einer Zeile –
+            // einzeln verschiebbar, benennbar, stylbar. Die Reihenfolge ist zugleich die
+            // TAB-Reihenfolge: Name → Text → Rec/Rec2 → Speichern.
             const dbg = new DebugPanel(state, engine);
-            dbg.mount(body);
-            if (body.lastElementChild) makeMovable(body.lastElementChild, 'u:debug');
+            const row = document.createElement('div'); row.className = 'group-ctrls debug-ctrls';
+            row.appendChild(makeText('debugName'));
+            row.appendChild(makeNote('debugNote'));
+            row.appendChild(makeText('debugPrompt'));
+            // Rec-Buttons zeigen ihren Zustand IM Label (kein separates Status-Feld mehr):
+            // läuft die Aufnahme → ⏹, sonst ⏺ + Länge der letzten Aufnahme.
+            const recBtns = {};
+            for (const [key, slot] of [['debugRec', 'a'], ['debugRec2', 'b']]) {
+                const el = makeButton(key, () => dbg.toggle(slot), (label) => {
+                    if (dbg.recording(slot)) return `⏹ ${label}`;
+                    const s = dbg.lastSeconds(slot);
+                    return s ? `⏺ ${label} · ${s.toFixed(1)} s` : `⏺ ${label}`;
+                });
+                el.querySelector('button').classList.toggle('debug-rec-on', dbg.recording(slot));
+                recBtns[slot] = el.querySelector('button');
+                row.appendChild(el);
+            }
+            // Der rote Punkt am laufenden Recorder – nach jedem Klick beide prüfen.
+            for (const slot of ['a', 'b']) {
+                recBtns[slot].addEventListener('click', () => {
+                    for (const s of ['a', 'b']) recBtns[s].classList.toggle('debug-rec-on', dbg.recording(s));
+                });
+            }
+            row.appendChild(makeButton('debugSave', () => dbg.saveBundle()));
+            body.appendChild(row);
+            registerArrange(row, grp.name + ':debug');
         }
         g.appendChild(body);
 
@@ -1634,7 +1789,7 @@ async function boot() {
     // Bypass noch etwas zu sagen hat (Crossfade zum trockenen Signal).
     function updateDistVisibility() {
         const on = state.get('distEnabled');
-        ['distDrive', 'distOut', 'distMode'].forEach((k) => setVis(k, on));
+        ['distDrive', 'distOut', 'distMode', 'distDryDelay'].forEach((k) => setVis(k, on));
         setVis('distMix', true);
     }
     // Metronom: Regler nur sichtbar, wenn 'aktiv'. Cutoff-Knob vs. Oktaver je nach
@@ -1817,10 +1972,6 @@ async function boot() {
         } else if (ctrlBindings.has(key)) {
             ctrlBindings.get(key)(data);
         }
-        // ×ganze: den Rate-Wert bei jeder relevanten Änderung gerastet halten.
-        // Bewusst NICHT bei '*' (Recall): sonst würde der gerade geladene pitchRate
-        // sofort wieder überschrieben (= „Rate oft nicht recalled"-Bug).
-        if (key !== '*' && RATE_QUANT_KEYS.has(key)) syncRateQuant();
         // Sequenzer-Widgets neu zeichnen (Recall oder Edit an Steps/Länge/aktiv).
         if (key === '*' || key === 'seqStyles' || key === 'filterEnvTrig' || /^(amp|filter)Seq/.test(key)) { seqWidgets.forEach((w) => w.refresh()); if (key === 'seqStyles') sizePanel(); }
         // Menü-Auswahlen nachziehen (Recall).
@@ -1934,19 +2085,11 @@ async function boot() {
             const bpmStr = bpm < 0.001 ? '..' : bpm > 999 ? 'zu hoch' : bpm.toFixed(bpm < 10 ? 3 : 1);
             baseSpeed.textContent = `BpM ${bpmStr} · ${bf.toFixed(bf < 10 ? 2 : 1)} Hz · P ${Math.round(freqToMidi(bf))}`;
         }
-        // Skaler-Rate als Verhältnis zur BaseFrq. Im Rast-Modus (×ganze) als Bruch k/l,
-        // sonst als Dezimal-Vielfaches. Nur noch „×… Base" (kein Hz/=n mehr).
+        // Skaler-Rate als Verhältnis zur BaseFrq – immer als freies Dezimal-Vielfaches
+        // (die k/l-Bruch-Anzeige ist mit der Quantisierung raus, @dpa 20260715_224643).
         const rate = state.get('pitchRate');
         let multStr = '×0';
-        if (bf > 0) {
-            if (state.get('rateQuant')) {
-                const { k, l } = bestFraction(rate / bf, state.get('rateNumMax'), state.get('rateDenMax'));
-                multStr = l === 1 ? `×${k}` : `×${k}/${l}`;
-            } else {
-                const m = rate / bf;
-                multStr = `×${m.toFixed(m < 1 ? 3 : 2)}`;
-            }
-        }
+        if (bf > 0) { const m = rate / bf; multStr = `×${m.toFixed(m < 1 ? 3 : 2)}`; }
         rateReadout.textContent = `${multStr} Base`;
         // Ohne echte Audio-Render-Kapazität: grobe UI-Last aus der Frame-Arbeitszeit.
         if (!cpuHasAudio) cpuLoad = cpuLoad * 0.9 + Math.min(1, (performance.now() - t0) / 16.7) * 0.1;

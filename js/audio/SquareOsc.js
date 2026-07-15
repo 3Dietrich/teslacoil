@@ -13,6 +13,7 @@
  * sanft gestohlen (FIFO, schnelles Release statt Knacken).
  */
 import { oscCoefficients, harmonicsForFreq } from './pulseWave.js';
+import { slidePlan, slideFreqAt } from '../dsp/holdSlide.js';
 
 export class SquareOsc {
     /**
@@ -89,37 +90,32 @@ export class SquareOsc {
                 const N = harmonicsForFreq(f, this.ctx.sampleRate, 2048);
                 v.osc.setPeriodicWave(this._wave(wp.engine || 'Square-PW', wp.param, wp.startPhase || 0, N));
             }
-            // Pitch-Slide (@dpa 20260715). Nicht als reine Gerade, sondern als einpoliger
-            // LP (exponentielle Annäherung) auf ein ÜBERHÖHTES Ziel, das an der echten
-            // Zielfrequenz gekappt wird – @dpas Vorschlag: „das slide smooth kann auch von
-            // einem (simplen LP-) Filter kommen … das ziel höher setzen und dann limiten".
-            // So bleibt der typisch weiche LP-Einschwinger erhalten, der Slide kommt aber in
-            // ENDLICHER Zeit exakt an (ein blankes setTargetAtTime käme nie an und würde die
-            // eingestellte Zeit nur als Zeitkonstante deuten).
+            // Pitch-Slide (@dpa 20260715): einpoliger LP auf ein überhöhtes, an der echten
+            // Zielfrequenz gekapptes Ziel – die Rechnung dazu steht in dsp/holdSlide.js
+            // (dort auch das Warum, und sie ist dort headless testbar).
             //
-            // L = Anzahl DURCHLAUFENER ZEITKONSTANTEN bis zum Kappen – das Maß für die
-            // Krümmung. Daraus folgt alles andere: τ = glide/L, und die nötige Überhöhung
-            // ist k = e^L/(e^L−1)  [aus f(glide) = f0 + k·(f−f0)·(1−e^(−L)) ≟ f].
-            // Ankunft damit IMMER exakt nach `glide` Sekunden.
-            //
-            // L liegt FEST bei 0.2 = nur der fast gerade Anfang der e-Kurve (@dpa 20260715:
-            // „ich will den logarithmischen, der andere fest auf 0 und weg"). Vorher war
-            // das ein Regler (ampHoldCurve, 0..1 → L = 0.2..3); der ist raus, der Slide
-            // ist jetzt immer diese eine Form. Die Zeit macht weiter `ampHoldGlide`.
+            // Startpunkt ist der IST-Wert bei t – bei einem Retune mitten im Slide also die
+            // Frequenz, auf der der Ton in diesem Moment wirklich steht (_freqAt rechnet den
+            // laufenden Plan nach). Vorher stand hier `v.freq`, das direkt auf das ZIEL
+            // gesetzt wurde: kam ein Trigger vor dem Ende des Slides, rechnete der nächste
+            // Slide von einem Ort aus, an dem der Ton nie war. Bei glide ≥ Trigger-Abstand
+            // wurde die Bewegung dadurch immer kleiner – der Slide „funktionierte nicht mehr".
             //
             // setTargetAtTime ist selbst-verankernd (startet beim Ist-Wert) – anders als
             // linearRampToValueAtTime, das ab dem VORHERIGEN Ereignis rampt und den Slide
             // dadurch viel zu früh beginnen ließe (so gemessen, deshalb nicht verwendet).
             const p = v.osc.frequency;
             if (glide > 0) {
-                const from = v.freq ?? f;
-                const L = 0.2;
-                const k = Math.exp(L) / (Math.exp(L) - 1);
+                const plan = slidePlan(this._freqAt(v, t), f, glide);
                 if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else p.cancelScheduledValues(t);
-                p.setTargetAtTime(from + k * (f - from), t, glide / L);
+                p.setTargetAtTime(plan.target, t, plan.tau);
                 p.setValueAtTime(f, t + glide);   // „limiten": hier ist die Kurve am Ziel → stetig
-            } else { p.cancelScheduledValues(t); p.setValueAtTime(f, t); }
-            v.freq = f;   // Ausgangspunkt des nächsten Slides
+                v.slide = { plan, t0: t };        // → _freqAt: Ist-Wert eines laufenden Slides
+            } else {
+                p.cancelScheduledValues(t); p.setValueAtTime(f, t);
+                v.slide = null;
+            }
+            v.freq = f;   // Ankunftsfrequenz (Anker, sobald kein Slide mehr läuft)
             // Sustain verlängern: geplantes Release/Stop verwerfen und neu setzen.
             const g = v.gain.gain;
             if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t); else g.cancelScheduledValues(t);
@@ -130,6 +126,19 @@ export class SquareOsc {
             g.exponentialRampToValueAtTime(0.0001, susEnd + v.release);
             v.osc.stop(susEnd + v.release + 0.01);
         } catch { /* Voice evtl. schon beendet */ }
+    }
+
+    /** Wo steht die Frequenz dieser Voice zur Zeit `t`? Läuft ein Slide, wird sein Plan
+     *  nachgerechnet (identisch zu dem, was der AudioParam tut) – sonst ist es schlicht
+     *  die zuletzt gesetzte Frequenz. `t` liegt durch den Clock-Lookahead meist in der
+     *  Zukunft; genau deshalb wird gerechnet und nicht `frequency.value` gelesen (das
+     *  gäbe den Wert von JETZT, nicht den bei t). */
+    _freqAt(v, t) {
+        if (v.slide) {
+            const val = slideFreqAt(v.slide.plan, t - v.slide.t0);
+            if (val != null) return val;
+        }
+        return v.freq ?? 1;
     }
 
     /** Älteste Voice sanft stehlen: Ramp auf ~0 in 5 ms, dann Stop/Disconnect (kein Knacken). */
@@ -185,8 +194,8 @@ export class SquareOsc {
         osc.stop(stopAt);
 
         // amp/release/attackEnd merken → retune() (hold) kann Sustain sauber verlängern.
-        // freq mitführen: Ausgangspunkt für den Hold-Slide in retune().
-        const voice = { osc, gain: g, amp, release, attackEnd: aEnd, freq: Math.max(1, freq) };
+        // freq/slide mitführen: Ausgangspunkt für den Hold-Slide in retune() (s. _freqAt).
+        const voice = { osc, gain: g, amp, release, attackEnd: aEnd, freq: Math.max(1, freq), slide: null };
         this._voices.push(voice);
         osc.onended = () => {
             try { osc.disconnect(); g.disconnect(); } catch { /* noop */ }
