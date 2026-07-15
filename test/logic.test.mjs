@@ -17,7 +17,9 @@ import { makeSeqSteps, seqAdvance, fillSeq, SEQ_MAX } from '../js/dsp/stepSeq.js
 import { bestFraction, reduce } from '../js/pitch/rateFraction.js';
 import { encodeWav, decodeWav } from '../js/dsp/wavEncoder.js';
 import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
-import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS } from '../js/data/Backup.js';
+import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS, serializeBackup, parseBackupFile, FILE_KIND } from '../js/data/Backup.js';
+import { PresetManager } from '../js/data/PresetManager.js';
+import { safeFilename, fileStamp } from '../js/core/fileIO.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 
 let pass = 0;
@@ -593,6 +595,84 @@ t('pushBackup: legt Eintrag mit Daten an und dünnt', () => {
     assert.equal(list[0].label, 'test');
     assert.equal(list[0].data.teslacoil_live, '{"v":1}');
     assert.ok(BACKED_UP_KEYS.includes('teslacoil_live'));
+});
+
+console.log('Datei-Zugang: Backup-Datei (@dpa 20260715)');
+t('serialize → parse: Roundtrip erhält alle Daten', () => {
+    const s = fakeStorage({ teslacoil_live: '{"a":1}', teslacoil_snapshots: '[{"name":"x"}]' });
+    const file = serializeBackup(s, 4242, 'Export');
+    assert.equal(file.kind, FILE_KIND);
+    const got = parseBackupFile(JSON.stringify(file));
+    assert.equal(got.ts, 4242);
+    assert.equal(got.label, 'Export');
+    assert.deepEqual(got.data, { teslacoil_live: '{"a":1}', teslacoil_snapshots: '[{"name":"x"}]' });
+});
+t('parse → restore: Datei stellt den Zustand wirklich her', () => {
+    const src = fakeStorage({ teslacoil_live: '{"v":7}', teslacoil_layouts: '["L"]' });
+    const text = JSON.stringify(serializeBackup(src, 1, ''));
+    const dst = fakeStorage({ teslacoil_live: '{"v":999}' });
+    restoreState(dst, parseBackupFile(text).data);
+    assert.equal(dst.getItem('teslacoil_live'), '{"v":7}');
+    assert.equal(dst.getItem('teslacoil_layouts'), '["L"]');
+});
+t('lehnt kaputtes JSON ab', () => assert.throws(() => parseBackupFile('{nope'), /gültige JSON/));
+t('lehnt fremdes JSON ab', () => assert.throws(() => parseBackupFile('{"hallo":1}'), /keine teslacoil-Backup-Datei/));
+t('lehnt Array ab', () => assert.throws(() => parseBackupFile('[1,2]'), /kein Backup-Objekt/));
+t('erkennt Snapshot-Datei und sagt, wo sie hingehört', () => {
+    assert.throws(() => parseBackupFile('{"name":"a","state":{"bpm":120}}'), /Snapshot-Datei, kein Backup/);
+});
+t('lehnt neuere Dateiversion ab', () => {
+    assert.throws(() => parseBackupFile(JSON.stringify({ kind: FILE_KIND, version: 99, data: { teslacoil_live: '{}' } })), /neueren teslacoil-Version/);
+});
+t('lehnt Backup ohne bekannte Keys ab', () => {
+    assert.throws(() => parseBackupFile(JSON.stringify({ kind: FILE_KIND, version: 1, data: { fremd: 'x' } })), /keine bekannten teslacoil-Daten/);
+});
+t('ignoriert Fremd-Keys und Nicht-Strings in data', () => {
+    const got = parseBackupFile(JSON.stringify({ kind: FILE_KIND, version: 1, ts: 5, data: { teslacoil_live: '{"a":1}', teslacoil_scales: { boese: true }, evil: 'x' } }));
+    assert.deepEqual(Object.keys(got.data), ['teslacoil_live']);   // Objekt-Wert + Fremd-Key raus
+});
+
+console.log('Datei-Zugang: Snapshot-Datei (@dpa 20260715)');
+t('parse: Name und Zustand kommen an', () => {
+    const got = PresetManager.parseSnapshotFile('{"kind":"teslacoil-snapshot","name":"Fiep","state":{"bpm":128}}');
+    assert.equal(got.name, 'Fiep');
+    assert.deepEqual(got.state, { bpm: 128 });
+});
+t('akzeptiert Alt-Export ohne kind (Rückwärtskompatibilität)', () => {
+    const got = PresetManager.parseSnapshotFile('{"name":"Alt","ts":1,"version":1,"state":{"bpm":90}}');
+    assert.equal(got.name, 'Alt');
+});
+t('wirft Optik-Keys raus (Snapshot darf NIE das Layout anfassen)', () => {
+    const got = PresetManager.parseSnapshotFile(JSON.stringify({ name: 'X', state: { bpm: 100, groupOrder: ['a'], knobMeta: { x: 1 }, snapSel: 'foo' } }));
+    assert.deepEqual(got.state, { bpm: 100 });
+});
+t('leerer Name → "Import"', () => {
+    assert.equal(PresetManager.parseSnapshotFile('{"name":"  ","state":{"bpm":1}}').name, 'Import');
+});
+t('erkennt Backup-Datei und sagt, wo sie hingehört', () => {
+    assert.throws(() => PresetManager.parseSnapshotFile(JSON.stringify({ kind: FILE_KIND, data: { teslacoil_live: '{}' } })), /Backup-Datei, kein Snapshot/);
+});
+t('lehnt kaputtes JSON / leeren State ab', () => {
+    assert.throws(() => PresetManager.parseSnapshotFile('{nope'), /gültige JSON/);
+    assert.throws(() => PresetManager.parseSnapshotFile('{"name":"x","state":{}}'), /leer/);
+});
+t('lehnt fremde kind-Kennung ab', () => {
+    assert.throws(() => PresetManager.parseSnapshotFile('{"kind":"was-anderes","name":"x","state":{"bpm":1}}'), /keine teslacoil-Snapshot-Datei/);
+});
+t('Optik-Snapshot-Datei mit NUR Optik-Keys → leerer Sound-State, klare Absage', () => {
+    // Grenzfall: Datei enthält ausschließlich Layout-Keys → nach dem Strippen bleibt
+    // nichts übrig. Darf nicht als „leerer Snapshot" durchrutschen und alles platt machen.
+    assert.throws(() => PresetManager.parseSnapshotFile(JSON.stringify({ name: 'NurOptik', state: { groupOrder: ['a'] } })), /leer/);
+});
+
+console.log('fileIO (Namens-Helfer)');
+t('safeFilename entschärft Sonderzeichen', () => {
+    assert.equal(safeFilename('Mein Fiep/Sound!'), 'Mein_Fiep_Sound');
+    assert.equal(safeFilename('äöü'), 'teslacoil');       // nichts Brauchbares → Fallback
+    assert.equal(safeFilename('', 'fallback'), 'fallback');
+});
+t('fileStamp: YYYYMMDD_HHMMSS', () => {
+    assert.equal(fileStamp(new Date(2026, 6, 15, 9, 5, 3)), '20260715_090503');
 });
 
 console.log('keyRoute (Tasten-Zuständigkeit)');

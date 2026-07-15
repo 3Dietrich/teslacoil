@@ -8,7 +8,12 @@
  * Recall-Disziplin (NI-Reaktor-Lehre): Clock stoppen → State laden → Defaults
  * für fehlende Felder → UI + Engine folgen über State-Subscription → neu starten.
  */
+import { downloadJSON, safeFilename } from '../core/fileIO.js';
+
 export class PresetManager {
+    /** Kennung der Snapshot-DATEI (Export/Import). Seit 20260715, ältere Exporte haben keine. */
+    static SNAP_FILE_KIND = 'teslacoil-snapshot';
+
     /**
      * @param {import('../core/State.js').State} state
      * @param {import('../engine/TeslaEngine.js').TeslaEngine} engine
@@ -233,19 +238,58 @@ export class PresetManager {
     }
 
     exportSnapshot(name) {
-        const snap = { name: name || 'teslacoil', ts: Date.now(), version: 1, state: this._snapshotState() };
-        this._download(snap, `teslacoil_${(snap.name).replace(/[^a-z0-9]/gi, '_')}.json`);
+        const snap = { kind: PresetManager.SNAP_FILE_KIND, name: name || 'teslacoil', ts: Date.now(), version: 1, state: this._snapshotState() };
+        this._download(snap, `teslacoil_${safeFilename(snap.name)}.json`);
+    }
+
+    /**
+     * Snapshot-Datei prüfen und entpacken (rein, ohne Storage → headless getestet).
+     *
+     * Akzeptiert bewusst auch Dateien OHNE `kind`: Exporte von vor 20260715 hatten
+     * die Kennung noch nicht, die sollen weiter ladbar bleiben. Erkannt wird dann
+     * an der Form (name + state).
+     *
+     * @param {string} text – Dateiinhalt
+     * @returns {{name:string, state:Object}}
+     */
+    static parseSnapshotFile(text) {
+        let obj;
+        try { obj = JSON.parse(text); }
+        catch { throw new Error('Das ist keine gültige JSON-Datei.'); }
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Die Datei enthält kein Snapshot-Objekt.');
+        // Ein volles Backup hat 'data' statt 'state' – der häufigste Fehlgriff.
+        if (obj.data && !obj.state) throw new Error('Das ist eine komplette Backup-Datei, kein Snapshot.\nDie lädst du in den Einstellungen unter „Datei".');
+        if (obj.kind && obj.kind !== PresetManager.SNAP_FILE_KIND) throw new Error('Das ist keine teslacoil-Snapshot-Datei.');
+        if (!obj.state || typeof obj.state !== 'object' || Array.isArray(obj.state)) throw new Error('Die Datei enthält keinen Snapshot-Zustand.');
+        // Optik-Keys rauswerfen: Ein Snapshot darf NIE das Layout anfassen (Trennung
+        // Sound/Optik). Eine fremde oder handgebaute Datei könnte welche mitbringen.
+        const state = { ...obj.state };
+        for (const k of PresetManager.LAYOUT_KEYS) delete state[k];
+        // Erst NACH dem Strippen auf „leer" prüfen: Eine Datei mit ausschließlich
+        // Optik-Keys ist sonst formal nicht leer, hinterher aber schon – und ein leerer
+        // Snapshot würde beim Recall den kompletten Sound-Zustand auf Defaults reißen.
+        if (!Object.keys(state).length) throw new Error('Der Snapshot in der Datei ist leer (enthält keine Sound-Werte).');
+        const name = String(obj.name || '').trim() || 'Import';
+        return { name, state };
+    }
+
+    /**
+     * Snapshot aus einer Datei übernehmen und speichern (Upsert wie saveSnapshot).
+     * @param {string} text – Dateiinhalt
+     * @returns {{name:string, list:Array}} gespeicherter Name + neue Liste
+     */
+    importSnapshot(text) {
+        const { name, state } = PresetManager.parseSnapshotFile(text);
+        const list = this._read(this.snapKey);
+        const entry = { name, ts: Date.now(), version: 1, state };
+        const at = list.findIndex((s) => s.name === name);
+        if (at >= 0) list[at] = entry; else list.push(entry);
+        this._write(this.snapKey, list);
+        return { name, list };
     }
 
     /** JSON-Objekt als Datei-Download anbieten. */
-    _download(obj, filename) {
-        const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(a.href);
-    }
+    _download(obj, filename) { downloadJSON(obj, filename); }
 
     /* ── Skalen-Presets (nur Maske) ── */
     listScales() { return this._read(this.scaleKey); }

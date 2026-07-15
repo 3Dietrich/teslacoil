@@ -22,7 +22,8 @@ import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { PresetBar } from './ui/PresetBar.js';
 import { PresetManager } from './data/PresetManager.js';
-import { pushBackup, readBackups, restoreState } from './data/Backup.js';
+import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
+import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
 import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
@@ -787,6 +788,47 @@ function boot() {
         bkSave.addEventListener('click', () => { try { pushBackup(localStorage, Date.now(), 'manuell'); refreshBackups(); } catch { alert('Backup fehlgeschlagen (Speicher voll?).'); } });
         bkRow.appendChild(bkSel); bkRow.appendChild(bkLoad); bkRow.appendChild(bkSave);
         win.appendChild(bkRow);
+
+        // ── Datei-Zugang (@dpa 20260715): Die Backups oben liegen NUR im localStorage
+        // dieses Browsers – geleerter Speicher oder ein anderer Rechner und sie sind weg.
+        // Als Datei ist der Zustand transportabel und echt aufbewahrbar. Bewusst eine
+        // eigene Sektion, damit „Laden" oben (= Menü daneben) und „Datei laden" hier
+        // nicht verwechselt werden. ──
+        const flHead = document.createElement('div'); flHead.className = 'sw-subhead'; flHead.textContent = 'Datei';
+        win.appendChild(flHead);
+        const flNote = document.createElement('p'); flNote.className = 'sw-note';
+        flNote.textContent = 'Den kompletten Zustand als Datei sichern oder von einer Datei einlesen – '
+            + 'unabhängig vom Browserspeicher, übertragbar auf andere Rechner. Einlesen ersetzt ebenfalls ALLES.';
+        win.appendChild(flNote);
+
+        const flRow = document.createElement('div'); flRow.className = 'sw-actions';
+        const flExp = document.createElement('button'); flExp.className = 'pb-btn';
+        flExp.innerHTML = '<span class="sw-ic pb-ic-export">⤓</span> Als Datei sichern';
+        flExp.title = 'Kompletten Zustand (Sound, Optik, Snapshots, Skalen, Layouts) als JSON-Datei herunterladen';
+        flExp.addEventListener('click', () => {
+            try {
+                const now = Date.now();
+                downloadJSON(serializeBackup(localStorage, now, 'Export'), `teslacoil_backup_${fileStamp(new Date(now))}.json`);
+            } catch { alert('Export fehlgeschlagen.'); }
+        });
+        const flImp = document.createElement('button'); flImp.className = 'pb-btn';
+        flImp.innerHTML = '<span class="sw-ic pb-ic-import">⤒</span> Datei laden';
+        flImp.title = 'Zustand aus einer teslacoil-Backup-Datei wiederherstellen (ersetzt alles)';
+        flImp.addEventListener('click', async () => {
+            const f = await pickTextFile();
+            if (!f) return;
+            let parsed;
+            try { parsed = parseBackupFile(f.text); }
+            catch (e) { alert('Import nicht möglich:\n\n' + e.message); return; }
+            const when = parsed.ts ? fmtTs(parsed.ts) : 'unbekanntem Datum';
+            if (!confirm('Backup vom ' + when + ' aus „' + f.name + '" laden?\n\n'
+                + 'Der AKTUELLE Zustand wird komplett ersetzt (es wird vorher gesichert).')) return;
+            try { pushBackup(localStorage, Date.now(), 'vor Datei-Import'); } catch { /* Quota */ }
+            restoreState(localStorage, parsed.data);
+            location.reload();   // sauberer Boot aus dem eingelesenen teslacoil_live
+        });
+        flRow.appendChild(flExp); flRow.appendChild(flImp);
+        win.appendChild(flRow);
 
         // ── Werkseinstellung: doppelte Warnung + Auto-Backup davor (@dpa 20260714). ──
         const acts = document.createElement('div'); acts.className = 'sw-actions';

@@ -1,6 +1,8 @@
 /**
  * PresetBar.js – Transport + Snapshot/Skalen-Verwaltung.
  */
+import { pickTextFile } from '../core/fileIO.js';
+
 export class PresetBar {
     /**
      * @param {import('../engine/TeslaEngine.js').TeslaEngine} engine
@@ -70,6 +72,20 @@ export class PresetBar {
                 }
             }, 'new'],
             ['⤓', 'Geladenen Snapshot exportieren (JSON)', () => this.presets.exportSnapshot(this.engine.state.get('snapSel')), 'export'],
+            // Gegenstück zum Export (@dpa 20260715): Snapshot aus einer Datei holen.
+            // Gleicher Name = überschreiben (Upsert, wie ＋), danach direkt geladen –
+            // sonst müsste man ihn nach dem Import erst noch von Hand auswählen.
+            ['⤒', 'Snapshot aus Datei laden (JSON) – gleicher Name überschreibt', async () => {
+                const f = await pickTextFile();
+                if (!f) return;
+                let res;
+                try { res = this.presets.importSnapshot(f.text); }
+                catch (e) { alert('Import nicht möglich:\n\n' + e.message); return; }
+                const i = res.list.findIndex((s) => s.name === res.name);
+                this.engine.state.set('snapSel', res.name);
+                if (i >= 0) this.presets.recallSnapshot(i);
+                this.refreshSnapshots();
+            }, 'import'],
             ['🗑', 'Geladenen Snapshot löschen', () => {
                 const i = curIdx(); const w = this.engine.state.get('snapSel');
                 if (i >= 0 && confirm('Snapshot „' + w + '" löschen?')) { this.presets.deleteSnapshot(i); this.engine.state.set('snapSel', ''); this.refreshSnapshots(); }

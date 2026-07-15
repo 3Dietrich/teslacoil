@@ -42,12 +42,15 @@ body {
 /* kompakte Icon-Buttons (Snapshot/Layout) */
 .pb-icon { padding: 4px 6px; min-width: 24px; font-size: 12px; line-height: 1; text-align: center; }
 /* Aktions-Farben: gleiche Glyph-Sprache in allen Clustern, aber klar unterscheidbar
-   (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export). Icons etwas größer als der Rest von
-   .pb-icon – die Vierecke bleiben normal (@dpa 20260713: "Icon oft zu klein im Viereck"). */
+   (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export · ⤒ import). Icons etwas größer als der
+   Rest von .pb-icon – die Vierecke bleiben normal (@dpa 20260713: "Icon oft zu klein im Viereck").
+   Export/Import sind ein Paar: gleiche Glyph-Familie (⤓/⤒), aber Import bekommt Farbe,
+   damit die beiden im Cluster nicht zu Zwillingen verschwimmen (@dpa 20260715). */
 .pb-ic-load   { color: #7fc8ff; font-size: 17px; }
 .pb-ic-save   { color: #ffcf7a; font-size: 17px; }
 .pb-ic-new    { color: #8fe388; font-size: 17px; }
 .pb-ic-export { color: #9aa4b2; font-size: 17px; }
+.pb-ic-import { color: #7ee0c0; font-size: 17px; }
 .pb-ic-del    { color: #ff7a7a; font-size: 17px; }
 .pb-icon:hover { border-color: var(--accent); }
 /* Master Vol/Settings/CPU/e-Mode sitzen jetzt in .topbar-right (Kopfzeile Zeile 1).
@@ -422,6 +425,9 @@ body {
 .sw-note { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
 .sw-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; align-items: center; }
 .sw-subhead { font-size: 13px; font-weight: 600; color: var(--text); margin: 6px 0 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+/* Icon IM Text-Button (Datei-Sektion): trägt die Aktions-Farbe aus .pb-ic-*, während
+   die Beschriftung normal bleibt – so ist die Glyph-Sprache dieselbe wie in den Clustern. */
+.sw-ic { font-size: 15px; line-height: 1; margin-right: 2px; }
 .pb-btn-danger { border-color: #6a2b2b; color: #ff9a9a; }
 .pb-btn-danger:hover { background: #3a1e1e; border-color: #ff5a5a; }
 

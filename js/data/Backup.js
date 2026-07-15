@@ -24,6 +24,10 @@ export const BACKED_UP_KEYS = [
 /** Eigener Key, unter dem die Liste der Backups liegt. */
 export const BACKUP_KEY = 'teslacoil_backups';
 
+/** Kennung/Version der Backup-DATEI (Export). Nur damit erkennen wir sie beim Import. */
+export const FILE_KIND = 'teslacoil-backup';
+export const FILE_VERSION = 1;
+
 /** Zeitfenster + Obergrenzen der gestaffelten Aufbewahrung (@dpa 20260714). */
 export const WINDOWS = {
     minute: 60e3,          // < 1 min: max 2
@@ -76,6 +80,41 @@ export function thinBackups(list, now, W = WINDOWS) {
         }
     }
     return keep;
+}
+
+/**
+ * Kompletten Zustand als Datei-Objekt verpacken (für den Export).
+ * Gleiche Nutzlast wie ein localStorage-Backup, nur mit Kennung + Version drumherum.
+ */
+export function serializeBackup(storage, now, label = '') {
+    return { kind: FILE_KIND, version: FILE_VERSION, ts: now, label, data: captureState(storage) };
+}
+
+/**
+ * Backup-Datei prüfen und entpacken. Wirft mit einer Meldung, die man dem User
+ * direkt zeigen kann – ein Import ersetzt ALLES, da ist Rateraten das Letzte, was
+ * man will (@dpa 20260715: lieber klar ablehnen als halb einlesen).
+ * @param {string} text – Dateiinhalt
+ * @returns {{ts:number,label:string,data:Object}}
+ */
+export function parseBackupFile(text) {
+    let obj;
+    try { obj = JSON.parse(text); }
+    catch { throw new Error('Das ist keine gültige JSON-Datei.'); }
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('Die Datei enthält kein Backup-Objekt.');
+    // Ein Snapshot hat 'state' statt 'data' – der häufigste Fehlgriff, also gezielt abfangen.
+    if (obj.kind !== FILE_KIND) {
+        if (obj.state) throw new Error('Das ist eine Snapshot-Datei, kein Backup.\nSnapshots lädst du über den ⤒-Button in der Snapshot-Leiste.');
+        throw new Error('Das ist keine teslacoil-Backup-Datei.');
+    }
+    if (Number(obj.version) > FILE_VERSION) throw new Error('Die Datei stammt aus einer neueren teslacoil-Version.');
+    if (!obj.data || typeof obj.data !== 'object') throw new Error('Die Backup-Datei enthält keine Daten.');
+    // Nur bekannte Keys mit String-Werten übernehmen – so kann eine manipulierte
+    // Datei keinen Fremd-Key in den localStorage schieben.
+    const data = {};
+    for (const k of BACKED_UP_KEYS) if (typeof obj.data[k] === 'string') data[k] = obj.data[k];
+    if (!Object.keys(data).length) throw new Error('Die Backup-Datei enthält keine bekannten teslacoil-Daten.');
+    return { ts: Number(obj.ts) || 0, label: String(obj.label || ''), data };
 }
 
 /** Backup-Liste lesen (defensiv – korrupte Daten → leere Liste). */
