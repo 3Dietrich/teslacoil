@@ -119,6 +119,7 @@ export const DEFAULTS = Object.freeze({
     distMode: 'Saturation', // 'Saturation' | 'Hard Clip' | 'Foldback'
     distDrive: 2,        // Vorverstärkung in die Kennlinie
     distOut: 1,          // Ausgangspegel
+    distMix: 1,          // Dry/Wet-Crossfade (1 = reines Wet = Verhalten vor dem Regler)
     // Gate-Reverb (fester Effekt; 'aktiv'-Haken = Bypass)
     reverbEnabled: false, // 'aktiv'-Haken (aus = Bypass)
     revMix: 0.35,        // Dry/Wet 0..1

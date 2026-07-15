@@ -65,6 +65,7 @@ const KNOBS = {
     lpGlide:      { label: 'Glide', min: 0, max: 1, curve: 'log', unit: 's', decimals: 3 },
     distDrive:    { label: 'Drive', min: 0.5, max: 50, curve: 'log', unit: '×', decimals: 1 },
     distOut:      { label: 'Out', min: 0, max: 2, curve: 'linear', unit: '', decimals: 2 },
+    distMix:      { label: 'Dry/Wet', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     revMix:       { label: 'Dry/Wet', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     revWet:       { label: 'Wet-Vol', min: 0, max: 4, curve: 'linear', unit: '×', decimals: 2 },
     revDensity:   { label: 'Density', min: 0, max: 1, curve: 'linear', unit: '', decimals: 4 },
@@ -140,7 +141,7 @@ const GROUPS = [
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
     { name: 'Filter', selects: ['filterType', 'lpMode', 'filterEnvTrig'], toggles: ['filterEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
     // Distortion: Effekt-Slot vor dem Reverb.
-    { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut'], dist: true },
+    { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut', 'distMix'], dist: true },
     // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
     // Länge + P→Len sind jetzt NORMALE Controls (Satelliten-Untergruppe aufgelöst, @dpa
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
@@ -1549,7 +1550,7 @@ function boot() {
     // Distortion: Regler nur sichtbar, wenn 'aktiv'.
     function updateDistVisibility() {
         const on = state.get('distEnabled');
-        ['distDrive', 'distOut'].forEach((k) => setVis(k, on));
+        ['distDrive', 'distOut', 'distMix'].forEach((k) => setVis(k, on));
     }
     // Metronom: Regler nur sichtbar, wenn 'aktiv'. Cutoff-Knob vs. Oktaver je nach
     // 'Quant' (AN = Oktaver an der BaseFrq, AUS = freier Cutoff-Knob wie bisher).

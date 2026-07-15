@@ -107,7 +107,7 @@ export class TeslaEngine {
         else if (key === 'filterType') { this.ladder.setType(s.get('filterType')); this._applyFilterParams(); }
         else if (key === 'lpMode') { this.ladder.setPoles(this._lpPoles()); this._applyFilterParams(); }
         else if (['lpReso', 'lpCutoff', 'lpEnv', 'lpKeyTrack'].includes(key)) this._applyFilterParams();
-        if (['distEnabled', 'distMode', 'distDrive', 'distOut', '*'].includes(key)) this._applyDistortion();
+        if (['distEnabled', 'distMode', 'distDrive', 'distOut', 'distMix', '*'].includes(key)) this._applyDistortion();
         // Reverb: Pegel-Regler OHNE IR-Neuberechnung (unterbrechungsfrei bedienbar),
         // nur IR-Parameter lösen ein Rebuild aus.
         if (key === '*') { this._applyReverbLevels(); this._rebuildReverb(); }
@@ -177,6 +177,7 @@ export class TeslaEngine {
         if (on) this.dist.setMode(s.get('distMode'));
         this.dist.setDrive(s.get('distDrive'));
         this.dist.setOut(s.get('distOut'));
+        this.dist.setMix(s.get('distMix'));
     }
 
     /** Reverb aktiv über den 'aktiv'-Haken (fester Gate-Reverb-Effekt). */
