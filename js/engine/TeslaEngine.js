@@ -460,8 +460,15 @@ export class TeslaEngine {
         this.clock.stop();
         this.metroClock.stop();
         this.square.panic();
-        // Resonanten Filter-Speicher nullen, damit nichts nachklingt (hängender Ton).
+    }
+
+    /** Harter Audio-Reset („Panik", @dpa 20260715). Der normale Stop lässt alles
+     *  ausklingen – nur wenn doch mal etwas hängt, räumt DAS hier auf: alle Voices tot,
+     *  Filter- und Reverb-Speicher genullt. Knacken ist dabei ausdrücklich in Ordnung. */
+    audioReset() {
+        this.square.kill();
         try { this.ladder.reset(); } catch { /* Filter evtl. noch nicht gebaut */ }
+        try { this.reverb.reset(); } catch { /* Reverb evtl. noch nicht gebaut */ }
     }
     get running() { return this.clock.running; }
 

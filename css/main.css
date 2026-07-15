@@ -73,6 +73,10 @@ body {
 /* Sync-Schalter neben Start/Stop (aktiv = grün). Nur der Reload-Glyph ist vergrößert,
    das Wort „Sync" bleibt so groß wie „Start" (@dpa 20260714). */
 .sync-ico { font-size: 18px; line-height: 1; vertical-align: -2px; }
+/* Panik/Reset: dezent, aber als Not-Aus erkennbar (@dpa 20260715). */
+.panic-btn { border-color: #6a2b2b; color: #ff9a9a; }
+.panic-btn:hover { background: #3a1e1e; border-color: #ff5a5a; }
+.panic-ico { font-size: 15px; line-height: 1; vertical-align: -2px; }
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }

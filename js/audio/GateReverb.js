@@ -90,6 +90,15 @@ export class GateReverb {
     }
 
     /** Dry/Wet + Wet-Pegel setzen. */
+    /** Hall-Fahne sofort abschneiden (nur Reset-/Panik-Knopf, @dpa 20260715). Ein
+     *  Convolver hat keinen Reset – das Neuzuweisen des Buffers verwirft seinen internen
+     *  Faltungs-Speicher. Knackt, ist hier aber gewollt. */
+    reset() {
+        for (const c of [this.convA, this.convB]) {
+            try { const b = c.buffer; c.buffer = null; c.buffer = b; } catch { /* noop */ }
+        }
+    }
+
     setMix(mix) { this.mix = Math.max(0, Math.min(1, mix)); this._applyGains(); }
     setWetVol(v) { this.wetVol = Math.max(0, v); this._applyGains(); }
 

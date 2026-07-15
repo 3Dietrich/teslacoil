@@ -32,6 +32,15 @@ export class PresetBar {
         this._updateSyncBtn();
         this.engine.state.subscribe((key) => { if (key === '*' || key === 'syncOnStart') this._updateSyncBtn(); });
 
+        // Panik/Reset (@dpa 20260715): Der normale Stop lässt alles sauber ausklingen –
+        // dieser Knopf ist für den Ausnahmefall, dass doch mal etwas hängt. Er räumt hart
+        // auf (Voices tot, Filter- und Reverb-Speicher genullt); Knacken ist dabei egal.
+        this._panicBtn = this._btn('', () => this.engine.audioReset(), 'panic-btn');
+        this._panicBtn.innerHTML = '<span class="panic-ico">⏻</span> Reset';
+        this._panicBtn.title = 'Audio-Panik: alle Töne, Filter- und Hall-Fahnen sofort abwürgen '
+            + '(nur nötig, wenn nach dem Stop etwas hängt – knackt hörbar)';
+        this.element.appendChild(this._panicBtn);
+
         const sep = () => { const s = document.createElement('span'); s.className = 'pb-sep'; this.element.appendChild(s); };
         sep();
 

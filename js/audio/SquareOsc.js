@@ -167,15 +167,23 @@ export class SquareOsc {
         };
     }
 
-    /** Alle laufenden Voices sofort stoppen. Gain wird zusätzlich hart auf 0 gesetzt:
-     *  eine per Clock-Lookahead in die ZUKUNFT geplante Voice (osc.start(t>now)) würde
-     *  von osc.stop(now) je nach Browser nicht sicher verstummen – das Nullen der Gain
-     *  garantiert Stille (Ursache für „hängenden Ton nach Stop", @dpa 20260714). */
+    /** Alle laufenden Voices sofort stoppen. */
     panic() {
+        for (const v of this._voices) {
+            try { v.osc.stop(); v.osc.disconnect(); v.gain.disconnect(); } catch { /* noop */ }
+        }
+        this._voices.length = 0;
+    }
+
+    /** Harter Audio-Reset (nur für den Reset-/Panik-Knopf, @dpa 20260715): zusätzlich die
+     *  Gain hart auf 0 – auch eine per Clock-Lookahead in die ZUKUNFT geplante Voice
+     *  (osc.start(t>now)) verstummt damit garantiert. Knacken ist hier ausdrücklich egal;
+     *  im normalen stop() hat das NICHTS zu suchen (dort klingt alles aus). */
+    kill() {
         const now = this.ctx.currentTime;
         for (const v of this._voices) {
             try {
-                v.osc.onended = null;                 // eigenes Aufräumen unten, kein doppeltes Splicen
+                v.osc.onended = null;                 // eigenes Aufräumen hier, kein doppeltes Splicen
                 const g = v.gain.gain;
                 g.cancelScheduledValues(now); g.setValueAtTime(0, now);
                 v.osc.stop(now); v.osc.disconnect(); v.gain.disconnect();
