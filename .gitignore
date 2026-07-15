@@ -5,3 +5,7 @@ node_modules/
 _restore_data.json
 _recovery_*/
 restore.html
+
+# Persoenliche Arbeitsnotizen (lokal, nicht veroeffentlichen)
+dd.md
+CLAUDE.md
