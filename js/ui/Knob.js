@@ -399,8 +399,14 @@ export class Knob {
         return shape;
     }
 
+    /** Ist DIESER Gestalt-Name ein Fader? Einzige Wahrheit – auch der MetaEditor fragt hier,
+     *  statt die Namen nochmal aufzuzählen (das lief beim Umbenennen auseinander). */
+    static isFaderShape(shape) {
+        return shape === 'faderHoriz' || shape === 'faderVert';
+    }
+
     /** Fader (egal welche Richtung)? */
-    _isFader() { return this._shape === 'faderHoriz' || this._shape === 'faderVert'; }
+    _isFader() { return Knob.isFaderShape(this._shape); }
     /** Waagerechter Fader? Bestimmt Zeichnung UND Zieh-Achse. */
     _isHFader() { return this._shape === 'faderHoriz'; }
 

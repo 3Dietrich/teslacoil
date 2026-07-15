@@ -275,11 +275,14 @@ export class KnobMetaEditor {
 
   get isOpen() { return this._panel.style.display !== 'none'; }
 
-  /** Fader-Länge nur zeigen, wenn es ein Fader ist – bei einem Dial sagt sie nichts. */
+  /** Fader-Länge nur zeigen, wenn es ein Fader ist – bei einem Dial sagt sie nichts.
+   *  Die Gestalt-Namen NICHT hier nochmal aufzählen: genau das ist beim Umbenennen
+   *  ('faderW/H' → 'faderHoriz/Vert') auseinandergelaufen und die Längen-Zeile blieb
+   *  für immer versteckt (@dpa: „die Länge ist wieder weg!"). Knob.isFaderShape ist
+   *  die eine Wahrheit. */
   _syncShapeRows() {
-    const v = this._panel.querySelector('.kme-shape').value;
     const row = this._panel.querySelector('.kme-row[data-f="faderLen"]');
-    if (row) row.style.display = (v === 'faderW' || v === 'faderH') ? '' : 'none';
+    if (row) row.style.display = Knob.isFaderShape(this._panel.querySelector('.kme-shape').value) ? '' : 'none';
   }
 
   _apply() {

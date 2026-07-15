@@ -164,6 +164,40 @@ try:
         check("Body: Pfeil verdoppelt baseBand",
               abs(pg.evaluate("() => window.tesla.state.get('baseBand')") - band0 * 2) < 1e-6)
 
+        # ── Fader: Gestalt + Länge (dd.md 815) ──
+        # Die Längen-Zeile war schon einmal weg, weil die Gestalt-Namen an ZWEI Stellen
+        # aufgezählt waren und beim Umbenennen auseinanderliefen (@dpa: „die Länge ist
+        # wieder weg!"). Deshalb hier fest verdrahtet.
+        print("\n-- Fader: Gestalt und Laenge --")
+        K = '.knob-container#knob_bpm'
+        ED = '.knob-meta-editor:not(.elem-settings)'
+        pg.query_selector(K).click(button="right")
+        pg.wait_for_timeout(250)
+        len_row = lambda: pg.evaluate(
+            "() => { const r = document.querySelector('.kme-row[data-f=\"faderLen\"]');"
+            "        return !!r && r.style.display !== 'none'; }")
+        size = lambda: pg.evaluate(
+            f"() => {{ const r = document.querySelector('{K} .knob-svg').getBoundingClientRect();"
+            f"         return {{ w: Math.round(r.width), h: Math.round(r.height) }}; }}")
+
+        check("Knob: Laengen-Zeile versteckt", not len_row())
+        for shape, axis in [("faderVert", "h"), ("faderHoriz", "w")]:
+            pg.select_option(f"{ED} .kme-shape", shape)
+            pg.wait_for_timeout(280)
+            check(f"{shape}: Laengen-Zeile sichtbar", len_row())
+            pg.fill(f"{ED} .kme-faderlen", "200")
+            pg.wait_for_timeout(300)
+            s = size()
+            check(f"{shape}: Laenge wirkt auf der richtigen Achse", s[axis] == 200, s)
+            other = "w" if axis == "h" else "h"
+            check(f"{shape}: Querachse bleibt schmal", s[other] == 22, s)
+        pg.select_option(f"{ED} .kme-shape", "knob")
+        pg.wait_for_timeout(280)
+        check("zurueck auf Knob: Zeile wieder versteckt", not len_row())
+        d = size()
+        check("zurueck auf Knob: wieder quadratisch", d["w"] == d["h"], d)
+        pg.keyboard.press("Escape")
+
         if errs:
             print("\nJS-Fehler:", errs[:5])
             fails.append("js-errors")
