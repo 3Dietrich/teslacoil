@@ -380,10 +380,12 @@ export class TeslaEngine {
                 // muss Engine/PW/FM aber trotzdem live folgen (sonst wirken die Audio-Osz-Regler
                 // im Hold nie). Amp/Attack/Release bleiben bewusst unberührt – das IST der Hold.
                 const engine = s.get('oscEngine');
-                this.square.retune(freq, time, envLen, 0, {
+                // Slide (@dpa 20260715): der Hold setzt nur die AMP-Env aus – die Frequenz
+                // gleitet linear auf die neue Tonhöhe, statt hart zu springen.
+                this.square.retune(freq, time, envLen, s.get('ampHoldGlide'), {
                     engine,
                     param: engine === 'Sine-FM' ? s.get('fmFeedback') : s.get('duty'),
-                });
+                }, s.get('ampHoldCurve'));
                 this._ampHoldUntil = time + envLen;       // Hold weiter nach vorn schieben
             } else {
                 const engine = s.get('oscEngine');

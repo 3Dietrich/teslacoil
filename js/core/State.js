@@ -71,6 +71,14 @@ export const DEFAULTS = Object.freeze({
     attack: 0.003,
     ampDecay: 0,         // ASR-Release: Ausklingzeit NACH dem Len-Ende in s (0 = nur Anti-Klick).
                          // Kein Decay/Sustain-Level – die Note hält immer auf vollem Amp bis Len-Ende.
+    ampHoldGlide: 0.05,  // Hold-Slide: Dauer (s) bis die gehaltene Voice die neue Tonhöhe
+                         // ERREICHT. 0 = harter Sprung (das alte Verhalten). Nur im Hold
+                         // wirksam – @dpa 20260715: „hold nur für Amp aussetzen, für
+                         // freq = sliden".
+    ampHoldCurve: 0.5,   // Form des Slides (0..1): einpoliger LP auf ein überhöhtes Ziel,
+                         // am echten Ziel gekappt (@dpa: „das ziel höher setzen und dann
+                         // limiten"). 0 = fast gerade, 1 = deutlich „ungerader" LP-Bauch.
+                         // Ändert NUR die Krümmung – die Ankunftszeit bleibt ampHoldGlide.
     ampHold: false,      // Hold: Amp-Env NICHT neu triggern, solange die laufende Note (envLen)
                          // über den nächsten Trigger hinausreicht → gehaltene Note klingt durch.
     envPercent: 0.6,     // Länge = Anteil des Trigger-Intervalls (globaler Master)

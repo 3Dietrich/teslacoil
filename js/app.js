@@ -56,6 +56,8 @@ const KNOBS = {
     envPitchLo:   { label: 'P→Len tief', min: 1, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
     envPitchHi:   { label: 'P→Len hoch', min: 1, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
     ampPitchAmt:  { label: 'P→Amp', min: 0, max: 100, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    ampHoldGlide: { label: 'Slide', min: 0, max: 1, curve: 'log', unit: 's', decimals: 3 },
+    ampHoldCurve: { label: 'Slide-Form', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     lpCutoff:     { label: 'Cutoff', min: 20, max: 18000, curve: 'log', unit: 'Hz', decimals: 0 },
     lpReso:       { label: 'Reso', min: 0.1, max: 20, curve: 'log', unit: 'Q', decimals: 1 },
     lpEnv:        { label: 'Env', min: -1, max: 1, curve: 'linear', unit: '', decimals: 2 },
@@ -145,7 +147,9 @@ const GROUPS = [
     // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
     // Länge + P→Len sind jetzt NORMALE Controls (Satelliten-Untergruppe aufgelöst, @dpa
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
-    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
+    // 'Slide' (ampHoldGlide) sitzt neben dem Hold-Schalter und zeigt sich nur bei hold=on –
+    // ohne Hold hat er keine Bedeutung (@dpa 20260715: „nur sichtbar bei hold=on").
+    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampHoldGlide', 'ampHoldCurve', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
     // Gate-Reverb: Effekt-Slot mit Umschalter; Regler nur sichtbar wenn aktiv.
     // revView ist fest auf 'Beide' verdrahtet (@dpa 20260714) – der Schalter ist raus,
     // die Migration in boot() zieht alte gespeicherte 'L'/'R'-Stände nach.
@@ -481,7 +485,7 @@ function boot() {
     // Keys, die das Rate↔Base-Verhältnis beeinflussen → Nachrasten auslösen.
     const RATE_QUANT_KEYS = new Set(['pitchRate', 'rateQuant', 'rateNumMax', 'rateDenMax', 'baseSrc', 'baseHz', 'baseNote', 'baseBand', 'bpm']);
     // Keys, deren Umschalten Controls ein-/ausblendet → Gruppenhöhe ändert sich.
-    const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn']);
+    const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn', 'ampHold']);
     function makeRateReadout() {
         const bar = document.createElement('div'); bar.className = 'group-extra rate-readout';
         rateReadout.className = 'rate-mult';
@@ -1547,6 +1551,11 @@ function boot() {
         setVis('filterEnvTrig', on);
         setVis('filterSeqWidget', on && envTrig === 'seq');
     }
+    // Envelope: der Hold-Slide zeigt sich nur bei eingeschaltetem Hold – ohne Hold wird
+    // nie retune() gerufen, der Regler wäre wirkungslos (@dpa 20260715).
+    function updateHoldVisibility() {
+        ['ampHoldGlide', 'ampHoldCurve'].forEach((k) => setVis(k, state.get('ampHold')));
+    }
     // Distortion: Regler nur sichtbar, wenn 'aktiv'.
     function updateDistVisibility() {
         const on = state.get('distEnabled');
@@ -1588,6 +1597,7 @@ function boot() {
         updateDistVisibility();
         updateMetroVisibility();
         updatePitchWaveVis();
+        updateHoldVisibility();
     }
     refreshVisibility();
     // Erst JETZT (finale Sichtbarkeit steht) die Positionen anwenden – siehe Kommentar
@@ -1704,6 +1714,9 @@ function boot() {
         } else if (key === 'distMode' || key === 'distEnabled') {
             ctrlBindings.get(key)(data);
             updateDistVisibility();
+        } else if (key === 'ampHold') {
+            ctrlBindings.get(key)(data);
+            updateHoldVisibility();
         } else if (key === 'metroEnabled' || key === 'metroCutoffQuant') {
             ctrlBindings.get(key)(data);
             updateMetroVisibility();

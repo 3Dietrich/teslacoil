@@ -69,10 +69,12 @@ export class SquareOsc {
      *  Tonhöhe steppt. Solange retune() nachkommt, erreicht die Note nie ihr Release
      *  (kein wiederkehrender langsamer Attack). Ein laufender Attack wird sanft
      *  fortgeführt (kein Sprung), danach hält sie auf vollem Amp bis zum neuen Len-Ende.
-     *  @param glide 0 = harter Pitch-Sprung, >0 = τ-Glide (s).
+     *  @param glide 0 = harter Pitch-Sprung, >0 = Slide-Dauer (s) bis zur Ankunft.
+     *  @param glideCurve 0..1 – Form des Slides: 0 = fast gerade, 1 = deutlich LP-krumm.
+     *              Ändert NUR die Krümmung, nie die Ankunftszeit (s.u.).
      *  @param wp   {engine,param,startPhase} – Wellenform-Parameter; werden bei JEDEM
      *              Retune neu angewandt (s.u.). */
-    retune(freq, time, dur, glide = 0, wp = null) {
+    retune(freq, time, dur, glide = 0, wp = null, glideCurve = 0) {
         const v = this._voices[this._voices.length - 1];
         if (!v) return;
         const f = Math.max(1, freq);
@@ -89,10 +91,37 @@ export class SquareOsc {
                 const N = harmonicsForFreq(f, this.ctx.sampleRate, 2048);
                 v.osc.setPeriodicWave(this._wave(wp.engine || 'Square-PW', wp.param, wp.startPhase || 0, N));
             }
-            // Pitch-Step
+            // Pitch-Slide (@dpa 20260715). Nicht als reine Gerade, sondern als einpoliger
+            // LP (exponentielle Annäherung) auf ein ÜBERHÖHTES Ziel, das an der echten
+            // Zielfrequenz gekappt wird – @dpas Vorschlag: „das slide smooth kann auch von
+            // einem (simplen LP-) Filter kommen … das ziel höher setzen und dann limiten".
+            // So bleibt der typisch weiche LP-Einschwinger erhalten, der Slide kommt aber in
+            // ENDLICHER Zeit exakt an (ein blankes setTargetAtTime käme nie an und würde die
+            // eingestellte Zeit nur als Zeitkonstante deuten).
+            //
+            // Geregelt wird direkt L = die Anzahl DURCHLAUFENER ZEITKONSTANTEN bis zum
+            // Kappen – das ist das eigentliche Maß für die Krümmung:
+            //   L ≈ 0.2 → nur der (fast gerade) Anfang der e-Kurve
+            //   L ≈ 3   → fast die ganze e-Kurve → deutlich „ungerader" LP-Bauch
+            // Daraus folgt alles andere: τ = glide/L, und die nötige Überhöhung ist
+            // k = e^L/(e^L−1)  [aus f(glide) = f0 + k·(f−f0)·(1−e^(−L)) ≟ f].
+            // Ankunft damit IMMER exakt nach `glide` Sekunden – der Form-Regler ändert
+            // nur die Krümmung, nie die Zeit. (L linear zu regeln fühlt sich gleichmäßig
+            // an; k linear zu regeln nicht: dort passiert fast alles am oberen Ende.)
+            //
+            // setTargetAtTime ist selbst-verankernd (startet beim Ist-Wert) – anders als
+            // linearRampToValueAtTime, das ab dem VORHERIGEN Ereignis rampt und den Slide
+            // dadurch viel zu früh beginnen ließe (so gemessen, deshalb nicht verwendet).
             const p = v.osc.frequency;
-            if (glide > 0) { p.cancelScheduledValues(t); p.setTargetAtTime(f, t, glide); }
-            else p.setValueAtTime(f, t);
+            if (glide > 0) {
+                const from = v.freq ?? f;
+                const L = 0.2 + Math.max(0, Math.min(1, glideCurve)) * 2.8;
+                const k = Math.exp(L) / (Math.exp(L) - 1);
+                if (p.cancelAndHoldAtTime) p.cancelAndHoldAtTime(t); else p.cancelScheduledValues(t);
+                p.setTargetAtTime(from + k * (f - from), t, glide / L);
+                p.setValueAtTime(f, t + glide);   // „limiten": hier ist die Kurve am Ziel → stetig
+            } else { p.cancelScheduledValues(t); p.setValueAtTime(f, t); }
+            v.freq = f;   // Ausgangspunkt des nächsten Slides
             // Sustain verlängern: geplantes Release/Stop verwerfen und neu setzen.
             const g = v.gain.gain;
             if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t); else g.cancelScheduledValues(t);
@@ -158,7 +187,8 @@ export class SquareOsc {
         osc.stop(stopAt);
 
         // amp/release/attackEnd merken → retune() (hold) kann Sustain sauber verlängern.
-        const voice = { osc, gain: g, amp, release, attackEnd: aEnd };
+        // freq mitführen: Ausgangspunkt für den Hold-Slide in retune().
+        const voice = { osc, gain: g, amp, release, attackEnd: aEnd, freq: Math.max(1, freq) };
         this._voices.push(voice);
         osc.onended = () => {
             try { osc.disconnect(); g.disconnect(); } catch { /* noop */ }
