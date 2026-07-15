@@ -4,8 +4,8 @@
  * @dpa 20260714: „Es müssen nun alle Elemente Settings kriegen." Knobs haben ihren
  * KnobMetaEditor; hier bekommen die anderen Kategorien per Rechtsklick eigene Optik-
  * Settings – typ-abhängige Felder:
- *   • select   (MultiSchalter, z.B. Pitch-Wave / BaseFrq-Quelle): Label, BG-Farbe,
- *              VG-Farbe, Größe (Schrift).
+ *   • select   (MultiSchalter, z.B. Pitch-Wave / BaseFrq-Quelle): Label, Label an/aus,
+ *              BG-Farbe, VG-Farbe, Größe (Schrift), Feldbreite.
  *   • toggle   (Schalter wie aktiv/hold): Label, Label-Position (oben/links/rechts/unten).
  *   • readout  (pure Texte, z.B. base-readout): Label, Label an/aus, Textgröße,
  *              Textfeld-Größe, Textfarbe.
@@ -110,7 +110,10 @@ export class ElementSettings {
 
   /** Welche Felder sind für welchen Typ sichtbar? */
   _fieldsFor(type) {
-    if (type === 'select') return ['label', 'bg', 'fg', 'size'];
+    // select (@dpa 20260715, „Menu Switches: fehlt noch Größe + Label On/Off"):
+    // 'size' gab es schon, ging aber nur auf die SCHRIFTgröße – gemeint war offenbar die
+    // Größe des Schalters selbst. Beides ist jetzt da: 'size' = Schrift, 'boxSize' = Breite.
+    if (type === 'select') return ['label', 'labelOn', 'bg', 'fg', 'size', 'boxSize'];
     if (type === 'toggle') return ['label', 'labelPos'];
     // Readouts tragen Live-Text (textContent wird laufend gesetzt) → nur Optik ohne
     // Struktur-Umbau: Textgröße, Feldbreite, Textfarbe. (Label/Label-an/aus würde jeden

@@ -151,11 +151,10 @@ export class KnobMetaEditor {
     this._curveCanvas = panel.querySelector('canvas');
     this._panel = panel;
 
-    // Klick außerhalb schließt (außer auf einen ⚙-Button)
+    // Klick außerhalb schließt. (Die frühere ⚙-Ausnahme ist weg – das Icon gibt es nicht
+    // mehr, Settings kommen per Rechtsklick, und der schließt/öffnet sauber neu.)
     document.addEventListener('mousedown', (e) => {
-      if (this._panel.style.display !== 'none' && !this._panel.contains(e.target)) {
-        if (!e.target.closest('.knob-meta-btn')) this.close();
-      }
+      if (this._panel.style.display !== 'none' && !this._panel.contains(e.target)) this.close();
     });
 
     document.body.appendChild(panel);

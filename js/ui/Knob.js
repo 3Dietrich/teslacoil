@@ -3,7 +3,7 @@
  * 
  * Drag to rotate (vertical = value change).
  * Supports linear, logarithmic, exponential mapping curves.
- * Mini-icon to open KnobMetaEditor for customisation.
+ * Rechtsklick öffnet den KnobMetaEditor (Settings) – wie bei jedem anderen Control.
  */
 export class Knob {
     /**
@@ -17,7 +17,6 @@ export class Knob {
      * @param {string} [config.unit='']      – display unit
      * @param {number} [config.decimals=2]   – decimal places for display
      * @param {Function} [config.onChange]    – callback(value)
-     * @param {Function} [config.onMetaClick]– callback to open meta-editor
      * @param {string} [config.id]           – unique id for the knob
      */
     constructor(config) {
@@ -36,7 +35,6 @@ export class Knob {
         this._hideValue = !!config.hideValue;            // true = Zahlen-Anzeige weg (nur Dial+Label, spart Platz)
         this.formatValue = config.formatValue || null;
         this.onChange = config.onChange || null;
-        this.onMetaClick = config.onMetaClick || null;
 
         // Internal normalised value (0‥1)
         this._normValue = this._valueToNorm(config.value ?? this._min);
@@ -219,16 +217,10 @@ export class Knob {
         this._labelEl = labelEl;   // Referenz: bei Umbenennung (setMeta) live aktualisieren
         container.appendChild(labelEl);
 
-        // Meta-edit icon (small gear/settings icon)
-        const metaBtn = document.createElement('button');
-        metaBtn.className = 'knob-meta-btn';
-        metaBtn.innerHTML = '⚙';
-        metaBtn.title = 'Edit knob settings';
-        metaBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (this.onMetaClick) this.onMetaClick(this);
-        });
-        container.appendChild(metaBtn);
+        // (Kein ⚙-Settings-Icon mehr, @dpa 20260715: „settings icon kann weg (in allen)".
+        //  Die Knob-Settings öffnet der Rechtsklick – genau wie bei jedem anderen Control,
+        //  wo der Rechtsklick die Element-Settings aufmacht. Das Icon war der einzige
+        //  Sonderweg und kostete überall Ausnahmen im Drag-/e-Mode-Code.)
 
         // Interaction handlers
         svg.addEventListener('mousedown', (e) => this._onDragStart(e));
@@ -245,7 +237,6 @@ export class Knob {
         //     zum echten Startpunkt (nicht zum Slop-Punkt), damit nichts springt.
         container.addEventListener('mousedown', (e) => {
             if (this._dragging) return;
-            if (e.target.closest('.knob-meta-btn')) return;   // ⚙ öffnet Settings
             if (e.target.closest('svg')) return;               // Dial: eigener Sofort-Drag oben
             e.preventDefault();
             const startEvt = e, sx = e.clientX, sy = e.clientY;
@@ -542,8 +533,8 @@ export class Knob {
         };
     }
 
-    static fromJSON(json, onChange, onMetaClick) {
-        return new Knob({ ...json, onChange, onMetaClick });
+    static fromJSON(json, onChange) {
+        return new Knob({ ...json, onChange });
     }
 
     /**

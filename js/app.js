@@ -376,12 +376,17 @@ function boot() {
         wrap.dataset.ctrl = 's:' + key;   // Kennung für den Arrange-Modus
         ctrlBindings.set(key, (data) => { sel.value = data[key]; applyTitle(); });
         ctrlEls.set(key, wrap);
-        // Element-Settings (Rechtsklick): Label, Schalter-BG/-VG-Farbe, Schriftgröße.
+        // Element-Settings (Rechtsklick): Label (+ an/aus), BG/VG-Farbe, Schriftgröße, Breite.
+        // labelOn/boxSize kamen 20260715 dazu (@dpa: „Menu Switches: fehlt noch Größe +
+        // Label On/Off"). Breite auf dem SELECT, nicht auf dem Wrapper – der Wrapper ist
+        // eine Flex-Spalte, seine Breite würde das Feld nicht mitziehen.
         registerCtrlStyle('s:' + key, 'select', wrap, (s) => {
             span.textContent = s.label || cfg.label;
+            span.style.display = s.labelOn === false ? 'none' : '';
             sel.style.background = s.bg || '';
             sel.style.color = s.fg || '';
             sel.style.fontSize = s.size ? s.size + 'px' : '';
+            sel.style.width = s.boxSize ? s.boxSize + 'px' : '';
         }, cfg.label);
         return wrap;
     }
@@ -422,12 +427,12 @@ function boot() {
             curve: def.curve, unit: def.unit, decimals: def.decimals, formatValue: def.formatValue,
             value: state.get(key),
             onChange: (val) => state.set(key, val),
-            onMetaClick: (k) => metaEditor.open(k),
         });
         knob._defaultMeta = knob.getMeta();   // Original-Range/Kurve für „Zurücksetzen"
         knob.element.dataset.ctrl = 'k:' + key;   // Kennung für den Arrange-Modus
-        // Rechtsklick = Settings (@dpa 20260711): öffnet den Meta-Editor dieses Reglers (wie
-        // der ⚙ am Knob). stopPropagation, damit NICHT zusätzlich die Gruppen-Settings aufgehen.
+        // Rechtsklick = Settings (@dpa 20260711): öffnet den Meta-Editor dieses Reglers. Seit
+        // das ⚙-Icon weg ist (@dpa 20260715) ist das der einzige Weg – wie bei allen anderen
+        // Controls. stopPropagation, damit NICHT zusätzlich die Gruppen-Settings aufgehen.
         knob.element.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); metaEditor.open(knob); });
         knobsById.set(key, knob);
         ctrlEls.set(key, knob.element);
@@ -1209,7 +1214,6 @@ function boot() {
     function wireCtrlMove(el) {
         el.addEventListener('mousedown', (e) => {
             if (!arranging) return;
-            if (e.target.closest('.knob-meta-btn')) return;   // ⚙ bleibt im e-Mode bedienbar
             e.preventDefault(); e.stopPropagation();
             // Shift/Cmd-Klick = additive Auswahl (Block E) → nur selektieren, KEIN Drag.
             if (e.shiftKey || e.metaKey) { setSelected(el, true); return; }

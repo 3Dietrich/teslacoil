@@ -288,8 +288,6 @@ body {
    Knob, die #232833 (--panel2) ist. Siehe .knob-center. KEIN Value-BG (@dpa ausdrücklich),
    kein Container-Hintergrund. */
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
-.knob-meta-btn { position: absolute; top: -2px; right: -2px; background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px; opacity: .4; padding: 2px; }
-.knob-meta-btn:hover { opacity: 1; color: var(--accent); }
 
 /* ── Knob-Meta-Editor (übernommen aus octaver) ── */
 .knob-meta-editor {
@@ -424,7 +422,6 @@ body {
 /* Ausnahme (@dpa): die Zahnrad-Knöpfe bleiben im e-Mode bedienbar → EINSTELLUNGEN
    weiterhin erreichbar (Gruppen-⚙ und je-Regler-⚙), ebenso der Klapp-Pfeil. */
 .arranging .group-settings-btn, .arranging .group-collapse,
-.arranging .knob-meta-btn { pointer-events: auto; }
 /* Klar sichtbarer „Anordnen-Modus": das ganze Panel wird dezent eingefärbt +
    schraffiert, jedes Element bekommt einen kräftigen Greif-Rahmen und getönten
    Hintergrund → man sieht sofort, dass hier verschoben (nicht bedient) wird. */
