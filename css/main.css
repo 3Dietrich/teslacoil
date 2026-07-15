@@ -269,6 +269,9 @@ body {
    Ausserdem: Dial-Teile sind gestrichene Pfade (stroke), die Fader-Teile sind Rechtecke
    → sie brauchen fill, sonst blieben sie unsichtbar bzw. schwarz. */
 .knob-shape-fader .knob-svg { width: auto; height: auto; }
+/* Waagerechter Fader ('Fader W'): auch der Zieh-Cursor dreht sich mit – nach rechts
+   ziehen erhöht, senkrecht zu ziehen waere hier widersinnig. */
+.knob-fader-w .knob-svg, .knob-fader-w .knob-value, .knob-fader-w .knob-label { cursor: ew-resize; }
 .knob-shape-fader .knob-track { fill: var(--knob-bg, var(--line)); stroke: none; }
 .knob-shape-fader .knob-value-arc { fill: var(--knob-accent, var(--accent)); stroke: none; }
 .knob-shape-fader .knob-indicator { fill: var(--knob-accent, var(--text)); stroke: none; }

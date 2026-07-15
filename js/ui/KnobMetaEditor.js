@@ -2,12 +2,14 @@
  * KnobMetaEditor.js – Schwebendes Panel zum Bearbeiten der Regler-Parameter.
  * Übernommen aus octaver, an teslacoil angepasst (deutsche Labels).
  *
- * Felder: Min, Max, Step, Kurve (linear/log/exp), Nachkommastellen, Skew, Einheit.
- * Mit kleiner Kurven-Vorschau. Öffnet neben dem Regler (⚙-Button).
+ * Felder: Min, Max, Step, Kurve (linear/log/exp), Nachkommastellen, Skew, Einheit,
+ * Gestalt (Knob / Fader waagerecht / Fader senkrecht) + Fader-Länge.
+ * Mit kleiner Kurven-Vorschau. Öffnet per Rechtsklick auf den Regler.
  *
  * Hinweis (Recall): Geänderte Meta-Werte (Range/Kurve) sind aktuell NICHT Teil
  * des Snapshots – nur der Wert wird gespeichert. Reine Bedien-/Tuning-Hilfe.
  */
+import { Knob } from './Knob.js';   // nur für Knob.migrateShape (alte Gestalt-Namen)
 export class KnobMetaEditor {
   /** @param {import('../core/State.js').State} [state] – für die Farb-Presets (Optik). */
   constructor(state) {
@@ -77,9 +79,10 @@ export class KnobMetaEditor {
         </div>
         <div class="kme-row">
           <label>Gestalt</label>
-          <select class="kme-shape" title="Runder Regler oder senkrechter Fader">
-            <option value="knob">Knob (rund)</option>
-            <option value="fader">Fader (senkrecht)</option>
+          <select class="kme-shape" title="Runder Regler oder Fader (Richtung wählbar)">
+            <option value="knob">Knob</option>
+            <option value="faderHoriz">Fader waagerecht</option>
+            <option value="faderVert">Fader senkrecht</option>
           </select>
         </div>
         <div class="kme-row" data-f="faderLen">
@@ -189,7 +192,7 @@ export class KnobMetaEditor {
     this._panel.querySelector('.kme-skew').value = meta.skew || 1;
     this._panel.querySelector('.kme-unit').value = meta.unit;
     this._panel.querySelector('.kme-view').value = meta.viewSize || 'medium';
-    this._panel.querySelector('.kme-shape').value = meta.shape || 'knob';
+    this._panel.querySelector('.kme-shape').value = Knob.migrateShape(meta.shape) || 'knob';
     this._panel.querySelector('.kme-faderlen').value = meta.faderLen ?? 80;
     this._syncShapeRows();
     this._colorCustom = !!meta.color;
@@ -274,9 +277,9 @@ export class KnobMetaEditor {
 
   /** Fader-Länge nur zeigen, wenn es ein Fader ist – bei einem Dial sagt sie nichts. */
   _syncShapeRows() {
-    const isFader = this._panel.querySelector('.kme-shape').value === 'fader';
+    const v = this._panel.querySelector('.kme-shape').value;
     const row = this._panel.querySelector('.kme-row[data-f="faderLen"]');
-    if (row) row.style.display = isFader ? '' : 'none';
+    if (row) row.style.display = (v === 'faderW' || v === 'faderH') ? '' : 'none';
   }
 
   _apply() {
