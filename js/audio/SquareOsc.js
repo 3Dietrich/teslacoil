@@ -167,18 +167,10 @@ export class SquareOsc {
         };
     }
 
-    /** Alle laufenden Voices sofort stoppen. */
-    panic() {
-        for (const v of this._voices) {
-            try { v.osc.stop(); v.osc.disconnect(); v.gain.disconnect(); } catch { /* noop */ }
-        }
-        this._voices.length = 0;
-    }
-
-    /** Harter Audio-Reset (nur für den Reset-/Panik-Knopf, @dpa 20260715): zusätzlich die
-     *  Gain hart auf 0 – auch eine per Clock-Lookahead in die ZUKUNFT geplante Voice
-     *  (osc.start(t>now)) verstummt damit garantiert. Knacken ist hier ausdrücklich egal;
-     *  im normalen stop() hat das NICHTS zu suchen (dort klingt alles aus). */
+    /** Harter Audio-Reset (nur für den Reset-/Panik-Knopf, @dpa 20260715): Gain hart auf 0
+     *  und alle Voices tot – auch eine per Clock-Lookahead in die ZUKUNFT geplante Voice
+     *  (osc.start(t>now)) verstummt damit garantiert. Knacken ist hier ausdrücklich egal.
+     *  Der normale stop() würgt NICHTS ab, dort klingt alles aus. */
     kill() {
         const now = this.ctx.currentTime;
         for (const v of this._voices) {

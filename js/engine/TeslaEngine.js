@@ -456,10 +456,13 @@ export class TeslaEngine {
         this.clock.start();
         this.metroClock.start();
     }
+    /** Stop hält nur den Takt an – es wird NICHTS abgewürgt (@dpa 20260715): keine neuen
+     *  Trigger, laufende Hüllkurven gehen zu Ende, alles klingt aus. Jede Voice hat ihr
+     *  osc.stop() schon beim Anschlag geplant, es bleibt also nichts liegen. Hängt doch
+     *  mal etwas, gibt es dafür den Reset-Knopf (audioReset). */
     stop() {
         this.clock.stop();
         this.metroClock.stop();
-        this.square.panic();
     }
 
     /** Harter Audio-Reset („Panik", @dpa 20260715). Der normale Stop lässt alles
