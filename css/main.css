@@ -261,6 +261,17 @@ body {
 /* Ohne Knob: kein reservierter Knob-Platz → Höhe nimmt deutlich ab. */
 .knob-size-none .knob-svg { display: none; }
 .knob-size-none { width: 54px; }
+
+/* ── Fader-Gestalt (@dpa 20260715: „umschalten auf Fader, mit Längenangabe") ──
+   MUSS nach den .knob-size-*-Regeln stehen: die setzen .knob-svg auf feste px-Maße
+   (gleiche Spezifität) und würden die Bahn sonst zum Quadrat stauchen. Das SVG trägt
+   seine Maße selbst (width/height-Attribut aus der eingestellten Länge).
+   Ausserdem: Dial-Teile sind gestrichene Pfade (stroke), die Fader-Teile sind Rechtecke
+   → sie brauchen fill, sonst blieben sie unsichtbar bzw. schwarz. */
+.knob-shape-fader .knob-svg { width: auto; height: auto; }
+.knob-shape-fader .knob-track { fill: var(--knob-bg, var(--line)); stroke: none; }
+.knob-shape-fader .knob-value-arc { fill: var(--knob-accent, var(--accent)); stroke: none; }
+.knob-shape-fader .knob-indicator { fill: var(--knob-accent, var(--text)); stroke: none; }
 .knob-size-none::before { content: ''; display: block; height: 4px; }
 .knob-size-none .knob-label { font-size: 9px; }
 .knob-size-none .knob-value { font-size: 10px; margin-top: 0; }

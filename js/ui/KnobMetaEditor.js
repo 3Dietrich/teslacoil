@@ -76,6 +76,17 @@ export class KnobMetaEditor {
           </select>
         </div>
         <div class="kme-row">
+          <label>Gestalt</label>
+          <select class="kme-shape" title="Runder Regler oder senkrechter Fader">
+            <option value="knob">Knob (rund)</option>
+            <option value="fader">Fader (senkrecht)</option>
+          </select>
+        </div>
+        <div class="kme-row" data-f="faderLen">
+          <label>Fader-Länge</label>
+          <input type="number" class="kme-faderlen" min="24" max="400" step="4" />
+        </div>
+        <div class="kme-row">
           <label>Label</label>
           <select class="kme-labelpos" title="Label-Position">
             <option value="bottom">Unten</option>
@@ -132,6 +143,10 @@ export class KnobMetaEditor {
     panel.querySelector('.kme-bg-clear').addEventListener('click', () => { this._bgCustom = false; this._apply(); });
     // Label-Position sofort anwenden.
     panel.querySelector('.kme-labelpos').addEventListener('change', () => this._apply());
+    // Gestalt/Länge wirken sofort (@dpa 20260715) – man will beim Einstellen sehen,
+    // wie lang der Fader wird. Die Längen-Zeile zeigt sich nur bei shape='fader'.
+    panel.querySelector('.kme-shape').addEventListener('change', () => { this._syncShapeRows(); this._apply(); });
+    panel.querySelector('.kme-faderlen').addEventListener('input', () => this._apply());
     // Farb-Preset-Menü: „Standard" (Index 0) verwirft die Farbe, sonst Preset anwenden.
     // Auswahl greift SOFORT (übernimmt am Regler) – rein per Tastatur bedienbar.
     panel.querySelector('.kme-color-preset').addEventListener('change', (e) => {
@@ -174,6 +189,9 @@ export class KnobMetaEditor {
     this._panel.querySelector('.kme-skew').value = meta.skew || 1;
     this._panel.querySelector('.kme-unit').value = meta.unit;
     this._panel.querySelector('.kme-view').value = meta.viewSize || 'medium';
+    this._panel.querySelector('.kme-shape').value = meta.shape || 'knob';
+    this._panel.querySelector('.kme-faderlen').value = meta.faderLen ?? 80;
+    this._syncShapeRows();
     this._colorCustom = !!meta.color;
     this._panel.querySelector('.kme-color').value = meta.color || '#5ad1ff';
     this._panel.querySelector('.kme-labelpos').value = meta.labelPos || 'bottom';
@@ -254,6 +272,13 @@ export class KnobMetaEditor {
 
   get isOpen() { return this._panel.style.display !== 'none'; }
 
+  /** Fader-Länge nur zeigen, wenn es ein Fader ist – bei einem Dial sagt sie nichts. */
+  _syncShapeRows() {
+    const isFader = this._panel.querySelector('.kme-shape').value === 'fader';
+    const row = this._panel.querySelector('.kme-row[data-f="faderLen"]');
+    if (row) row.style.display = isFader ? '' : 'none';
+  }
+
   _apply() {
     if (!this._currentKnob) return;
     this._currentKnob.setMeta({
@@ -266,6 +291,8 @@ export class KnobMetaEditor {
       skew: parseFloat(this._panel.querySelector('.kme-skew').value) || 1,
       unit: this._panel.querySelector('.kme-unit').value,
       viewSize: this._panel.querySelector('.kme-view').value,
+      shape: this._panel.querySelector('.kme-shape').value,
+      faderLen: parseInt(this._panel.querySelector('.kme-faderlen').value) || 80,
       color: this._colorCustom ? this._panel.querySelector('.kme-color').value : '',
       labelPos: this._panel.querySelector('.kme-labelpos').value,
       bg: this._bgCustom ? this._panel.querySelector('.kme-bg').value : '',

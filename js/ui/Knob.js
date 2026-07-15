@@ -29,6 +29,8 @@ export class Knob {
         this._unit = config.unit ?? '';
         this._decimals = config.decimals ?? 2;
         this._viewSize = config.viewSize ?? 'medium';   // 'medium'|'small'|'large'|'none'
+        this._shape = config.shape ?? 'knob';           // 'knob' (Dial) | 'fader' (senkrecht)
+        this._faderLen = config.faderLen ?? 80;         // Fader-Länge in px (nur bei shape='fader')
         this._color = config.color ?? '';               // '' = Standardfarbe
         this._labelPos = config.labelPos ?? 'bottom';   // 'bottom'|'top'|'left'|'right'|'off'
         this._bg = config.bg ?? '';                      // '' = kein Hintergrund (Knob-BG-Farbe, z.B. #232833)
@@ -156,44 +158,14 @@ export class Knob {
         container.id = this.id;
         container.tabIndex = 0; // Make focusable for keyboard events
 
-        // SVG knob
-        const size = 56;
-        const cx = size / 2, cy = size / 2, r = 22;
-        const startAngle = 225;  // degrees, 0 = right
-        const endAngle = -45;
-        const totalArc = 270;    // total sweep in degrees
-
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', size);
-        svg.setAttribute('height', size);
-        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
         svg.classList.add('knob-svg');
-
-        // Background track arc
-        const trackArc = this._createArc(cx, cy, r, startAngle, startAngle - totalArc);
-        trackArc.classList.add('knob-track');
-        svg.appendChild(trackArc);
-
-        // Value arc
-        this._svgArc = this._createArc(cx, cy, r, startAngle, startAngle);
-        this._svgArc.classList.add('knob-value-arc');
-        svg.appendChild(this._svgArc);
-
-        // Indicator dot
-        this._indicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        this._indicator.classList.add('knob-indicator');
-        this._indicator.setAttribute('r', '3');
-        svg.appendChild(this._indicator);
-
-        // Center circle
-        const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        centerCircle.setAttribute('cx', cx);
-        centerCircle.setAttribute('cy', cy);
-        centerCircle.setAttribute('r', '10');
-        centerCircle.classList.add('knob-center');
-        svg.appendChild(centerCircle);
-
+        this._svg = svg;
         container.appendChild(svg);
+        // Inhalt (Dial ODER Fader-Bahn) baut _renderShape – umschaltbar zur Laufzeit.
+        // Alles andere (Value, Label, Drag, Tastatur) ist davon unberührt, deshalb
+        // verhält sich ein Fader exakt wie ein Knob (@dpa 20260715: „umschalten auf Fader").
+        this._renderShape();
 
         // Value display
         this._valueDisplay = document.createElement('span');
@@ -265,13 +237,6 @@ export class Knob {
         });
 
         this.element = container;
-        this._size = size;
-        this._cx = cx;
-        this._cy = cy;
-        this._r = r;
-        this._startAngle = startAngle;
-        this._totalArc = totalArc;
-
         this._applyView();
         this._updateVisual();
 
@@ -376,6 +341,78 @@ export class Knob {
         };
     }
 
+    /* ──────────────── Gestalt: Dial oder Fader ──────────────── */
+
+    /** SVG-Inhalt für die aktuelle Gestalt neu aufbauen. Nur die Zeichnung wechselt –
+     *  Wert, Label, Drag und Tastatur liegen ausserhalb des SVG und bleiben identisch.
+     *  Ruft bewusst KEIN _updateVisual (beim Erstaufbau gibt es die Value-Anzeige noch
+     *  nicht); die Aufrufer machen das. */
+    _renderShape() {
+        const svg = this._svg;
+        while (svg.firstChild) svg.removeChild(svg.firstChild);
+        this._svgArc = this._indicator = this._faderFill = this._faderHandle = null;
+        if (this._shape === 'fader') this._buildFader(svg); else this._buildDial(svg);
+    }
+
+    /** Runder Regler (Original): Track-Bogen, Wertbogen, Indikator-Punkt, Nabe. */
+    _buildDial(svg) {
+        const size = 56;
+        const cx = size / 2, cy = size / 2, r = 22;
+        const startAngle = 225, totalArc = 270;   // 0° = rechts; 270° Sweep
+        svg.setAttribute('width', size);
+        svg.setAttribute('height', size);
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+
+        const trackArc = this._createArc(cx, cy, r, startAngle, startAngle - totalArc);
+        trackArc.classList.add('knob-track');
+        svg.appendChild(trackArc);
+
+        this._svgArc = this._createArc(cx, cy, r, startAngle, startAngle);
+        this._svgArc.classList.add('knob-value-arc');
+        svg.appendChild(this._svgArc);
+
+        this._indicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        this._indicator.classList.add('knob-indicator');
+        this._indicator.setAttribute('r', '3');
+        svg.appendChild(this._indicator);
+
+        const centerCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        centerCircle.setAttribute('cx', cx);
+        centerCircle.setAttribute('cy', cy);
+        centerCircle.setAttribute('r', '10');
+        centerCircle.classList.add('knob-center');
+        svg.appendChild(centerCircle);
+
+        this._size = size; this._cx = cx; this._cy = cy; this._r = r;
+        this._startAngle = startAngle; this._totalArc = totalArc;
+    }
+
+    /** Senkrechter Fader: Bahn, gefüllter Teil von unten, Griff. Länge frei einstellbar
+     *  (@dpa 20260715: „umschalten auf Fader (am besten mit Längenangabe)"). Unten = min,
+     *  oben = max – passt zum vertikalen Wert-Drag, der für beide Gestalten derselbe ist. */
+    _buildFader(svg) {
+        const W = 22;
+        const H = Math.max(24, Math.min(400, this._faderLen ?? 80));
+        const pad = 5;                       // Halbe Griffhöhe: Griff bleibt am Rand drin
+        const trackW = 4, trackX = (W - trackW) / 2;
+        svg.setAttribute('width', W);
+        svg.setAttribute('height', H);
+        svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+        const mk = (tag, cls, attrs) => {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            el.classList.add(cls);
+            for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+            svg.appendChild(el);
+            return el;
+        };
+        mk('rect', 'knob-track', { x: trackX, y: pad, width: trackW, height: H - 2 * pad, rx: 2 });
+        this._faderFill = mk('rect', 'knob-value-arc', { x: trackX, width: trackW, rx: 2, y: pad, height: 0 });
+        this._faderHandle = mk('rect', 'knob-indicator', { x: 1, width: W - 2, height: 6, rx: 2, y: 0 });
+
+        this._size = H; this._faderH = H; this._faderPad = pad;
+    }
+
     /* ──────────────── Ansicht (Größe + Farbe) ──────────────── */
 
     /** Größen-Klasse + Farb-Variable auf den Container anwenden. */
@@ -383,6 +420,8 @@ export class Knob {
         if (!this.element) return;
         this.element.classList.remove('knob-size-medium', 'knob-size-mini', 'knob-size-small', 'knob-size-large', 'knob-size-none');
         this.element.classList.add('knob-size-' + (this._viewSize || 'medium'));
+        // Gestalt: der Fader hängt seine eigenen SVG-Maße/Füllungen an (s. CSS).
+        this.element.classList.toggle('knob-shape-fader', this._shape === 'fader');
         this.element.classList.toggle('knob-hide-value', this._hideValue);
         // Farbe als CSS-Variable → Wertbogen/Indikator/Value nutzen sie (Fallback = Default).
         if (this._color) this.element.style.setProperty('--knob-accent', this._color);
@@ -403,17 +442,27 @@ export class Knob {
     /* ──────────────── Visual Update ──────────────── */
 
     _updateVisual() {
-        if (!this._svgArc) return;
-
-        const valueDeg = this._startAngle - this._normValue * this._totalArc;
-        this._svgArc.setAttribute('d',
-            this._describeArc(this._cx, this._cy, this._r, this._startAngle, valueDeg)
-        );
-
-        // Indicator dot position
-        const pos = this._polarToCartesian(this._cx, this._cy, this._r, valueDeg);
-        this._indicator.setAttribute('cx', pos.x);
-        this._indicator.setAttribute('cy', pos.y);
+        if (this._shape === 'fader') {
+            if (!this._faderFill) return;
+            // Unten = min, oben = max. Die Bahn läuft von pad bis H-pad; der Griff sitzt
+            // mittig auf dem Wert, der gefüllte Teil reicht von unten bis dorthin.
+            const H = this._faderH, pad = this._faderPad;
+            const span = H - 2 * pad;
+            const y = pad + (1 - this._normValue) * span;   // Griffmitte
+            this._faderFill.setAttribute('y', y);
+            this._faderFill.setAttribute('height', Math.max(0, H - pad - y));
+            this._faderHandle.setAttribute('y', y - 3);
+        } else {
+            if (!this._svgArc) return;
+            const valueDeg = this._startAngle - this._normValue * this._totalArc;
+            this._svgArc.setAttribute('d',
+                this._describeArc(this._cx, this._cy, this._r, this._startAngle, valueDeg)
+            );
+            // Indicator dot position
+            const pos = this._polarToCartesian(this._cx, this._cy, this._r, valueDeg);
+            this._indicator.setAttribute('cx', pos.x);
+            this._indicator.setAttribute('cy', pos.y);
+        }
 
         // Value text
         const displayVal = this.value;
@@ -489,6 +538,8 @@ export class Knob {
             color: this._color,
             labelPos: this._labelPos,
             bg: this._bg,
+            shape: this._shape,
+            faderLen: this._faderLen,
         };
     }
 
@@ -509,10 +560,16 @@ export class Knob {
         if (meta.color !== undefined) this._color = meta.color;
         if (meta.labelPos !== undefined) this._labelPos = meta.labelPos;
         if (meta.bg !== undefined) this._bg = meta.bg;
+        // Gestalt/Länge ändern die SVG-Zeichnung → neu aufbauen (@dpa 20260715).
+        const reshape = (meta.shape !== undefined && meta.shape !== this._shape)
+            || (meta.faderLen !== undefined && meta.faderLen !== this._faderLen);
+        if (meta.shape !== undefined) this._shape = meta.shape;
+        if (meta.faderLen !== undefined) this._faderLen = meta.faderLen;
 
         this._normValue = this._valueToNorm(
             Math.max(this._min, Math.min(this._max, currentValue))
         );
+        if (reshape) this._renderShape();
         this._applyView();
         this._updateVisual();
     }
