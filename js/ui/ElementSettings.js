@@ -22,6 +22,7 @@
  * → state.ctrlStyles (Optik-Ebene, LAYOUT_KEYS).
  */
 import { makeDraggable } from './dragPanel.js';
+import { hint } from '../core/i18n.js';
 
 export class ElementSettings {
   constructor(state) {
@@ -206,13 +207,13 @@ export class ElementSettings {
       if (boxLab) boxLab.textContent = 'Taste ↔';
       if (hLab) hLab.textContent = 'Taste ↕';
       if (fgLab) fgLab.textContent = 'Ton an';
-      wIn.min = 10; wIn.max = 999; wIn.step = 1; wIn.title = 'Breite EINER Taste (10–999 px)';
-      hIn.min = 10; hIn.max = 500; hIn.step = 1; hIn.title = 'Höhe EINER Taste (10–500 px)';
+      wIn.min = 10; wIn.max = 999; wIn.step = 1; hint(wIn, 'Breite EINER Taste (10–999 px)');
+      hIn.min = 10; hIn.max = 500; hIn.step = 1; hint(hIn, 'Höhe EINER Taste (10–500 px)');
     } else {
       if (hLab) hLab.textContent = 'Höhe';
       if (fgLab) fgLab.textContent = 'Text';
-      wIn.min = 20; wIn.max = 1200; wIn.step = 2; wIn.title = 'Breite des Feldes (px)';
-      hIn.min = 16; hIn.max = 1200; hIn.step = 2; hIn.title = 'Höhe des Feldes (px)';
+      wIn.min = 20; wIn.max = 1200; wIn.step = 2; hint(wIn, 'Breite des Feldes (px)');
+      hIn.min = 16; hIn.max = 1200; hIn.step = 2; hint(hIn, 'Höhe des Feldes (px)');
     }
     this._panel.querySelector('.kme-title').textContent = style.label ?? target.defLabel ?? 'Element';
 

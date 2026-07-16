@@ -17,6 +17,7 @@
  */
 import { NOTE_NAMES, rotateMask } from '../pitch/ScaleModel.js';
 import { freqToMidi, midiToName } from '../pitch/Scaler.js';
+import { hint } from '../core/i18n.js';
 
 const BLACK = new Set([1, 3, 6, 8, 10]); // C#, D#, F#, G#, A#
 // Relative (diatonische) Namen für den Base→C-Modus: do…ti auf 0,2,4,5,7,9,11;
@@ -52,7 +53,7 @@ export class Keyboard {
         head.className = 'kb-head';
         this._readout = document.createElement('div');
         this._readout.className = 'kb-readout kb-readout-hint';
-        this._readout.title = 'Klick: Skala auf der Frequenzachse verschieben (Anker)';
+        hint(this._readout, 'Klick: Skala auf der Frequenzachse verschieben (Anker)');
         this._readout.textContent = '–';
         this._readout.addEventListener('click', () => this._toggleTranspose());
         head.appendChild(this._readout);
@@ -65,7 +66,7 @@ export class Keyboard {
         this._ankBtn = document.createElement('button');
         this._ankBtn.className = 'pb-btn kb-skal2-btn kb-anchor-btn';
         this._ankBtn.textContent = 'Anker';
-        this._ankBtn.title = 'Anker: Skala auf der Frequenzachse verschieben (Transponier-Modus).';
+        hint(this._ankBtn, 'Anker: Skala auf der Frequenzachse verschieben (Transponier-Modus).');
         this._ankBtn.addEventListener('click', () => this._toggleTranspose());
         btns.appendChild(this._ankBtn);
 
@@ -73,14 +74,14 @@ export class Keyboard {
         this._bcBtn = document.createElement('button');
         this._bcBtn.className = 'pb-btn kb-skal2-btn';
         this._bcBtn.textContent = 'base=c';
-        this._bcBtn.title = 'base=c: Skala relativ zur Basis (do re mi); der Klang folgt der BaseFreq.';
+        hint(this._bcBtn, 'base=c: Skala relativ zur Basis (do re mi); der Klang folgt der BaseFreq.');
         this._bcBtn.addEventListener('click', () => this.state.set('baseToC', !this.state.get('baseToC')));
         btns.appendChild(this._bcBtn);
 
         this._skBtn = document.createElement('button');
         this._skBtn.className = 'pb-btn kb-skal2-btn';
         this._skBtn.textContent = 'skal2';
-        this._skBtn.title = 'skal2: die 12 Tasten als abrufbare Skala-Slots (P2). Bleibt auch im Anker-Modus aktiv.';
+        hint(this._skBtn, 'skal2: die 12 Tasten als abrufbare Skala-Slots (P2). Bleibt auch im Anker-Modus aktiv.');
         this._skBtn.addEventListener('click', () => this.state.set('skal2On', !this._skal2()));
         btns.appendChild(this._skBtn);
         head.appendChild(btns);
@@ -209,8 +210,12 @@ export class Keyboard {
         const pc = ((midi % 12) + 12) % 12;
         // Live-Highlight nur im Normal-Modus (im Transponier-Modus leuchtet der Anker).
         // Base→C: die absolute Tonklasse auf ihre RELATIVE Position abbilden (pc − pcBase).
+        // Das gilt auch im skal2-Modus (@dpa 20260716_164359: „Anzeige um 2 versetzt"):
+        // skal2 tauscht nur die BESCHRIFTUNG gegen Slot-Namen – die IO-Reihe darüber ist
+        // dieselbe Maske, und die ist bei Base→C relativ (Index 0 = Basis = do). Das frühere
+        // `&& !this._skal2()` ließ das Highlight dort absolut laufen → um pcBase daneben.
         let showPc = this._transpose ? -1 : pc;
-        if (showPc >= 0 && this.state.get('baseToC') && !this._skal2()) {
+        if (showPc >= 0 && this.state.get('baseToC')) {
             const bpc = ((Math.round(freqToMidi(this.getBaseFreq())) % 12) + 12) % 12;
             showPc = (pc - bpc + 12) % 12;
         }

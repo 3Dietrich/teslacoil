@@ -3,6 +3,8 @@
  */
 import { pickTextFile } from '../core/fileIO.js';
 import { PickMenu } from './PickMenu.js';
+import { icon } from './icons.js';
+import { hint } from '../core/i18n.js';
 
 export class PresetBar {
     /**
@@ -19,18 +21,21 @@ export class PresetBar {
 
     _build() {
         // Transport
-        this._playBtn = this._btn('▶ Start', () => this.toggle(), 'play-btn');
+        this._playBtn = this._btn('', () => this.toggle(), 'play-btn');
         // War als eigener Hint im Header untergebracht – zog dort nur unnötig Platz,
         // gehört inhaltlich sowieso zum Start-Button (@dpa 20260713).
-        this._playBtn.title = 'Leertaste = Start/Stop';
+        hint(this._playBtn, 'Leertaste = Start/Stop');
+        this._paintPlayBtn();
         this.element.appendChild(this._playBtn);
 
         // Sync: bei aktivem Schalter beginnen bei jedem Start alle Sequenzer bei Step 1.
         this._syncBtn = this._btn('', () => this._toggleSync(), 'sync-btn');
-        // Icon separat vom Wort (@dpa 20260714): nur der Reload-Glyph darf größer werden,
-        // die Schrift „Sync" bleibt so groß wie „Start".
-        this._syncBtn.innerHTML = '<span class="sync-ico">⟲</span> Sync';
-        this._syncBtn.title = 'Sync: bei jedem Start alle Sequenzer wieder bei Step 1 beginnen';
+        // Icon + Wort (@dpa 20260714: die Schrift „Sync" bleibt so groß wie „Start", nur das
+        // Zeichen davor darf groß sein). Seit 20260716_164359 ist es ein SVG – der alte
+        // ⟲-Glyph war trotz font-size:18px „zu klein", weil er seine em-Box kaum füllte.
+        this._syncBtn.appendChild(icon('sync'));
+        this._syncBtn.appendChild(document.createTextNode(' Sync'));
+        hint(this._syncBtn, 'Sync: bei jedem Start alle Sequenzer wieder bei Step 1 beginnen');
         this.element.appendChild(this._syncBtn);
         this._updateSyncBtn();
         this.engine.state.subscribe((key) => { if (key === '*' || key === 'syncOnStart') this._updateSyncBtn(); });
@@ -39,9 +44,9 @@ export class PresetBar {
         // dieser Knopf ist für den Ausnahmefall, dass doch mal etwas hängt. Er räumt hart
         // auf (Voices tot, Filter- und Reverb-Speicher genullt); Knacken ist dabei egal.
         this._panicBtn = this._btn('', () => this.engine.audioReset(), 'panic-btn');
-        this._panicBtn.innerHTML = '<span class="panic-ico">⏻</span> Reset';
-        this._panicBtn.title = 'Audio-Panik: alle Töne, Filter- und Hall-Fahnen sofort abwürgen '
-            + '(nur nötig, wenn nach dem Stop etwas hängt – knackt hörbar)';
+        this._panicBtn.appendChild(icon('power'));
+        this._panicBtn.appendChild(document.createTextNode(' Reset'));
+        hint(this._panicBtn, 'Audio-Panik: alle Töne, Filter- und Hall-Fahnen sofort abwürgen (nur nötig, wenn nach dem Stop etwas hängt – knackt hörbar)');
         this.element.appendChild(this._panicBtn);
 
         const sep = () => { const s = document.createElement('span'); s.className = 'pb-sep'; this.element.appendChild(s); };
@@ -71,7 +76,7 @@ export class PresetBar {
                 this.refreshSnapshots();
             },
             foot: [
-                ['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuellen Zustand als neuen Snapshot speichern (gleicher Name = überschreiben)', () => {
+                ['plus', 'Neu…', 'Aktuellen Zustand als neuen Snapshot speichern (gleicher Name = überschreiben)', () => {
                     const name = prompt('Snapshot-Name?', '');
                     if (name === null) return;
                     const list = this.presets.saveSnapshot(name);
@@ -80,11 +85,11 @@ export class PresetBar {
                     this.engine.state.set('snapSel', nm);
                     this.refreshSnapshots();
                 }],
-                ['<span class="pm-fic pb-ic-export">⤓</span>Export', 'Geladenen Snapshot als JSON-Datei sichern', () => this.presets.exportSnapshot(this.engine.state.get('snapSel'))],
+                ['export', 'Export', 'Geladenen Snapshot als JSON-Datei sichern', () => this.presets.exportSnapshot(this.engine.state.get('snapSel'))],
                 // Gegenstück zum Export (@dpa 20260715): Snapshot aus einer Datei holen.
                 // Gleicher Name = überschreiben (Upsert, wie „Neu"), danach direkt geladen –
                 // sonst müsste man ihn nach dem Import erst noch von Hand auswählen.
-                ['<span class="pm-fic pb-ic-import">⤒</span>Import', 'Snapshot aus Datei laden (JSON) – gleicher Name überschreibt', async () => {
+                ['import', 'Import', 'Snapshot aus Datei laden (JSON) – gleicher Name überschreibt', async () => {
                     const f = await pickTextFile();
                     if (!f) return;
                     let res;
@@ -125,9 +130,19 @@ export class PresetBar {
         this._snapMark.title = d && d.changed ? `${d.changed}/${d.total} Parameter gegenüber „${want}" verändert` : '';
     }
 
+    /** Transport-Knopf zeichnen (Icon + Wort). Eine Stelle für beide Zustände: mit dem
+     *  SVG-Icon darf hier kein textContent mehr gesetzt werden – das löschte das Icon. */
+    _paintPlayBtn() {
+        const on = this.engine.running;
+        this._playBtn.textContent = '';
+        this._playBtn.appendChild(icon(on ? 'stop' : 'play'));
+        this._playBtn.appendChild(document.createTextNode(on ? ' Stop' : ' Start'));
+        this._playBtn.classList.toggle('on', on);
+    }
+
     toggle() {
-        if (this.engine.running) { this.engine.stop(); this._playBtn.textContent = '▶ Start'; this._playBtn.classList.remove('on'); }
-        else { this.engine.start(); this._playBtn.textContent = '■ Stop'; this._playBtn.classList.add('on'); }
+        if (this.engine.running) this.engine.stop(); else this.engine.start();
+        this._paintPlayBtn();
     }
 
     _toggleSync() { const st = this.engine.state; st.set('syncOnStart', !st.get('syncOnStart')); }

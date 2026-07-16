@@ -19,7 +19,7 @@ import { PitchOsc } from '../pitch/PitchOsc.js';
 import { GateOsc } from '../core/GateOsc.js';
 import { ScaleModel, NOTE_NAMES, rotateMask } from '../pitch/ScaleModel.js';
 import { quantizeToScale, freqToMidi, midiToFreq, foldToBand } from '../pitch/Scaler.js';
-import { seqAdvance } from '../dsp/stepSeq.js';
+import { seqAdvance, seqDyn } from '../dsp/stepSeq.js';
 import { keytrackCutoff, envPeakMult } from '../dsp/filterMod.js';
 
 export class TeslaEngine {
@@ -331,14 +331,9 @@ export class TeslaEngine {
         const filterEnvTrig = s.get('filterEnvTrig');
         const filtEn = filterEnvTrig === 'seq';
         // Amp-Sequenzer gated die Note (0 = kein Trigger) und skaliert die Velocity.
-        // 'Dyn' biegt die Velocity-Kurve bipolar: −1 = alle Steps auf 75 % (flach),
-        // 0 = linear (roher Step-Wert), +1 = quadratisch v² (Kontrast, "hart/weich").
-        let ampGate = ampEn ? ampSeqV : 1;
-        if (ampEn && ampGate > 0) {
-            const dyn = s.get('ampSeqDyn');
-            const g = ampGate;
-            ampGate = dyn >= 0 ? (g * (1 - dyn) + g * g * dyn) : (g * (1 + dyn) + 0.75 * (-dyn));
-        }
+        // 'Dyn' spreizt die Velocity (@dpa 20260716_164359): 0 = alle Töne gleich laut,
+        // 100 = wie eingestellt, 200 = volle Dynamik. Ein Step auf 0 bleibt off.
+        const ampGate = ampEn ? seqDyn(ampSeqV, s.get('ampSeqDynPct')) : 1;
 
         const open = this.gate.isOpen();
         const von = s.get('fromHz');
@@ -433,7 +428,10 @@ export class TeslaEngine {
             if (lpEnv !== 0 && filterEnvTrig !== 'off') {
                 const doTrig = filtEn ? filtSeqV > 0 : noteOn;
                 if (doTrig) {
-                    const depth = filtEn ? filtSeqV : 1;
+                    // Dyn spreizt die Env-Depth genauso wie beim Amp (@dpa 20260716_164359:
+                    // „das gleiche in Amp Env Dyn"). Nur im 'seq'-Modus: bei 'each' gibt es
+                    // keinen Step-Wert, den man spreizen könnte – da ist die Depth immer voll.
+                    const depth = filtEn ? seqDyn(filtSeqV, s.get('filterSeqDynPct')) : 1;
                     const peakMult = envPeakMult(lpEnv, depth);
                     this.ladder.triggerEnvMult(time, peakMult, s.get('lpAttack'), s.get('lpDecay'));
                 }

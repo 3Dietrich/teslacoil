@@ -5,6 +5,8 @@
  * Supports linear, logarithmic, exponential mapping curves.
  * Rechtsklick öffnet den KnobMetaEditor (Settings) – wie bei jedem anderen Control.
  */
+
+import { hint } from '../core/i18n.js';
 export class Knob {
     /**
      * @param {object} config
@@ -180,7 +182,7 @@ export class Knob {
         // Value display
         this._valueDisplay = document.createElement('span');
         this._valueDisplay.className = 'knob-value';
-        this._valueDisplay.title = 'Klick = auswählen (dann Pfeiltasten), Doppelklick = Wert eingeben';
+        hint(this._valueDisplay, 'Klick = auswählen (dann Pfeiltasten), Doppelklick = Wert eingeben');
         // Einfacher Klick auf den Anzeigewert: Regler auswählen → Pfeiltasten aktiv.
         this._valueDisplay.addEventListener('click', (e) => {
             e.stopPropagation();

@@ -175,10 +175,25 @@ export const DEFAULTS = Object.freeze({
     ampSeqEnabled: false,
     ampSeqLen: 16,
     ampSeqSteps: makeSeqSteps('full'),
-    ampSeqDyn: 0,        // Dynamik-Kurve der Amp-Seq-Velocity: 0 = linear, 1 = quadratisch (v²)
+    ampSeqDyn: 0,        // DEPRECATED (@dpa 20260716_164359): die alte bipolare Kurve −1..+1
+                         // (0 = linear, 1 = v²). Ersetzt durch ampSeqDynPct mit @dpas eigener
+                         // Skala 0/100/200. Bewusst ein NEUER Key statt einer Umrechnung: die
+                         // Bereiche überlappen ([−1,1] vs [0,200]), eine Heuristik hätte einen
+                         // gewollten neuen Dyn=1 stumm zu 100 umgedeutet. Alte Snapshots laden
+                         // ihren ampSeqDyn weiterhin (er wird ignoriert) und bekommen für
+                         // ampSeqDynPct den Default 100 = neutral – genau das, was der alte
+                         // Default 0 (linear) klanglich tat.
+    // Dyn (@dpa 20260716_164359), gleiche Skala für BEIDE Sequenzer:
+    //   0 = alles 100 % · 100 = wie eingestellt · 200 = volle Dynamik (>50 %→100 %, <50 %→min).
+    // Logik in dsp/stepSeq.js → seqDyn().
+    ampSeqDynPct: 100,
+    filterSeqDynPct: 100,
     // Pegel
     amp: 0.7,
     masterVol: 0.8,
+    // Sprache der Hints/Beschriftungen: 'de' | 'en' (@dpa 20260716_164359). Siehe
+    // js/core/i18n.js – selbst vergebene Labels bleiben davon unberührt.
+    lang: 'de',
     dcBlock: true,       // DC-Block/Rumpelfilter aktiv (aus = Extreme erlaubt)
     // Skala-Maske (12 bool)
     scaleMask: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],

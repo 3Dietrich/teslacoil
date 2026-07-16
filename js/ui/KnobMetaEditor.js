@@ -195,7 +195,7 @@ export class KnobMetaEditor {
         if (this._state.get('knobColorSel') === p.name) this._state.set('knobColorSel', '');
       },
       foot: [
-        ['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Farbe + Hintergrund als Preset speichern', () => this._saveColorPreset()],
+        ['plus', 'Neu…', 'Aktuelle Farbe + Hintergrund als Preset speichern', () => this._saveColorPreset()],
         ['— Standard —', 'Eigene Farbe verwerfen (Regler nimmt wieder die Grundfarbe)', () => {
           this._colorCustom = false;
           if (this._state) this._state.set('knobColorSel', '');

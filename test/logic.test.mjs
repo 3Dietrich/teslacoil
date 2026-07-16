@@ -13,7 +13,7 @@ import { pulseCoefficients, harmonicsForFreq, phaseWarp, warpedCoefficients, fmC
 import { LadderCore, prewarp, resToDamping } from '../js/dsp/ladderCore.js';
 import { fft } from '../js/dsp/fft.js';
 import { renderMetroClick } from '../js/dsp/metroClick.js';
-import { makeSeqSteps, seqAdvance, fillSeq, SEQ_MAX } from '../js/dsp/stepSeq.js';
+import { makeSeqSteps, seqAdvance, fillSeq, seqDyn, SEQ_MAX, SEQ_DYN_MIN } from '../js/dsp/stepSeq.js';
 import { bestFraction, reduce } from '../js/pitch/rateFraction.js';
 import { encodeWav, decodeWav } from '../js/dsp/wavEncoder.js';
 import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
@@ -24,6 +24,9 @@ import { hasUserState, fetchFactory } from '../js/data/factory.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 import { slidePlan, slideFreqAt, SLIDE_L } from '../js/dsp/holdSlide.js';
 import { DebugPanel } from '../js/ui/DebugPanel.js';
+import { t as tr, hasTranslation, setLang, EN_KEYS } from '../js/core/i18n.js';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 let pass = 0;
 function t(name, fn) {
@@ -437,6 +440,47 @@ t('seqAdvance: reset erzwingt 0 (set0)', () => {
 t('seqAdvance: length wird auf 1..SEQ_MAX geklemmt', () => {
     assert.equal(seqAdvance(0, 0, false), 0);    // len<1 → 1 → bleibt 0
     assert.equal(seqAdvance(-1, 999, false), 0);
+});
+/* ── Dyn (@dpa 20260716_164359): 0 = alles 100 % · 100 = wie eingestellt · 200 = volle
+      Dynamik (>50 %→100 %, <50 %→min, NICHT aus). Die drei Punkte sind @dpas Ansage –
+      sie stehen hier einzeln, damit eine spätere Kurven-Idee sie nicht still verbiegt. ── */
+t('seqDyn: 0 = alles 100 % (jeder Ton gleich laut)', () => {
+    assert.equal(seqDyn(1, 0), 1);
+    assert.equal(seqDyn(0.5, 0), 1);
+    assert.equal(seqDyn(0.01, 0), 1);
+});
+t('seqDyn: 100 = wie eingestellt (roher Step-Wert)', () => {
+    assert.equal(seqDyn(1, 100), 1);
+    assert.equal(seqDyn(0.5, 100), 0.5);
+    assert.equal(seqDyn(0.2, 100), 0.2);
+});
+t('seqDyn: 200 = volle Dynamik – >50 % auf 100 %, <50 % auf min (nicht aus)', () => {
+    assert.equal(seqDyn(1, 200), 1);
+    assert.equal(seqDyn(0.6, 200), 1);
+    assert.equal(seqDyn(0.5, 200), 1);          // die Hälfte zählt nach oben
+    assert.equal(seqDyn(0.4, 200), SEQ_DYN_MIN);
+    assert.equal(seqDyn(0.05, 200), SEQ_DYN_MIN);
+    assert.ok(SEQ_DYN_MIN > 0, 'min darf nie 0 sein – „nicht aus!"');
+});
+t('seqDyn: Step 0 bleibt 0 – Dyn erfindet keine Töne', () => {
+    // Sonst machte dyn=0 („alles 100 %") aus jeder Pause einen Ton.
+    assert.equal(seqDyn(0, 0), 0);
+    assert.equal(seqDyn(0, 100), 0);
+    assert.equal(seqDyn(0, 200), 0);
+});
+t('seqDyn: stetig – kein Sprung an den Stützstellen, monoton dazwischen', () => {
+    const v = 0.25;
+    // 0 → 100: von 1 auf v
+    assert.ok(Math.abs(seqDyn(v, 50) - (1 + (v - 1) * 0.5)) < 1e-9);
+    // 100 → 200: von v auf min
+    assert.ok(Math.abs(seqDyn(v, 150) - (v + (SEQ_DYN_MIN - v) * 0.5)) < 1e-9);
+    // An der Naht muss beides denselben Wert liefern.
+    assert.equal(seqDyn(v, 100), v);
+});
+t('seqDyn: Dyn wird auf 0..200 geklemmt, fehlender Wert = neutral', () => {
+    assert.equal(seqDyn(0.5, -50), 1);      // wie 0
+    assert.equal(seqDyn(0.5, 999), 1);      // wie 200 (0.5 zählt nach oben)
+    assert.equal(seqDyn(0.5, undefined), 0.5);  // Default 100 = eingestellt
 });
 t('fillSeq: sichtbares Muster kachelt den unsichtbaren Rest', () => {
     const s = makeSeqSteps('first'); // [1,0,0,...]
@@ -878,6 +922,78 @@ t('Debug: Rücksetzen bricht eine laufende Aufnahme ab (hinterher ist nichts meh
     d.resetAll();
     assert.equal(d.recording('a'), false, 'darf nicht weiterlaufen');
     assert.equal(d.lastSeconds('a'), 0, 'der abgebrochene Take darf nicht liegen bleiben');
+});
+
+/* ── i18n (@dpa 20260716_164359) ─────────────────────────────────────────────────
+   Der deutsche Text IST der Schlüssel. Das ist bequem, hat aber genau eine Gefahr:
+   ändert jemand einen deutschen Hint, findet EN[] ihn nicht mehr und die Übersetzung
+   verschwindet STILL (es erscheint wieder Deutsch – niemand merkt es).
+   Dieser Wächter liest die Hints aus dem Quelltext und hält sie gegen EN[]. */
+function sourceHints() {
+    const out = new Set();
+    const walk = (dir) => readdirSync(dir).forEach((f) => {
+        const p = join(dir, f);
+        if (statSync(p).isDirectory()) return walk(p);
+        if (!f.endsWith('.js') || p.includes('i18n.js')) return;
+        const src = readFileSync(p, 'utf8');
+        // Alle Wege, auf denen ein deutscher UI-Text ins i18n läuft – einzeilige,
+        // einfache Literale. Zusammengesetzte ('a' + 'b') und dynamische (`${…}`)
+        // Texte prüft der Wächter bewusst nicht: die erste Hälfte wäre kein Schlüssel.
+        const PATTERNS = [
+            /(?:hint|i18nText)\([^,]+,\s*'((?:[^'\\]|\\.)*)'\s*\)/g,   // hint(el, '…')
+            /iconBtn\('[a-z]+',\s*'((?:[^'\\]|\\.)*)'/g,                 // iconBtn('gear', '…')
+            /\btitle:\s*'((?:[^'\\]|\\.)*)'/g,                           // BUTTONS/KNOBS: title: '…'
+            // foot/Cluster: ['plus', 'Neu…', 'title…', fn]. Bewusst auf die bekannten
+            // Icon-Namen festgenagelt – ein offenes /\['[a-z]+'/ fing sonst JEDES
+            // String-Array (options: ['off','each','seq'], knobs: [...]) als „Hint".
+            /\['(?:plus|export|import|load|edit|trash|gear|close|sync|power|expand|arrange|play|stop|fill|rewind|caret)',\s*'((?:[^'\\]|\\.)*)',\s*'((?:[^'\\]|\\.)*)'/g,
+        ];
+        for (const re of PATTERNS) {
+            for (const m of src.matchAll(re)) {
+                for (const g of m.slice(1)) if (g) out.add(g.replace(/\\'/g, "'"));
+            }
+        }
+    });
+    walk('js');
+    return [...out];
+}
+t('i18n: jeder einzeilige Hint im Code hat eine englische Übersetzung', () => {
+    const missing = sourceHints().filter((h) => h && !hasTranslation(h));
+    assert.deepEqual(missing, [], 'ohne EN-Eintrag (fällt still auf Deutsch zurück):\n  - '
+        + missing.join('\n  - '));
+});
+t('i18n: EN[] enthält keine Leichen (Schlüssel, die es im Code nicht mehr gibt)', () => {
+    // Findet die Umkehrung: ein umformulierter deutscher Text lässt seinen alten
+    // EN-Eintrag als toten Ballast zurück. Nur einzeilige Hints sind hier belegbar,
+    // darum prüfen wir gegen die Vereinigung aus Code-Hints und den bekannten
+    // Sammel-Texten (Buttons/Abschnitte), die aus mehrteiligen Literalen kommen.
+    const known = new Set(sourceHints());
+    // Ein Schlüssel darf auch mehrteilig im Code stehen ('a ' + 'b', Ternär, Wort in einem
+    // längeren Satz). Darum: was der Scanner nicht als Literal fand, muss wenigstens
+    // wörtlich irgendwo im Quelltext vorkommen. Das findet echte Leichen (umformulierter
+    // deutscher Text) und lässt legitime Bauformen in Ruhe – ohne Pflege-Liste.
+    const allSrc = (function read(dir) {
+        return readdirSync(dir).map((f) => {
+            const p = join(dir, f);
+            if (statSync(p).isDirectory()) return read(p);
+            return f.endsWith('.js') && !p.includes('i18n.js') ? readFileSync(p, 'utf8') : '';
+        }).join('\n');
+    })('js');
+    const dead = EN_KEYS.filter((k) => !known.has(k) && !allSrc.includes(k));
+    assert.deepEqual(dead, [], 'EN-Einträge ohne Fundstelle im Code:\n  - ' + dead.join('\n  - '));
+});
+t('i18n: t() gibt Deutsch zurück, solange nicht umgeschaltet ist', () => {
+    assert.equal(tr('Einstellungen'), 'Einstellungen');
+    assert.equal(tr('gibt es nicht'), 'gibt es nicht');   // Unbekanntes bleibt, wie es ist
+});
+t('i18n: nach setLang(en) kommt Englisch, Unbekanntes bleibt deutsch', () => {
+    setLang('en');
+    assert.equal(tr('Einstellungen'), 'Settings');
+    assert.equal(tr('Ein-/Ausklappen'), 'Collapse/expand');
+    // Kein Schlüssel-Kauderwelsch, wenn eine Übersetzung fehlt:
+    assert.equal(tr('völlig unübersetzt'), 'völlig unübersetzt');
+    setLang('de');   // Zustand für die anderen Tests zurückgeben
+    assert.equal(tr('Einstellungen'), 'Einstellungen');
 });
 
 await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind

@@ -7,6 +7,8 @@
  * Eingang/Mikrofon, z.B. um eine physische Tesla-Coil zu vergleichen) mit
  * eigenem Anzeige-Pegel (+volume / „Maximizer").
  */
+
+import { hint } from '../core/i18n.js';
 export class Scopes {
     /**
      * @param {import('../engine/TeslaEngine.js').TeslaEngine} engine
@@ -55,7 +57,7 @@ export class Scopes {
         const scopeBox = document.createElement('div');
         scopeBox.className = 'scope-box';
         const head = document.createElement('div'); head.className = 'scope-head';
-        const onChk = document.createElement('input'); onChk.type = 'checkbox'; onChk.checked = this.scopeOn; onChk.title = 'Anzeige an/aus';
+        const onChk = document.createElement('input'); onChk.type = 'checkbox'; onChk.checked = this.scopeOn; hint(onChk, 'Anzeige an/aus');
         onChk.addEventListener('change', () => { this.scopeOn = onChk.checked; this._scopeCv.style.display = this.scopeOn ? '' : 'none'; this._set('scopeOn', this.scopeOn); });
         this._onChk = onChk;
         head.appendChild(onChk);
@@ -87,7 +89,7 @@ export class Scopes {
         const specBox = document.createElement('div');
         specBox.className = 'scope-box';
         const sHead = document.createElement('div'); sHead.className = 'scope-head';
-        const sOnChk = document.createElement('input'); sOnChk.type = 'checkbox'; sOnChk.checked = this.specOn; sOnChk.title = 'Anzeige an/aus';
+        const sOnChk = document.createElement('input'); sOnChk.type = 'checkbox'; sOnChk.checked = this.specOn; hint(sOnChk, 'Anzeige an/aus');
         sOnChk.addEventListener('change', () => { this.specOn = sOnChk.checked; this._specCv.style.display = this.specOn ? '' : 'none'; this._set('specOn', this.specOn); });
         this._sOnChk = sOnChk;
         sHead.appendChild(sOnChk);

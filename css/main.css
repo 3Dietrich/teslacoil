@@ -23,6 +23,12 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` muss jede display-Regel schlagen. Ohne das hier bleibt ein
+   `el.hidden = true` wirkungslos, sobald das Element irgendwo ein eigenes `display`
+   bekommt (z.B. `.pb-icon { display: inline-flex }`) – Autor-CSS sticht das
+   UA-Stylesheet aus. Genau daran hing der ⤢-Knopf der Kette sichtbar fest. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -50,24 +56,40 @@ body {
   border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 12px;
 }
 .pb-btn:hover { border-color: var(--accent); }
-/* kompakte Icon-Buttons (Snapshot/Layout) */
-.pb-icon { padding: 4px 6px; min-width: 24px; font-size: 12px; line-height: 1; text-align: center; }
+
+/* ── Icons (js/ui/icons.js) ──────────────────────────────────────────────────────
+   @dpa 20260716_164359: „mach die ICONs in deren Rahmen so groß wie möglich" – die
+   Regel steht HIER, einmal, statt als font-size je Icon. Ein SVG-Icon füllt seine
+   24×24-viewBox aus, also ist seine Kantenlänge = seine Rahmengröße. Kein Glyph mehr,
+   dessen Font-Metrik uns die Größe diktiert (s. Kopf von icons.js).
+   Wer ein Icon größer/kleiner will, dreht am Rahmen (--ico) – nicht am Zeichen. */
+.ico { width: var(--ico, 18px); height: var(--ico, 18px); display: block; flex: 0 0 auto; }
+/* Icon-Buttons: das Padding ist nur noch Klickrand, das Icon bekommt den Rest. */
+.pb-icon {
+  --ico: 19px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px; min-width: 26px; line-height: 1;
+}
+/* Icon + Wort nebeneinander (Start/Sync/Reset): das Icon richtet sich an der Textzeile aus. */
+.pb-btn .ico { vertical-align: middle; }
 /* Aktions-Farben: gleiche Glyph-Sprache in allen Clustern, aber klar unterscheidbar
    (↺ laden · ✎ überschreiben · ＋ neu · ⤓ export · ⤒ import). Icons etwas größer als der
    Rest von .pb-icon – die Vierecke bleiben normal (@dpa 20260713: "Icon oft zu klein im Viereck").
    Export/Import sind ein Paar: gleiche Glyph-Familie (⤓/⤒), aber Import bekommt Farbe,
    damit die beiden im Cluster nicht zu Zwillingen verschwimmen (@dpa 20260715). */
-.pb-ic-load   { color: #7fc8ff; font-size: 17px; }
-.pb-ic-save   { color: #ffcf7a; font-size: 17px; }
-.pb-ic-new    { color: #8fe388; font-size: 17px; }
-.pb-ic-export { color: #9aa4b2; font-size: 17px; }
-.pb-ic-import { color: #7ee0c0; font-size: 17px; }
-.pb-ic-del    { color: #ff7a7a; font-size: 17px; }
+.pb-ic-load   { color: #7fc8ff; }
+.pb-ic-save   { color: #ffcf7a; }
+.pb-ic-new    { color: #8fe388; }
+.pb-ic-export { color: #9aa4b2; }
+.pb-ic-import { color: #7ee0c0; }
+.pb-ic-del    { color: #ff7a7a; }
 .pb-icon:hover { border-color: var(--accent); }
 /* Master Vol/Settings/CPU/e-Mode sitzen jetzt in .topbar-right (Kopfzeile Zeile 1).
    „Alles zeigen" an der Kette (fx-showall-btn) bekommt dieselbe Icon+Viereck-Größe. */
 .hdr-cpu { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; min-width: 52px; text-align: right; }
-.settings-btn, .arrange-btn, .fx-showall-btn { padding: 6px 9px; min-width: 30px; font-size: 18px; }
+/* @dpa 20260716_164359 zu diesen dreien: ⚙ „etwas zu klein", ⤢ „Button zu groß, Icon
+   trotzdem zu klein". Jetzt: knapperer Rahmen, Icon füllt ihn. */
+.settings-btn, .arrange-btn, .fx-showall-btn { --ico: 21px; padding: 4px; min-width: 29px; }
 .arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 
 /* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
@@ -93,7 +115,7 @@ body {
 .pm-btn:hover, .pm-btn:focus { outline: none; border-color: var(--accent); }
 .pm-name { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-name.pm-none { color: var(--muted); }   /* nichts geladen */
-.pm-caret { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.pm-caret { flex: 0 0 auto; color: var(--muted); display: flex; --ico: 11px; }
 .pm-pop {
   position: fixed; z-index: 1200; min-width: 200px; max-width: 320px;
   background: var(--panel2); border: 1px solid var(--sel-line); border-radius: 6px;
@@ -118,12 +140,13 @@ body {
    Icons sind noch immer zu klein"), aber ohne Kästchen drumherum. */
 .pm-act {
   flex: 0 0 auto; visibility: hidden; background: none; border: none; border-radius: 3px;
-  padding: 0 3px; line-height: 1; font-size: 16px; cursor: pointer; opacity: .75;
+  display: inline-flex; align-items: center; --ico: 15px;
+  padding: 2px 3px; line-height: 1; cursor: pointer; opacity: .75;
 }
 .pm-item:hover .pm-act, .pm-item.pm-current .pm-act { visibility: visible; }
 .pm-act:hover { opacity: 1; background: rgba(255,255,255,.10); }
 .pm-act.pm-ic-save { color: #ffcf7a; }
-.pm-act.pm-ic-del  { color: #ff7a7a; font-size: 14px; }
+.pm-act.pm-ic-del  { color: #ff7a7a; }
 .pm-empty { color: var(--muted); font-size: 11px; padding: 8px 10px; }
 /* Fußzeile = was die LISTE betrifft (Neu/Import/Export), nicht einen einzelnen Eintrag. */
 .pm-foot { display: flex; gap: 4px; padding: 5px; border-top: 1px solid var(--line); background: var(--panel); }
@@ -131,21 +154,22 @@ body {
   flex: 1 1 auto; background: var(--panel2); color: var(--text);
   border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px;
   font-size: 11px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; --ico: 15px;
 }
 .pm-foot-btn:hover { border-color: var(--accent); }
-.pm-foot-btn .pm-fic { font-size: 15px; line-height: 1; vertical-align: -2px; margin-right: 3px; }
 /* Dirty-Marker: geladener Snapshot wurde verändert (* leicht, ‼ >60% anders). */
 .snap-dirty, .gs-dirty { color: var(--accent2); font-weight: 700; min-width: 10px; font-size: 13px; }
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
+.play-btn, .sync-btn, .panic-btn { display: inline-flex; align-items: center; gap: 6px; --ico: 17px; }
 .play-btn { font-weight: 600; min-width: 84px; }
 .play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
-/* Sync-Schalter neben Start/Stop (aktiv = grün). Nur der Reload-Glyph ist vergrößert,
-   das Wort „Sync" bleibt so groß wie „Start" (@dpa 20260714). */
-.sync-ico { font-size: 18px; line-height: 1; vertical-align: -2px; }
+/* Sync-Schalter neben Start/Stop (aktiv = grün). Das Wort bleibt so groß wie „Start"
+   (@dpa 20260714), das Icon davor ist ein SVG mit eigenem Rahmen (@dpa 20260716_164359 –
+   die frühere font-size:18px auf dem ⟲-Glyph war trotzdem „zu klein"). */
 /* Panik/Reset: dezent, aber als Not-Aus erkennbar (@dpa 20260715). */
 .panic-btn { border-color: #6a2b2b; color: #ff9a9a; }
 .panic-btn:hover { background: #3a1e1e; border-color: #ff5a5a; }
-.panic-ico { font-size: 15px; line-height: 1; vertical-align: -2px; }
+
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
@@ -228,8 +252,12 @@ body {
 .group-collapse, .group-settings-btn {
   background: none; border: none; color: var(--muted); cursor: pointer; font-size: 10px;
   padding: 0 2px; opacity: .5; line-height: 1;
+  display: inline-flex; align-items: center; --ico: 12px;
 }
 .group-collapse:hover, .group-settings-btn:hover { opacity: 1; color: var(--accent); }
+/* Zugeklappt: derselbe Pfeil, nur gedreht – eine Aussage, ein Zeichen. */
+.group-collapse .ico { transition: transform .12s ease; }
+.group-collapse.collapsed .ico { transform: rotate(-90deg); }
 .group.dragging { opacity: .45; }
 
 /* Gruppen-Settings-Popup */
@@ -287,7 +315,9 @@ body {
 .seq-steps { width: 52px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 2px; padding: 2px 4px; font: inherit; }
 .seq-canvas { display: block; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; cursor: crosshair; touch-action: none; }
 /* Seq-Header-Buttons: kompakter Button, größeres Glyph (Mittelmaß, @dpa). */
-.seq-ic { padding: 2px 5px; min-width: 24px; font-size: 15px; line-height: 1; text-align: center; }
+/* Seq-Kopfzeile (Fill/set0/⚙): Icon füllt den Rahmen, s. .ico-Regel oben. */
+.seq-ic { --ico: 16px; display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px; min-width: 24px; line-height: 1; }
 
 /* ── Reflections-Anzeige mit eigenem Settings-Knopf ── */
 .refl-wrap { display: flex; align-items: flex-start; gap: 6px; }
@@ -568,7 +598,11 @@ body {
 .sw-subhead { font-size: 13px; font-weight: 600; color: var(--text); margin: 6px 0 6px; padding-top: 8px; border-top: 1px solid var(--line); }
 /* Icon IM Text-Button (Datei-Sektion): trägt die Aktions-Farbe aus .pb-ic-*, während
    die Beschriftung normal bleibt – so ist die Glyph-Sprache dieselbe wie in den Clustern. */
-.sw-ic { font-size: 15px; line-height: 1; margin-right: 2px; }
+/* Datei-Knöpfe in den Einstellungen: Icon + Wort (früher ein ⤓/⤒-Glyph per innerHTML –
+   der letzte Rest der font-size-Icons, @dpa 20260716_164359). Die Farbe kommt weiter
+   von .pb-ic-export/-import, das SVG erbt sie über currentColor. */
+.sw-file-btn { display: inline-flex; align-items: center; gap: 5px; --ico: 16px; }
+.sw-file-btn span { color: var(--text); }   /* nur das Icon trägt die Aktionsfarbe */
 .pb-btn-danger { border-color: #6a2b2b; color: #ff9a9a; }
 .pb-btn-danger:hover { background: #3a1e1e; border-color: #ff5a5a; }
 
@@ -655,3 +689,8 @@ body {
 .btn-field { display: flex; align-items: flex-end; }
 /* flex, damit Label-Pos (justify/align) im Button überhaupt etwas bewegen kann. */
 .ctrl-btn { display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+/* Button-Control OHNE Text = reines Icon (z.B. Debug-Rec-Rücksetzen). Es bekommt einen
+   quadratischen Rahmen, den das Icon ausfüllt – @dpa 20260716_164359 über das alte ⟲:
+   „Icon so klein, dass es nicht zu erkennen ist". Tippt der User ein Label ein, ist der
+   Knopf wieder ein normaler Text-Knopf (s. makeButton/paint in app.js). */
+.ctrl-btn.ctrl-btn-ico { --ico: 20px; padding: 4px; min-width: 28px; min-height: 28px; }

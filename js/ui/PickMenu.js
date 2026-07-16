@@ -25,6 +25,9 @@
  * will, baut wieder _cluster(...) statt new PickMenu(...) (s. PresetBar._build).
  */
 
+import { icon } from './icons.js';
+import { hint } from '../core/i18n.js';
+
 /** @typedef {{name:string}} PickItem */
 
 export class PickMenu {
@@ -51,9 +54,9 @@ export class PickMenu {
     }
     const btn = document.createElement('button');
     btn.className = 'pm-btn'; btn.type = 'button';
-    btn.title = cfg.title || 'Auswählen · erneut wählen lädt erneut';
+    hint(btn, cfg.title || 'Auswählen · erneut wählen lädt erneut');
     this._name = document.createElement('span'); this._name.className = 'pm-name';
-    const caret = document.createElement('span'); caret.className = 'pm-caret'; caret.textContent = '▾';
+    const caret = document.createElement('span'); caret.className = 'pm-caret'; caret.appendChild(icon('caret'));
     btn.appendChild(this._name); btn.appendChild(caret);
     btn.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(); });
     // Pfeiltasten/Enter am Knopf: Menü öffnen – der Knopf ist ein normales Bedienelement
@@ -88,9 +91,11 @@ export class PickMenu {
     this._list = list;
     if (this._cfg.foot && this._cfg.foot.length) {
       const foot = document.createElement('div'); foot.className = 'pm-foot';
-      this._cfg.foot.forEach(([txt, title, fn]) => {
+      this._cfg.foot.forEach(([ico, label, title, fn]) => {
         const b = document.createElement('button'); b.className = 'pm-foot-btn'; b.type = 'button';
-        b.innerHTML = txt; b.title = title;
+        b.appendChild(icon(ico));
+        b.appendChild(document.createTextNode(label));
+        hint(b, title);
         b.addEventListener('click', (e) => { e.stopPropagation(); this.close(); fn(); });
         foot.appendChild(b);
       });
@@ -138,14 +143,14 @@ export class PickMenu {
       // Klick auf die Zeile lädt – auch auf der markierten (genau der Punkt, an dem das
       // native <select> versagt hat: es feuert dort kein 'change').
       row.addEventListener('click', (e) => { e.stopPropagation(); this.close(); this._cfg.onPick(i, it); this.refresh(); });
-      const act = (glyph, title, fn, kind) => {
+      const act = (name, title, fn, kind) => {
         const b = document.createElement('button'); b.className = 'pm-act pm-ic-' + kind; b.type = 'button';
-        b.textContent = glyph; b.title = title; b.setAttribute('aria-label', title);
+        b.appendChild(icon(name)); b.setAttribute('aria-label', title); hint(b, title);
         b.addEventListener('click', (e) => { e.stopPropagation(); fn(i, it); this.refresh(); this._fill(); });
         row.appendChild(b);
       };
-      if (this._cfg.onUpdate) act('✎', `„${it.name}" mit dem aktuellen Zustand überschreiben`, this._cfg.onUpdate, 'save');
-      if (this._cfg.onDelete) act('🗑', `„${it.name}" löschen`, this._cfg.onDelete, 'del');
+      if (this._cfg.onUpdate) act('edit', `„${it.name}" mit dem aktuellen Zustand überschreiben`, this._cfg.onUpdate, 'save');
+      if (this._cfg.onDelete) act('trash', `„${it.name}" löschen`, this._cfg.onDelete, 'del');
       list.appendChild(row);
     });
     // „Wenn die Liste groß ist, soll sie gescrollt werden, damit der markierte Snapshot

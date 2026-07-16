@@ -107,6 +107,11 @@ export class PresetManager {
         'seqStyles',
         'skal2On', 'skal2Active', 'skal2Slots',
         'debugName', 'debugPrompt',
+        // Sprache ist eine Anzeige-Einstellung, kein Klang (@dpa 20260716_164359: „wird auch
+        // in Backups gespeichert – logisch"). Als LAYOUT_KEY landet sie im Backup und im
+        // Optik-Layout, aber NICHT im Sound-Snapshot: ein Snapshot-Recall darf niemandem
+        // die Sprache umstellen.
+        'lang',
     ];
 
     /** Optische Felder aus einem State-Objekt herausziehen. */

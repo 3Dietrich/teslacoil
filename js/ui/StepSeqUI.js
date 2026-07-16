@@ -15,6 +15,8 @@
  */
 import { fillSeq, SEQ_MAX } from '../dsp/stepSeq.js';
 import { Knob } from './Knob.js';
+import { icon } from './icons.js';
+import { hint } from '../core/i18n.js';
 
 const DRAG_THRESH = 4;   // px: darüber = Höhe ziehen, darunter = Klick (Gate toggeln)
 // Per-Typ-Default: Balkenfarbe unterscheidet Filter (cyan) und Amp (orange).
@@ -65,7 +67,7 @@ export class StepSeqUI {
         const lab = document.createElement('span'); lab.className = 'seq-lab'; lab.textContent = 'Steps';
         const num = document.createElement('input'); num.type = 'number'; num.className = 'seq-steps';
         num.min = 1; num.max = SEQ_MAX; num.step = 1; num.value = this._len();
-        num.title = 'Sequenz-Länge (1…' + SEQ_MAX + ' Steps)';
+        hint(num, 'Sequenz-Länge (1…' + SEQ_MAX + ' Steps)');
         num.addEventListener('change', () => {
             let v = Math.round(parseFloat(num.value) || 1);
             v = Math.max(1, Math.min(SEQ_MAX, v));
@@ -73,16 +75,16 @@ export class StepSeqUI {
         });
         this._num = num;
         const fill = document.createElement('button');
-        fill.className = 'pb-btn seq-ic'; fill.textContent = '⇥';
-        fill.title = 'Fill: sichtbares Muster über den unsichtbaren Rest wiederholen';
+        fill.className = 'pb-btn seq-ic'; fill.appendChild(icon('fill'));
+        hint(fill, 'Fill: sichtbares Muster über den unsichtbaren Rest wiederholen');
         fill.addEventListener('click', () => this._write(fillSeq(this._steps(), this._len())));
         const s0 = document.createElement('button');
-        s0.className = 'pb-btn seq-ic'; s0.textContent = '⏮';
-        s0.title = 'set0: der nächste Trigger startet wieder bei Step 1';
+        s0.className = 'pb-btn seq-ic'; s0.appendChild(icon('rewind'));
+        hint(s0, 'set0: der nächste Trigger startet wieder bei Step 1');
         s0.addEventListener('click', () => this.engine.resetSeq(this.which));
         const cog = document.createElement('button');
-        cog.className = 'pb-btn seq-ic'; cog.textContent = '⚙';
-        cog.title = 'Anzeige: Größe, Hintergrund- & Balkenfarbe (mit Alpha)';
+        cog.className = 'pb-btn seq-ic'; cog.appendChild(icon('gear'));
+        hint(cog, 'Anzeige: Größe, Hintergrund- & Balkenfarbe (mit Alpha)');
         cog.addEventListener('click', () => this._openSettings(cog));
         head.appendChild(lab); head.appendChild(num); head.appendChild(fill); head.appendChild(s0); head.appendChild(cog);
 

@@ -12,6 +12,7 @@
  */
 import { State, DEFAULTS } from './core/State.js';
 import { globalKeyOk, arrowKeyOk } from './core/keyRoute.js';
+import { t, hint, text as i18nText, setLang, onLangChange } from './core/i18n.js';
 import { TeslaEngine } from './engine/TeslaEngine.js';
 import { Knob } from './ui/Knob.js';
 import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
@@ -23,6 +24,7 @@ import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { PresetBar } from './ui/PresetBar.js';
 import { PickMenu } from './ui/PickMenu.js';
+import { icon } from './ui/icons.js';
 import { PresetManager } from './data/PresetManager.js';
 import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
 import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
@@ -83,7 +85,10 @@ const KNOBS = {
     revPreDelay:  { label: 'Pre-Delay', min: 0, max: 200, step: 1, curve: 'linear', unit: 'ms', decimals: 0 },
     revSeed:      { label: 'Seed', min: 1, max: 999, step: 1, curve: 'linear', unit: '', decimals: 0 },
     amp:          { label: 'Amp', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
-    ampSeqDyn:    { label: 'Dyn', min: -1, max: 1, curve: 'linear', unit: '', decimals: 2 },
+    // Dyn (@dpa 20260716_164359): 0 = alles 100 % · 100 = wie eingestellt · 200 = volle
+    // Dynamik. Gleiche Skala für beide Sequenzer, Logik in dsp/stepSeq.js → seqDyn().
+    ampSeqDynPct:    { label: 'Dyn', min: 0, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
+    filterSeqDynPct: { label: 'Dyn', min: 0, max: 200, step: 1, curve: 'linear', unit: '%', decimals: 0 },
     masterVol:    { label: 'Volume', min: 0, max: 1, curve: 'linear', unit: '', decimals: 2 },
     metroL:       { label: 'l', min: 1, max: 16, step: 1, curve: 'linear', unit: '', decimals: 0 },
     metroM:       { label: 'm', min: 1, max: 16, step: 1, curve: 'linear', unit: '', decimals: 0 },
@@ -132,7 +137,10 @@ const NOTES = {
 const BUTTONS = {
     debugRec:  { label: 'Rec',  title: 'Audio parallel am Master abgreifen (Hörweg unberührt) – Start/Stop' },
     debugRec2: { label: 'Rec2', title: 'Zweite Aufnahme zum Vergleich (vorher/nachher) – Start/Stop' },
-    debugRecReset: { label: '⟲', title: 'Beide Aufnahmen verwerfen (Rec und Rec2 leeren)' },
+    // Leeres Label + `icon` = der Button zeigt das SVG-Icon (@dpa 20260716_164359: das ⟲
+    // hier war „so klein, dass es nicht zu erkennen ist"). Tippt der User in den Settings
+    // einen eigenen Text ein, gewinnt der Text – das Label bleibt selbst ernennbar.
+    debugRecReset: { label: '', icon: 'sync', title: 'Beide Aufnahmen verwerfen (Rec und Rec2 leeren)' },
     debugSave: { label: 'Debug speichern', title: 'Audio (WAV, beide Aufnahmen) + Screenshot (PNG) + Zustand (JSON) + Prompt (TXT) einzeln herunterladen' },
 };
 
@@ -171,7 +179,7 @@ const GROUPS = [
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
     // Lowpass auf dem OSC: Cutoff (+ Reso ab 2p) mit Decay-Env (Takt×Gate).
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
-    { name: 'Filter', selects: ['filterType', 'lpMode', 'filterEnvTrig'], toggles: ['filterEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide'], filter: true, seq: 'filter' },
+    { name: 'Filter', selects: ['filterType', 'lpMode', 'filterEnvTrig'], toggles: ['filterEnabled'], knobs: ['lpCutoff', 'lpReso', 'lpEnv', 'lpAttack', 'lpDecay', 'lpKeyTrack', 'lpGlide', 'filterSeqDynPct'], filter: true, seq: 'filter' },
     // Distortion: Effekt-Slot vor dem Reverb.
     { name: 'Distortion', selects: ['distMode'], toggles: ['distEnabled'], knobs: ['distDrive', 'distOut', 'distMix', 'distDryDelay'], dist: true },
     // Envelope: P→Len als kleine „Satelliten" an der Länge. Amp-Sequenzer = Gate/Velocity.
@@ -179,7 +187,7 @@ const GROUPS = [
     // 20260713): envPercent (Länge), envPitchLo (P→Len tief), envPitchHi (P→Len hoch).
     // 'Slide' (ampHoldGlide) sitzt neben dem Hold-Schalter und zeigt sich nur bei hold=on –
     // ohne Hold hat er keine Bedeutung (@dpa 20260715: „nur sichtbar bei hold=on").
-    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampHoldGlide', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDyn'], seq: 'amp' },
+    { name: 'Envelope', toggles: ['ampSeqEnabled', 'ampHold'], knobs: ['attack', 'ampDecay', 'ampHoldGlide', 'envPercent', 'envPitchLo', 'envPitchHi', 'ampPitchAmt', 'amp', 'ampSeqDynPct'], seq: 'amp' },
     // Gate-Reverb: Effekt-Slot mit Umschalter; Regler nur sichtbar wenn aktiv.
     // revView ist fest auf 'Beide' verdrahtet (@dpa 20260714) – der Schalter ist raus,
     // die Migration in boot() zieht alte gespeicherte 'L'/'R'-Stände nach.
@@ -426,7 +434,7 @@ async function boot() {
         sel.value = state.get(key);
         // MouseOver-Info je nach gewählter Option (falls die Select-Def welche mitgibt,
         // z.B. Env-Trig off/each/seq) – live nachziehen bei Änderung/Recall.
-        const applyTitle = () => { if (cfg.optionTitles) sel.title = cfg.optionTitles[sel.value] || ''; };
+        const applyTitle = () => { if (cfg.optionTitles) hint(sel, cfg.optionTitles[sel.value] || ''); };
         applyTitle();
         sel.addEventListener('change', () => { state.set(key, sel.value); applyTitle(); });
         // Vertikal ziehen wechselt die Option (Trefferzone = ganzes Feld außer dem Select).
@@ -464,7 +472,7 @@ async function boot() {
         const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = state.get(key);
         chk.addEventListener('change', () => state.set(key, chk.checked));
         const span = document.createElement('span'); span.textContent = cfg.label;
-        if (cfg.title) wrap.title = cfg.title;   // Erklärung dort, wo das Label knapp ist
+        if (cfg.title) hint(wrap, cfg.title);   // Erklärung dort, wo das Label knapp ist
         // Nach oben ziehen = an, nach unten = aus (wie ein Regler); Trefferzone = ganzes Feld
         // außer der Checkbox. Klick auf die Checkbox bleibt normale Bedienung.
         span.classList.add('ctrl-label-drag');
@@ -583,11 +591,18 @@ async function boot() {
         const cfg = BUTTONS[key];
         const wrap = document.createElement('div'); wrap.className = 'btn-field';
         const btn = document.createElement('button'); btn.className = 'pb-btn ctrl-btn';
-        btn.title = cfg.title || '';
+        if (cfg.title) hint(btn, cfg.title);
         wrap.appendChild(btn);
         wrap.dataset.ctrl = 'b:' + key;
         let label = cfg.label;
-        const paint = () => { btn.textContent = dynamicLabel ? dynamicLabel(label) : label; };
+        // Ein Button ohne Text zeigt sein Icon (falls er eins hat) – siehe BUTTONS.
+        // Ein vom User vergebenes Label sticht das Icon immer aus.
+        const paint = () => {
+            const txt = dynamicLabel ? dynamicLabel(label) : label;
+            btn.textContent = '';
+            if (!txt && cfg.icon) { btn.classList.add('ctrl-btn-ico'); btn.appendChild(icon(cfg.icon)); }
+            else { btn.classList.remove('ctrl-btn-ico'); btn.textContent = txt; }
+        };
         paint();
         btn.refresh = paint;   // der Besitzer (z.B. Debug) stößt Neuzeichnen an
         btn.addEventListener('click', () => { onClick(); paint(); });
@@ -630,11 +645,14 @@ async function boot() {
         ctrlEls.set(key, knob.element);
         return knob;
     }
-    // Kleiner Icon-Button (glyph + title) – für die kompakten Preset-Cluster.
+    // Kleiner Icon-Button – für die kompakten Preset-Cluster.
+    // `name` ist ein Icon aus js/ui/icons.js (SVG, füllt seinen Rahmen; @dpa 20260716_164359).
     // `kind` (load/save/new/export) gibt ihm eine Aktions-Farbe → klar unterscheidbar.
-    function iconBtn(glyph, title, fn, kind = '') {
+    function iconBtn(name, title, fn, kind = '') {
         const b = document.createElement('button'); b.className = 'pb-btn pb-icon' + (kind ? ' pb-ic-' + kind : '');
-        b.textContent = glyph; b.title = title; b.setAttribute('aria-label', title);
+        b.appendChild(icon(name));
+        b.setAttribute('aria-label', title);   // muss VOR hint() stehen – hint() pflegt es mit
+        hint(b, title);
         b.addEventListener('click', fn); return b;
     }
     // Flacher, aligned Preset-Cluster (gleiche Optik wie Snapshot/Optik).
@@ -646,7 +664,7 @@ async function boot() {
         return box;
     }
     // Keys, deren Umschalten Controls ein-/ausblendet → Gruppenhöhe ändert sich.
-    const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn', 'ampHold']);
+    const VIS_TOGGLE_KEYS = new Set(['filterEnabled', 'filterType', 'lpMode', 'reverbEnabled', 'distEnabled', 'distMode', 'metroEnabled', 'metroCutoffQuant', 'oscEngine', 'pitchWave', 'baseSrc', 'gateEnabled', 'baseTestOn', 'ampHold', 'ampSeqEnabled']);
     // Skaler-Rate als Vielfaches der BaseFrq – reine ANZEIGE (@dpa 20260715_224643:
     // „quant fest auf aus … nur noch die ×… Base anzeige"). Die Rate-Quantisierung auf
     // einen Bruch k/l samt 'Quant'-Schalter und den k max/l max-Reglern ist ersatzlos
@@ -670,6 +688,7 @@ async function boot() {
     let p2Refresh = () => {};
     let p2Bar = null;   // Referenz für Sichtbarkeit (nur im skal2-Modus zeigen)
     let fxChainRender = () => {};
+    let fxChainVisUpdate = () => {};   // ⤢-Knopf zeigen/verstecken (nur bei Überlauf, s. makeFxChainBar)
 
     // Skala-Presets (laden/sichern) – gehören in die Skaler-Gruppe.
     // Die getroffene Auswahl wird in der Optik gemerkt (state.scaleSel) → Recall/Reset-fest.
@@ -689,7 +708,7 @@ async function boot() {
                 presets.deleteScale(i);
                 if (state.get('scaleSel') === it.name) state.set('scaleSel', '');
             },
-            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Maske als neue Skala speichern', () => {
+            foot: [['plus', 'Neu…', 'Aktuelle Maske als neue Skala speichern', () => {
                 const name = prompt('Skalen-Name?', '');
                 if (name === null) return;
                 const list = presets.saveScale(name);
@@ -718,7 +737,7 @@ async function boot() {
                 presets.deleteP2(i);
                 if (state.get('p2Sel') === it.name) state.set('p2Sel', '');
             },
-            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Die 12 Slots als neues P2 speichern', () => {
+            foot: [['plus', 'Neu…', 'Die 12 Slots als neues P2 speichern', () => {
                 const name = prompt('P2-Name?', '');
                 if (name === null) return;
                 const list = presets.saveP2(name);
@@ -744,9 +763,13 @@ async function boot() {
         const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.01;
         vol.className = 'mi-vol'; vol.value = state.get('masterVol');
         vol.addEventListener('input', () => state.set('masterVol', parseFloat(vol.value)));
+        // Doppelklick = 0 dB (@dpa 20260716_164359). Bewusst NICHT State.DEFAULTS (0.8 ≈
+        // −1.9 dB): der Fader ist linear Amplitude, Unity-Gain ist der Bezugspunkt, den man
+        // beim Pegeln sucht – nicht der Auslieferungswert.
+        vol.addEventListener('dblclick', () => { state.set('masterVol', 1); vol.value = 1; });
         ctrlBindings.set('masterVol', (data) => { vol.value = data.masterVol; });
         const volWrap = document.createElement('label'); volWrap.className = 'pb-field';
-        const vlab = document.createElement('span'); vlab.className = 'mi-title'; vlab.textContent = 'Master Vol'; volWrap.appendChild(vlab); volWrap.appendChild(vol);
+        const vlab = document.createElement('span'); vlab.className = 'mi-title'; i18nText(vlab, 'Master Vol'); volWrap.appendChild(vlab); volWrap.appendChild(vol);
         bar.appendChild(volWrap);
         return bar;
     }
@@ -761,8 +784,13 @@ async function boot() {
     let fxShowAll = false;
     function makeFxChainBar() {
         const wrap = document.createElement('div'); wrap.className = 'fx-chain-wrap';
-        const lab = document.createElement('span'); lab.className = 'fx-chain-lab'; lab.textContent = 'Kette';
-        const showAllBtn = iconBtn('⤢', 'Alles zeigen (umbrechen statt scrollen)', () => { fxShowAll = !fxShowAll; wrap.classList.toggle('fx-showall', fxShowAll); showAllBtn.classList.toggle('on', fxShowAll); });
+        const lab = document.createElement('span'); lab.className = 'fx-chain-lab'; i18nText(lab, 'Kette');
+        const showAllBtn = iconBtn('expand', 'Alles zeigen (umbrechen statt scrollen)', () => {
+            fxShowAll = !fxShowAll;
+            wrap.classList.toggle('fx-showall', fxShowAll);
+            showAllBtn.classList.toggle('on', fxShowAll);
+            fxChainVisUpdate();
+        });
         showAllBtn.classList.add('fx-showall-btn');
         const bar = document.createElement('div'); bar.className = 'fx-chain';
         let dragName = null;
@@ -785,7 +813,7 @@ async function boot() {
                 const chip = document.createElement('span');
                 chip.className = 'fx-node fx-chip ' + (isEff ? 'fx-eff' : 'fx-src');
                 chip.dataset.fx = name; chip.draggable = true;
-                chip.title = isEff ? 'Effekt – ziehen zum Umsortieren' : 'Quelle Metronom – ziehen; Position bestimmt, wo es in die Kette einspeist (ganz hinten = parallel)';
+                hint(chip, isEff ? 'Effekt – ziehen zum Umsortieren' : 'Quelle Metronom – ziehen; Position bestimmt, wo es in die Kette einspeist (ganz hinten = parallel)');
                 chip.innerHTML = (isEff ? '<i class="fx-port fx-in"></i>' : '') + `<span class="fx-node-lab">${name}</span><i class="fx-port fx-out"></i>`;
                 chip.addEventListener('dragstart', (e) => { dragName = name; chip.classList.add('drag'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', name); } catch { /* noop */ } });
                 chip.addEventListener('dragend', () => { dragName = null; chip.classList.remove('drag'); clearMarks(); });
@@ -814,6 +842,20 @@ async function boot() {
         };
         fxChainRender = render; render();
         wrap.appendChild(lab); wrap.appendChild(bar); wrap.appendChild(showAllBtn);
+        // Der ⤢-Knopf zeigt sich NUR, wenn es etwas aufzuklappen gibt (@dpa 20260716_164359:
+        // „wenn alles sichtbar ist, braucht es den Aufklapp-Button nicht"). Überlauf =
+        // die Zeile scrollt (scrollWidth > clientWidth) – das misst nur im nicht-umgebrochenen
+        // Zustand etwas, im showall-Zustand gibt es per Definition keinen Überlauf mehr.
+        // Darum bleibt er sichtbar, solange showall AN ist: sonst nähme man dem User den
+        // einzigen Weg zurück.
+        const updateShowAllVis = () => {
+            const overflow = bar.scrollWidth > bar.clientWidth + 1;
+            showAllBtn.hidden = !fxShowAll && !overflow;
+        };
+        fxChainVisUpdate = updateShowAllVis;
+        // Der Überlauf hängt an der Fensterbreite UND am Inhalt (Chips kommen/gehen).
+        new ResizeObserver(updateShowAllVis).observe(bar);
+        requestAnimationFrame(updateShowAllVis);
         return wrap;
     }
     presetBar.element.appendChild(makeFxChainBar());
@@ -839,15 +881,21 @@ async function boot() {
         }, 300);
     };
     state.subscribe((key) => { if (key === '*' || OPTIK_KEYS.has(key)) persistOptik(); });
+    // Sprache: der State ist auch hier die Quelle – ein Backup-Restore oder Layout-Recall
+    // schaltet die Oberfläche live mit um (@dpa 20260716_164359).
+    const applyLangFromState = () => setLang(state.get('lang') || 'de');
+    state.subscribe((key) => { if (key === '*' || key === 'lang') applyLangFromState(); });
+    applyLangFromState();
 
     // ── Kopfzeile Zeile 1 (rechts): Master Vol · Settings · CPU · e-Mode (@dpa 20260713:
     //    zieht in die vorher fast leere erste Zeile, Zeile 2 bleibt Start·Snapshot·Kette·DC). ──
-    const settingsBtn = iconBtn('⚙', 'Einstellungen', () => openSettings());
+    const settingsBtn = iconBtn('gear', 'Einstellungen', () => openSettings());
     settingsBtn.classList.add('settings-btn');
     // Hint sagt jetzt, was der Modus IST und wie man ihn ruft (@dpa 20260716_132014:
     // „bitte Hint anpassen: shortcut, nicht mehr experimentell").
-    const arrBtn = iconBtn('⇄', 'Anordnen-Modus (Taste „e"): Elemente frei ziehen · Klick/Tab wählt aus · '
-        + 'Pfeiltasten verschieben (10px, Shift = 1px) · hier wird nichts bedient', () => setArranging(!arranging));
+    // Ein Literal, keine Konkatenation: der Hint IST der i18n-Schlüssel (js/core/i18n.js) –
+    // aus 'a' + 'b' wird zur Laufzeit ein Satz, den das Dictionary nicht kennt.
+    const arrBtn = iconBtn('arrange', 'Anordnen-Modus (Taste „e"): Elemente frei ziehen · Klick/Tab wählt aus · Pfeiltasten verschieben (10px, Shift = 1px) · hier wird nichts bedient', () => setArranging(!arranging));
     arrBtn.classList.add('arrange-btn');
     const cpuEl = document.createElement('span'); cpuEl.className = 'hdr-cpu'; cpuEl.textContent = 'CPU –';
     const hdrRight = document.createElement('div'); hdrRight.className = 'topbar-right';
@@ -870,7 +918,7 @@ async function boot() {
 
     // ── Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala ──
     const levelMeter = document.createElement('canvas'); levelMeter.className = 'level-meter';
-    levelMeter.width = 46; levelMeter.height = 340; levelMeter.title = 'Ausgangspegel (dBFS, Peak-Hold)';
+    levelMeter.width = 46; levelMeter.height = 340; hint(levelMeter, 'Ausgangspegel (dBFS, Peak-Hold)');
     document.body.appendChild(levelMeter);
     const METER_DB_MIN = -48;
     const METER_TICKS = [0, -6, -12, -24, -36, -48];
@@ -915,21 +963,39 @@ async function boot() {
         const win = document.createElement('div'); win.className = 'settings-window';
 
         const head = document.createElement('div'); head.className = 'sw-head';
-        const t = document.createElement('span'); t.textContent = 'Einstellungen'; head.appendChild(t);
-        const x = iconBtn('✕', 'Schließen', closeSettings); head.appendChild(x);
+        const t = document.createElement('span'); i18nText(t, 'Einstellungen'); head.appendChild(t);
+        const x = iconBtn('close', 'Schließen', closeSettings); head.appendChild(x);
         win.appendChild(head);
 
         const note = document.createElement('p'); note.className = 'sw-note';
-        note.textContent = 'Auto-Restore ist aktiv: Sound- und Optik-Zustand werden automatisch '
-            + 'gesichert und beim Neuladen/Aktualisieren wiederhergestellt.';
+        i18nText(note, 'Auto-Restore ist aktiv: Sound- und Optik-Zustand werden automatisch gesichert und beim Neuladen/Aktualisieren wiederhergestellt.');
         win.appendChild(note);
 
+        // ── Sprache (@dpa 20260716_164359: „Es soll sowohl für einen deutschen, als auch
+        // english speaker alles Verständlich sein"). Steht bewusst ganz oben: wer die Sprache
+        // sucht, soll sie finden, ohne den Rest lesen zu müssen. Umgeschaltet wird LIVE
+        // (js/core/i18n.js) – kein Neuladen, und die selbst vergebenen Namen bleiben. ──
+        const lgHead = document.createElement('div'); lgHead.className = 'sw-subhead';
+        i18nText(lgHead, 'Sprache');
+        win.appendChild(lgHead);
+        const lgNote = document.createElement('p'); lgNote.className = 'sw-note';
+        i18nText(lgNote, 'Sprache der Hinweise und Beschriftungen (selbst vergebene Namen bleiben unverändert)');
+        win.appendChild(lgNote);
+        const lgRow = document.createElement('div'); lgRow.className = 'sw-actions';
+        const lgSel = document.createElement('select'); lgSel.className = 'pb-select';
+        [['de', 'Deutsch'], ['en', 'English']].forEach(([v, n]) => {
+            const o = document.createElement('option'); o.value = v; o.textContent = n; lgSel.appendChild(o);
+        });
+        lgSel.value = state.get('lang') || 'de';
+        lgSel.addEventListener('change', () => state.set('lang', lgSel.value));
+        lgRow.appendChild(lgSel);
+        win.appendChild(lgRow);
+
         // ── Ausgang: DC-Block (@dpa 20260716_132014 hierher verschoben) ──
-        const dcHead = document.createElement('div'); dcHead.className = 'sw-subhead'; dcHead.textContent = 'Ausgang';
+        const dcHead = document.createElement('div'); dcHead.className = 'sw-subhead'; i18nText(dcHead, 'Ausgang');
         win.appendChild(dcHead);
         const dcNote = document.createElement('p'); dcNote.className = 'sw-note';
-        dcNote.textContent = 'Entfernt den Gleichanteil aus dem Ausgangssignal (Lautsprecherschutz). '
-            + 'Ein Puls-Synth erzeugt ihn zwangsläufig – aus lassen nur, wenn man ihn wirklich braucht.';
+        i18nText(dcNote, 'Entfernt den Gleichanteil aus dem Ausgangssignal (Lautsprecherschutz). Ein Puls-Synth erzeugt ihn zwangsläufig – aus lassen nur, wenn man ihn wirklich braucht.');
         win.appendChild(dcNote);
         const dcRow = document.createElement('div'); dcRow.className = 'sw-actions';
         dcRow.appendChild(dcToggle);
@@ -937,11 +1003,10 @@ async function boot() {
 
         // ── Backups (@dpa 20260714): vollständige Sicherungen aller Keys, gestaffelt
         // aufbewahrt. Auswahl + Laden (setzt ALLES zurück auf den Stand) + manuelles Sichern. ──
-        const bkHead = document.createElement('div'); bkHead.className = 'sw-subhead'; bkHead.textContent = 'Backups';
+        const bkHead = document.createElement('div'); bkHead.className = 'sw-subhead'; i18nText(bkHead, 'Backups');
         win.appendChild(bkHead);
         const bkNote = document.createElement('p'); bkNote.className = 'sw-note';
-        bkNote.textContent = 'Automatisch nach jeder Ruhephase gesichert (max. 2/Min, 5/Std, 1/Tag, 1/Woche). '
-            + 'Ein Backup zu laden ersetzt den KOMPLETTEN Zustand (Sound, Optik, Snapshots, Skalen, Layouts).';
+        i18nText(bkNote, 'Automatisch nach jeder Ruhephase gesichert (max. 2/Min, 5/Std, 1/Tag, 1/Woche). Ein Backup zu laden ersetzt den KOMPLETTEN Zustand (Sound, Optik, Snapshots, Skalen, Layouts).');
         win.appendChild(bkNote);
 
         const bkRow = document.createElement('div'); bkRow.className = 'sw-actions';
@@ -950,14 +1015,14 @@ async function boot() {
         const refreshBackups = () => {
             bkSel.innerHTML = '';
             const list = readBackups(localStorage).slice().sort((a, b) => b.ts - a.ts);   // neueste zuerst
-            if (!list.length) { const o = document.createElement('option'); o.textContent = '— keine Backups —'; o.value = ''; bkSel.appendChild(o); bkSel.disabled = true; return; }
+            if (!list.length) { const o = document.createElement('option'); i18nText(o, '— keine Backups —'); o.value = ''; bkSel.appendChild(o); bkSel.disabled = true; return; }
             bkSel.disabled = false;
-            const ph = document.createElement('option'); ph.textContent = '— Backup wählen —'; ph.value = ''; bkSel.appendChild(ph);
+            const ph = document.createElement('option'); i18nText(ph, '— Backup wählen —'); ph.value = ''; bkSel.appendChild(ph);
             list.forEach((b) => { const o = document.createElement('option'); o.value = String(b.ts); o.textContent = fmtTs(b.ts) + (b.label ? '  · ' + b.label : ''); bkSel.appendChild(o); });
         };
         refreshBackups();
-        const bkLoad = document.createElement('button'); bkLoad.className = 'pb-btn'; bkLoad.textContent = 'Laden';
-        bkLoad.title = 'Gewähltes Backup wiederherstellen (ersetzt alles) und neu laden';
+        const bkLoad = document.createElement('button'); bkLoad.className = 'pb-btn'; i18nText(bkLoad, 'Laden');
+        hint(bkLoad, 'Gewähltes Backup wiederherstellen (ersetzt alles) und neu laden');
         bkLoad.addEventListener('click', () => {
             const ts = Number(bkSel.value); if (!ts) return;
             const b = readBackups(localStorage).find((x) => x.ts === ts); if (!b) return;
@@ -966,8 +1031,8 @@ async function boot() {
             restoreState(localStorage, b.data);
             location.reload();   // sauberer Boot aus dem wiederhergestellten teslacoil_live
         });
-        const bkSave = document.createElement('button'); bkSave.className = 'pb-btn'; bkSave.textContent = 'Jetzt sichern';
-        bkSave.title = 'Sofort ein Backup des aktuellen Zustands anlegen';
+        const bkSave = document.createElement('button'); bkSave.className = 'pb-btn'; i18nText(bkSave, 'Jetzt sichern');
+        hint(bkSave, 'Sofort ein Backup des aktuellen Zustands anlegen');
         bkSave.addEventListener('click', () => { try { pushBackup(localStorage, Date.now(), 'manuell'); refreshBackups(); } catch { alert('Backup fehlgeschlagen (Speicher voll?).'); } });
         bkRow.appendChild(bkSel); bkRow.appendChild(bkLoad); bkRow.appendChild(bkSave);
         win.appendChild(bkRow);
@@ -977,17 +1042,18 @@ async function boot() {
         // Als Datei ist der Zustand transportabel und echt aufbewahrbar. Bewusst eine
         // eigene Sektion, damit „Laden" oben (= Menü daneben) und „Datei laden" hier
         // nicht verwechselt werden. ──
-        const flHead = document.createElement('div'); flHead.className = 'sw-subhead'; flHead.textContent = 'Datei';
+        const flHead = document.createElement('div'); flHead.className = 'sw-subhead'; i18nText(flHead, 'Datei');
         win.appendChild(flHead);
         const flNote = document.createElement('p'); flNote.className = 'sw-note';
-        flNote.textContent = 'Den kompletten Zustand als Datei sichern oder von einer Datei einlesen – '
-            + 'unabhängig vom Browserspeicher, übertragbar auf andere Rechner. Einlesen ersetzt ebenfalls ALLES.';
+        i18nText(flNote, 'Den kompletten Zustand als Datei sichern oder von einer Datei einlesen – unabhängig vom Browserspeicher, übertragbar auf andere Rechner. Einlesen ersetzt ebenfalls ALLES.');
         win.appendChild(flNote);
 
         const flRow = document.createElement('div'); flRow.className = 'sw-actions';
         const flExp = document.createElement('button'); flExp.className = 'pb-btn';
-        flExp.innerHTML = '<span class="sw-ic pb-ic-export">⤓</span> Als Datei sichern';
-        flExp.title = 'Kompletten Zustand (Sound, Optik, Snapshots, Skalen, Layouts) als JSON-Datei herunterladen';
+        flExp.classList.add('sw-file-btn', 'pb-ic-export');
+        flExp.appendChild(icon('export'));
+        flExp.appendChild(i18nText(document.createElement('span'), 'Als Datei sichern'));
+        hint(flExp, 'Kompletten Zustand (Sound, Optik, Snapshots, Skalen, Layouts) als JSON-Datei herunterladen');
         flExp.addEventListener('click', () => {
             try {
                 const now = Date.now();
@@ -995,8 +1061,10 @@ async function boot() {
             } catch { alert('Export fehlgeschlagen.'); }
         });
         const flImp = document.createElement('button'); flImp.className = 'pb-btn';
-        flImp.innerHTML = '<span class="sw-ic pb-ic-import">⤒</span> Datei laden';
-        flImp.title = 'Zustand aus einer teslacoil-Backup-Datei wiederherstellen (ersetzt alles)';
+        flImp.classList.add('sw-file-btn', 'pb-ic-import');
+        flImp.appendChild(icon('import'));
+        flImp.appendChild(i18nText(document.createElement('span'), 'Datei laden'));
+        hint(flImp, 'Zustand aus einer teslacoil-Backup-Datei wiederherstellen (ersetzt alles)');
         flImp.addEventListener('click', async () => {
             const f = await pickTextFile();
             if (!f) return;
@@ -1019,8 +1087,8 @@ async function boot() {
         // bleiben die Code-Defaults als Rückfalllinie. ──
         const acts = document.createElement('div'); acts.className = 'sw-actions';
         const reset = document.createElement('button'); reset.className = 'pb-btn pb-btn-danger';
-        reset.textContent = 'Auf Werkseinstellung zurücksetzen';
-        reset.title = 'ALLES verwerfen und die ausgelieferte Werkseinstellung laden (vorher wird automatisch gesichert)';
+        i18nText(reset, 'Auf Werkseinstellung zurücksetzen');
+        hint(reset, 'ALLES verwerfen und die ausgelieferte Werkseinstellung laden (vorher wird automatisch gesichert)');
         reset.addEventListener('click', async () => {
             if (!confirm('ACHTUNG: Das setzt ALLES zurück – Sound, Optik, Snapshots, Skalen und Layouts.\n\nEs wird vorher automatisch ein Backup angelegt. Fortfahren?')) return;
             if (!confirm('Wirklich ALLES auf Werkseinstellung zurücksetzen?\n\nLetzte Warnung – nur das automatische Backup bleibt erhalten.')) return;
@@ -1059,11 +1127,11 @@ async function boot() {
         refresh();
         sel.addEventListener('change', () => state.set('layoutSel', sel.selectedIndex > 0 ? sel.value : ''));
         return presetCluster('Optik', sel, [
-            ['↺', 'Layout laden (Recall)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.recallLayout(i); }, 'load'],
-            ['✎', 'Ausgewähltes Layout mit aktueller Optik überschreiben (Update)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.updateLayout(i); }, 'save'],
-            ['＋', 'Als neues Layout speichern', () => { const name = prompt('Layout-Name?', ''); if (name !== null) { presets.saveLayout(name); refresh(); if (name) state.set('layoutSel', name); } }, 'new'],
-            ['⤓', 'Layout exportieren (JSON)', () => presets.exportLayout(sel.value), 'export'],
-            ['🗑', 'Ausgewähltes Layout löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('Layout „' + sel.value + '" löschen?')) { presets.deleteLayout(i); state.set('layoutSel', ''); refresh(); } }, 'del'],
+            ['load', 'Layout laden (Recall)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.recallLayout(i); }, 'load'],
+            ['edit', 'Ausgewähltes Layout mit aktueller Optik überschreiben (Update)', () => { const i = sel.selectedIndex - 1; if (i >= 0) presets.updateLayout(i); }, 'save'],
+            ['plus', 'Als neues Layout speichern', () => { const name = prompt('Layout-Name?', ''); if (name !== null) { presets.saveLayout(name); refresh(); if (name) state.set('layoutSel', name); } }, 'new'],
+            ['export', 'Layout exportieren (JSON)', () => presets.exportLayout(sel.value), 'export'],
+            ['trash', 'Ausgewähltes Layout löschen', () => { const i = sel.selectedIndex - 1; if (i >= 0 && confirm('Layout „' + sel.value + '" löschen?')) { presets.deleteLayout(i); state.set('layoutSel', ''); refresh(); } }, 'del'],
         ]);
     }
 
@@ -1161,8 +1229,8 @@ async function boot() {
         // die rechte Maustaste ist überall im Instrument der Weg zu den Settings – ein Icon
         // dafür ist Platzverschwendung und eine zweite Wahrheit daneben.
         const bar = document.createElement('div'); bar.className = 'group-title-bar';
-        const collapseBtn = document.createElement('button'); collapseBtn.className = 'group-collapse'; collapseBtn.textContent = '▾'; collapseBtn.title = 'Ein-/Ausklappen';
-        const h = document.createElement('div'); h.className = 'group-title'; h.textContent = grp.name; h.title = 'Ziehen zum Verschieben · Rechtsklick = Einstellungen';
+        const collapseBtn = document.createElement('button'); collapseBtn.className = 'group-collapse'; collapseBtn.appendChild(icon('caret')); hint(collapseBtn, 'Ein-/Ausklappen');
+        const h = document.createElement('div'); h.className = 'group-title'; h.textContent = grp.name; hint(h, 'Ziehen zum Verschieben · Rechtsklick = Einstellungen');
         bar.appendChild(collapseBtn); bar.appendChild(h);
         g.appendChild(bar);
 
@@ -1233,7 +1301,7 @@ async function boot() {
             reflCanvas.width = Math.max(80, state.get('reflW') | 0);
             reflCanvas.height = Math.max(24, state.get('reflH') | 0);
             const wrap = document.createElement('div'); wrap.className = 'group-extra refl-wrap';
-            const rBtn = iconBtn('⚙', 'Reflections-Anzeige: Größe & Farben', (e) => openReflSettings(e.currentTarget));
+            const rBtn = iconBtn('gear', 'Reflections-Anzeige: Größe & Farben', (e) => openReflSettings(e.currentTarget));
             rBtn.classList.add('refl-settings-btn');
             wrap.appendChild(reflCanvas); wrap.appendChild(rBtn);
             ctrlEls.set('reflWrap', wrap);   // → setVis: Graph folgt dem Reverb-Bypass
@@ -1406,7 +1474,7 @@ async function boot() {
             e.g.style.minHeight = st.height ? st.height + 'px' : '';
             const col = !!st.collapsed;
             e.body.style.display = col ? 'none' : '';
-            e.collapseBtn.textContent = col ? '▸' : '▾';
+            e.collapseBtn.classList.toggle('collapsed', col);   // CSS dreht den Pfeil (-90°)
         }
         sizePanel();   // Klappen ändert Gruppenhöhen → Spalten-Umbruch neu berechnen
     }
@@ -1723,7 +1791,7 @@ async function boot() {
         // Sichtbarer Hinweis, dass hier verschoben statt bedient wird.
         if (on && !_arrangeHint) {
             _arrangeHint = document.createElement('div'); _arrangeHint.className = 'arrange-hint';
-            _arrangeHint.textContent = '⇄ Anordnen-Modus – Element klicken/ziehen (10px-Raster · Shift 1px · Pfeiltasten)';
+            i18nText(_arrangeHint, 'Anordnen-Modus – Element klicken/ziehen (10px-Raster · Shift 1px · Pfeiltasten)');
             document.body.appendChild(_arrangeHint);
         } else if (!on && _arrangeHint) { _arrangeHint.remove(); _arrangeHint = null; }
     }
@@ -1804,7 +1872,7 @@ async function boot() {
                 state.set('groupStylePresets', list);
                 if (state.get('comboSel') === p.name) state.set('comboSel', '');
             },
-            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Farben als neuen Combo speichern', () => {
+            foot: [['plus', 'Neu…', 'Aktuelle Farben als neuen Combo speichern', () => {
                 const pn = prompt('Combo-Name?', '');
                 if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); state.set('comboSel', pn); comboMenu.refresh(); }
             }]],
@@ -1845,7 +1913,7 @@ async function boot() {
                     if (remembered() === it.name) remember('');
                     updMark();
                 },
-                foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Sound + Control-Settings dieser Gruppe als neuen Snapshot speichern', () => {
+                foot: [['plus', 'Neu…', 'Sound + Control-Settings dieser Gruppe als neuen Snapshot speichern', () => {
                     const nm = prompt('Snapshot-Name für „' + name + '"?', '');
                     if (nm) { presets.saveGroupSnap(name, nm, keys(), metaKeys()); remember(nm); gsMenu.refresh(); updMark(); }
                 }]],
@@ -1858,7 +1926,7 @@ async function boot() {
         // Speichern/Überschreiben/Löschen liegen in den beiden Menüs (Combo/Snapshot)
         // → hier nur noch „Fertig".
         const acts = document.createElement('div'); acts.className = 'gs-actions';
-        const doneBtn = document.createElement('button'); doneBtn.className = 'pb-btn'; doneBtn.textContent = 'Fertig';
+        const doneBtn = document.createElement('button'); doneBtn.className = 'pb-btn'; i18nText(doneBtn, 'Fertig');
         doneBtn.addEventListener('click', closeGroupSettings);
         acts.appendChild(doneBtn); pop.appendChild(acts);
 
@@ -1915,11 +1983,16 @@ async function boot() {
         setVis('lpGlide', on);
         setVis('filterEnvTrig', on);
         setVis('filterSeqWidget', on && envTrig === 'seq');
+        // Dyn spreizt die Step-Werte → nur im 'seq'-Modus da. Bei 'each' gibt es keine
+        // Step-Werte, die Depth ist immer voll (@dpa 20260716_164359).
+        setVis('filterSeqDynPct', on && envTrig === 'seq');
     }
     // Envelope: der Hold-Slide zeigt sich nur bei eingeschaltetem Hold – ohne Hold wird
     // nie retune() gerufen, der Regler wäre wirkungslos (@dpa 20260715).
     function updateHoldVisibility() {
         ['ampHoldGlide'].forEach((k) => setVis(k, state.get('ampHold')));
+        // Dyn wirkt nur, wenn der Amp-Sequenzer die Velocity liefert (sonst Gate fest 1).
+        setVis('ampSeqDynPct', state.get('ampSeqEnabled'));
     }
     // Distortion: 'aktiv' aus → bis auf Dry/Wet ALLES weg, auch das Kennlinien-Menü
     // (@dpa 20260715). Dry/Wet bleibt bewusst stehen: es ist der Regler, der auch im
@@ -2031,7 +2104,7 @@ async function boot() {
         row('Farbe L', col('reflColL'));
         row('Farbe R', col('reflColR'));
         const acts = document.createElement('div'); acts.className = 'gs-actions';
-        const done = document.createElement('button'); done.className = 'pb-btn'; done.textContent = 'Fertig';
+        const done = document.createElement('button'); done.className = 'pb-btn'; i18nText(done, 'Fertig');
         done.addEventListener('click', closeReflSettings); acts.appendChild(done); pop.appendChild(acts);
         const r = anchor.getBoundingClientRect();
         pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 280))}px`;
@@ -2082,7 +2155,7 @@ async function boot() {
         } else if (key === 'distMode' || key === 'distEnabled') {
             ctrlBindings.get(key)(data);
             updateDistVisibility();
-        } else if (key === 'ampHold') {
+        } else if (key === 'ampHold' || key === 'ampSeqEnabled') {
             ctrlBindings.get(key)(data);
             updateHoldVisibility();
         } else if (key === 'metroEnabled' || key === 'metroCutoffQuant') {
@@ -2115,7 +2188,7 @@ async function boot() {
         if (key === '*' || key === 'scaleSel') scaleRefresh();
         if (key === '*' || key === 'layoutSel') layoutRefresh();
         if (key === '*' || key === 'p2Sel') p2Refresh();
-        if (key === '*' || key === 'fxOrder') fxChainRender();
+        if (key === '*' || key === 'fxOrder') { fxChainRender(); fxChainVisUpdate(); }
         // skal2-Modus: P2-Leiste nur dann zeigen; Höhenänderung → Layout nachrechnen.
         if (key === '*' || key === 'skal2On') { if (p2Bar) p2Bar.style.display = state.get('skal2On') ? '' : 'none'; sizePanel(); }
         // Sichtbarkeits-Umschalter (aktiv-Haken, Modus-Selects) ändern Gruppenhöhen

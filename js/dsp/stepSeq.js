@@ -14,6 +14,38 @@
 
 export const SEQ_MAX = 120;
 
+/** Kleinster Wert, den „volle Dynamik" (Dyn 200) einem leisen Step lässt.
+ *  @dpa 20260716_164359: „<50% = min (nicht aus!)" – ein Step unter der Hälfte wird
+ *  ganz leise, aber er bleibt ein Ton. 0 wäre „off" und damit eine andere Aussage
+ *  (kein Trigger), die dem Sequenzer nicht zusteht: was off ist, entscheidet das Muster. */
+export const SEQ_DYN_MIN = 0.1;
+
+/**
+ * Dyn: die Dynamik-Spreizung eines Step-Werts (@dpa 20260716_164359).
+ *
+ *   dyn=0    → alles 100 %      (keine Dynamik – jeder Ton gleich laut)
+ *   dyn=100  → wie eingestellt  (roher Step-Wert, neutral)
+ *   dyn=200  → volle Dynamik    (>50 % → 100 %, <50 % → SEQ_DYN_MIN)
+ *
+ * Zwischen den drei Punkten wird linear geblendet, damit der Regler durchgehend
+ * stetig ist (kein Sprung bei 100).
+ *
+ * Step-Wert 0 = „off" bleibt IMMER 0: Dyn regelt die Lautstärke der Töne, es
+ * erfindet keine. Sonst würde dyn=0 („alles 100 %") aus jeder Pause einen Ton machen.
+ */
+export function seqDyn(v, dyn) {
+    const s = Math.max(0, Math.min(1, v || 0));
+    if (s <= 0) return 0;
+    const t = Math.max(0, Math.min(200, dyn ?? 100)) / 100;
+    // Die drei Stützstellen sind @dpas Ansage und werden EXAKT getroffen – nicht über die
+    // Blend-Formel gerechnet: 1 + (0.2−1)·1 ergäbe 0.19999999999999996 statt „= eingestellt".
+    if (t === 1) return s;
+    const hard = s >= 0.5 ? 1 : SEQ_DYN_MIN;         // volle Dynamik: hart auf/ab
+    if (t === 2) return hard;
+    if (t < 1) return 1 + (s - 1) * t;               // 0 → 1 … 1 → s
+    return s + (hard - s) * (t - 1);                 // 1 → s … 2 → hard
+}
+
 /**
  * Default-Puffer bauen.
  *   'first' → nur Step 0 = 1, Rest 0 (Filter-Default: einmal triggern, dann laufen lassen)
