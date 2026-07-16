@@ -23,6 +23,7 @@ import { safeFilename, fileStamp } from '../js/core/fileIO.js';
 import { hasUserState, fetchFactory } from '../js/data/factory.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 import { slidePlan, slideFreqAt, SLIDE_L } from '../js/dsp/holdSlide.js';
+import { DebugPanel } from '../js/ui/DebugPanel.js';
 
 let pass = 0;
 function t(name, fn) {
@@ -811,6 +812,52 @@ t('L liegt fest bei 0.2 (Slide-Form ist kein Regler mehr)', () => {
 });
 t('glide 0 wird nicht gerechnet (harter Sprung ist Sache des Aufrufers)', () => {
     assert.equal(slideFreqAt(null, 0.1), null);
+});
+
+// ── Debug-Recorder: die zwei Slots (@dpa 20260716_031100) ───────────────────────
+// Die Regeln gehören in DebugPanel, nicht in die UI – deshalb sind sie hier testbar.
+// Die echten Recorder brauchen Web Audio → gegen Attrappen getauscht (der Konstruktor
+// von DebugPanel fasst den ctx nicht an, nur seine Methoden täten es).
+function makeDbg() {
+    const ctx = { sampleRate: 48000 };
+    const engine = { ctx, master: { volume: {} } };
+    const dbg = new DebugPanel({ get: () => '' }, engine);
+    const fake = (len) => ({
+        recording: false,
+        start() { this.recording = true; },
+        stop() { this.recording = false; return new Float32Array(len); },
+    });
+    dbg.slots.a.rec = fake(4800);    // 0.1 s
+    dbg.slots.b.rec = fake(9600);    // 0.2 s
+    return dbg;
+}
+t('Debug: ein Start nimmt auf, ein zweiter Klick stoppt', () => {
+    const d = makeDbg();
+    assert.equal(d.toggle('a'), null);
+    assert.equal(d.recording('a'), true);
+    assert.equal(d.toggle('a'), 0.1);
+    assert.equal(d.recording('a'), false);
+});
+t('Debug: NIEMALS nehmen beide gleichzeitig auf', () => {
+    const d = makeDbg();
+    d.toggle('a');
+    d.toggle('b');                       // startet b, während a läuft
+    assert.equal(d.recording('a'), false, 'a muss gestoppt sein');
+    assert.equal(d.recording('b'), true);
+});
+t('Debug: der verdrängte Recorder behält seine Aufnahme (Vergleich vorher/nachher)', () => {
+    const d = makeDbg();
+    d.toggle('a');
+    d.toggle('b');
+    assert.equal(d.lastSeconds('a'), 0.1, 'a-Take darf nicht verloren gehen');
+});
+t('Debug: ein neuer Start löscht die vorherige Aufnahme DIESES Recorders', () => {
+    const d = makeDbg();
+    d.toggle('a'); d.toggle('a');
+    assert.equal(d.lastSeconds('a'), 0.1);
+    d.toggle('a');                       // neuer Take → alter ist weg, solange er läuft
+    assert.equal(d.lastSeconds('a'), 0);
+    assert.equal(d.recording('a'), true);
 });
 
 await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind

@@ -10,6 +10,7 @@
  * des Snapshots – nur der Wert wird gespeichert. Reine Bedien-/Tuning-Hilfe.
  */
 import { Knob } from './Knob.js';   // nur für Knob.migrateShape (alte Gestalt-Namen)
+import { makeDraggable } from './dragPanel.js';
 export class KnobMetaEditor {
   /** @param {import('../core/State.js').State} [state] – für die Farb-Presets (Optik). */
   constructor(state) {
@@ -31,80 +32,86 @@ export class KnobMetaEditor {
         <button class="kme-close" title="Schließen">✕</button>
       </div>
       <div class="kme-body">
-        <div class="kme-row">
+        <div class="kme-row kme-wide">
           <label>Name</label>
           <input type="text" class="kme-label" maxlength="18" title="Regler umbenennen (wie Gruppen)" />
         </div>
-        <div class="kme-row">
-          <label>Min</label>
-          <input type="number" class="kme-min" step="any" />
+        <!-- Paarweise (@dpa 20260716_011222): eine 70px-Eingabe braucht keine eigene
+             Zeile – zwei passende nebeneinander halbieren die Panel-Höhe. -->
+        <div class="kme-grid">
+          <div class="kme-row">
+            <label>Min</label>
+            <input type="number" class="kme-min" step="any" />
+          </div>
+          <div class="kme-row">
+            <label>Max</label>
+            <input type="number" class="kme-max" step="any" />
+          </div>
+          <div class="kme-row">
+            <label>Step</label>
+            <input type="number" class="kme-step" step="any" min="0" />
+          </div>
+          <div class="kme-row">
+            <label title="Nachkommastellen">Dez.</label>
+            <input type="number" class="kme-decimals" min="0" max="6" step="1" />
+          </div>
+          <div class="kme-row">
+            <label>Kurve</label>
+            <select class="kme-curve">
+              <option value="linear">Linear</option>
+              <option value="log">Log.</option>
+              <option value="exp">Exp.</option>
+            </select>
+          </div>
+          <div class="kme-row">
+            <label>Skew</label>
+            <input type="number" class="kme-skew" min="0.1" max="10" step="0.1" value="1" />
+          </div>
+          <div class="kme-row">
+            <label>Einheit</label>
+            <input type="text" class="kme-unit" maxlength="8" />
+          </div>
+          <div class="kme-row">
+            <label>Label</label>
+            <select class="kme-labelpos" title="Label-Position">
+              <option value="bottom">Unten</option>
+              <option value="top">Oben</option>
+              <option value="left">Links</option>
+              <option value="right">Rechts</option>
+              <option value="off">Aus</option>
+            </select>
+          </div>
+          <!-- Erst Gestalt, dann was daraus folgt (@dpa 20260716_011222): beim Knob ist
+               das die Ansicht (Größe), beim Fader seine Länge – dasselbe Feld-Nest. -->
+          <div class="kme-row">
+            <label>Gestalt</label>
+            <select class="kme-shape" title="Runder Regler oder Fader (Richtung wählbar)">
+              <option value="knob">Knob</option>
+              <option value="faderHoriz">Fader waagerecht</option>
+              <option value="faderVert">Fader senkrecht</option>
+            </select>
+          </div>
+          <div class="kme-row" data-f="view">
+            <label>Ansicht</label>
+            <select class="kme-view">
+              <option value="large">Groß</option>
+              <option value="medium">Mittel</option>
+              <option value="small">Klein</option>
+              <option value="mini">Mini</option>
+              <option value="none">Ohne Knob</option>
+            </select>
+          </div>
+          <div class="kme-row" data-f="faderLen">
+            <label>Länge</label>
+            <input type="number" class="kme-faderlen" min="24" max="400" step="4" />
+          </div>
+          <div class="kme-row">
+            <label title="Knob-Hintergrund">BG</label>
+            <input type="color" class="kme-bg" value="#232833" />
+            <button class="kme-bg-clear" title="Hintergrund entfernen">✕</button>
+          </div>
         </div>
-        <div class="kme-row">
-          <label>Max</label>
-          <input type="number" class="kme-max" step="any" />
-        </div>
-        <div class="kme-row">
-          <label>Step</label>
-          <input type="number" class="kme-step" step="any" min="0" />
-        </div>
-        <div class="kme-row">
-          <label>Kurve</label>
-          <select class="kme-curve">
-            <option value="linear">Linear</option>
-            <option value="log">Logarithmisch</option>
-            <option value="exp">Exponentiell</option>
-          </select>
-        </div>
-        <div class="kme-row">
-          <label>Dezimalen</label>
-          <input type="number" class="kme-decimals" min="0" max="6" step="1" />
-        </div>
-        <div class="kme-row">
-          <label>Skew</label>
-          <input type="number" class="kme-skew" min="0.1" max="10" step="0.1" value="1" />
-        </div>
-        <div class="kme-row">
-          <label>Einheit</label>
-          <input type="text" class="kme-unit" maxlength="8" />
-        </div>
-        <div class="kme-row">
-          <label>Ansicht</label>
-          <select class="kme-view">
-            <option value="large">Groß</option>
-            <option value="medium">Mittel</option>
-            <option value="small">Klein</option>
-            <option value="mini">Mini (Höhe + Breite)</option>
-            <option value="none">Ohne Knob (nur Label + Wert)</option>
-          </select>
-        </div>
-        <div class="kme-row">
-          <label>Gestalt</label>
-          <select class="kme-shape" title="Runder Regler oder Fader (Richtung wählbar)">
-            <option value="knob">Knob</option>
-            <option value="faderHoriz">Fader waagerecht</option>
-            <option value="faderVert">Fader senkrecht</option>
-          </select>
-        </div>
-        <div class="kme-row" data-f="faderLen">
-          <label>Fader-Länge</label>
-          <input type="number" class="kme-faderlen" min="24" max="400" step="4" />
-        </div>
-        <div class="kme-row">
-          <label>Label</label>
-          <select class="kme-labelpos" title="Label-Position">
-            <option value="bottom">Unten</option>
-            <option value="top">Oben</option>
-            <option value="left">Links</option>
-            <option value="right">Rechts</option>
-            <option value="off">Aus</option>
-          </select>
-        </div>
-        <div class="kme-row">
-          <label>Knob-BG</label>
-          <input type="color" class="kme-bg" value="#232833" />
-          <button class="kme-bg-clear" title="Hintergrund entfernen">✕</button>
-        </div>
-        <div class="kme-row">
+        <div class="kme-row kme-wide kme-color-row">
           <label>Farbe</label>
           <input type="color" class="kme-color" value="#5ad1ff" />
           <select class="kme-color-preset" title="Farbe wählen (Standard = zurücksetzen) – Tab/Pfeiltasten"></select>
@@ -112,18 +119,16 @@ export class KnobMetaEditor {
           <button class="kme-color-del" title="Ausgewähltes Farb-Preset löschen">🗑</button>
         </div>
         <div class="kme-curve-preview">
-          <canvas width="120" height="60"></canvas>
+          <canvas width="96" height="44"></canvas>
         </div>
         <div class="kme-actions">
           <button class="kme-apply">Übernehmen</button>
-          <button class="kme-reset">Zurücksetzen</button>
         </div>
       </div>
     `;
 
     panel.querySelector('.kme-close').addEventListener('click', () => this.close());
     panel.querySelector('.kme-apply').addEventListener('click', () => this._apply());
-    panel.querySelector('.kme-reset').addEventListener('click', () => this._reset());
 
     // Enter = Übernehmen · ESC = Schließen. Bewusst auf document-Ebene (mit isOpen-
     // Guard): beim Öffnen liegt der Fokus AUSSERHALB des Panels (auf dem ⚙-Button des
@@ -168,6 +173,7 @@ export class KnobMetaEditor {
 
     this._curveCanvas = panel.querySelector('canvas');
     this._panel = panel;
+    makeDraggable(panel, panel.querySelector('.kme-header'));
 
     // Klick außerhalb schließt. (Die frühere ⚙-Ausnahme ist weg – das Icon gibt es nicht
     // mehr, Settings kommen per Rechtsklick, und der schließt/öffnet sauber neu.)
@@ -201,7 +207,7 @@ export class KnobMetaEditor {
     this._bgCustom = !!meta.bg;
     this._panel.querySelector('.kme-bg').value = meta.bg || '#232833';
     this._fillColorPresets();
-    this._panel.querySelector('.kme-title').textContent = `⚙ ${meta.label}`;
+    this._panel.querySelector('.kme-title').textContent = meta.label;
 
     const rect = knob.element.getBoundingClientRect();
     this._panel.style.left = `${rect.right + 10}px`;
@@ -281,8 +287,13 @@ export class KnobMetaEditor {
    *  für immer versteckt (@dpa: „die Länge ist wieder weg!"). Knob.isFaderShape ist
    *  die eine Wahrheit. */
   _syncShapeRows() {
-    const row = this._panel.querySelector('.kme-row[data-f="faderLen"]');
-    if (row) row.style.display = Knob.isFaderShape(this._panel.querySelector('.kme-shape').value) ? '' : 'none';
+    // Ansicht und Länge sind dasselbe Feld in zwei Ausprägungen (@dpa 20260716_011222:
+    // „bei Gestalt Fader wird die Ansicht zu Länge") – immer genau eines davon zeigen.
+    const fader = Knob.isFaderShape(this._panel.querySelector('.kme-shape').value);
+    const lenRow = this._panel.querySelector('.kme-row[data-f="faderLen"]');
+    const viewRow = this._panel.querySelector('.kme-row[data-f="view"]');
+    if (lenRow) lenRow.style.display = fader ? '' : 'none';
+    if (viewRow) viewRow.style.display = fader ? 'none' : '';
   }
 
   _apply() {
@@ -303,17 +314,8 @@ export class KnobMetaEditor {
       labelPos: this._panel.querySelector('.kme-labelpos').value,
       bg: this._bgCustom ? this._panel.querySelector('.kme-bg').value : '',
     });
-    this._panel.querySelector('.kme-title').textContent = `⚙ ${this._currentKnob.label}`;
+    this._panel.querySelector('.kme-title').textContent = this._currentKnob.label;
     if (this.onApply) this.onApply(this._currentKnob);   // Meta in State persistieren
-  }
-
-  _reset() {
-    if (!this._currentKnob) return;
-    // Auf die ursprüngliche Reglerdefinition zurück (Fallback: generisch 0..1).
-    const def = this._currentKnob._defaultMeta || { min: 0, max: 1, step: 0, curve: 'linear', decimals: 2, unit: '', viewSize: 'medium', color: '' };
-    this._currentKnob.setMeta({ ...def });
-    if (this.onApply) this.onApply(this._currentKnob);
-    this.open(this._currentKnob);
   }
 
   _drawCurvePreview() {
@@ -352,10 +354,7 @@ export class KnobMetaEditor {
       if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
     }
     ctx.stroke();
-
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '9px sans-serif';
-    ctx.fillText('in', 2, h - 2);
-    ctx.fillText('out', w - 18, 10);
+    // Keine 'in'/'out'-Beschriftung (@dpa 20260716_011222): der Graph soll die Kurvenform
+    // zeigen, mehr will man hier nicht ablesen.
   }
 }

@@ -10,13 +10,14 @@
  * onChange schreibt in den State; bei State-'*' (Recall) wird JEDES Control aus
  * dem State neu gesetzt → der octaver-Recall-Bug kann hier nicht auftreten.
  */
-import { State } from './core/State.js';
+import { State, DEFAULTS } from './core/State.js';
 import { globalKeyOk, arrowKeyOk } from './core/keyRoute.js';
 import { TeslaEngine } from './engine/TeslaEngine.js';
 import { Knob } from './ui/Knob.js';
 import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
 import { ElementSettings } from './ui/ElementSettings.js';
 import { Keyboard } from './ui/Keyboard.js';
+import { BaseKeyboard } from './ui/BaseKeyboard.js';
 import { StepSeqUI } from './ui/StepSeqUI.js';
 import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
@@ -368,6 +369,7 @@ async function boot() {
     const ctrlBindings = new Map();   // key → (data) => UI aktualisieren (Selects/Toggles)
     const ctrlEls = new Map();        // key → DOM-Wrapper (für modusabhängiges Ein-/Ausblenden)
     const keyboard = new Keyboard(state, () => engine.currentFreq, () => engine.baseFreq);
+    const baseKeyboard = new BaseKeyboard(state, () => engine.baseFreq);
     const baseReadout = document.createElement('div'); // zeigt effektive BaseFrq
     const baseSpeed = document.createElement('div');    // zeigt BpM/Hz/P (Freq-Modus)
     const rateReadout = document.createElement('div');  // Skaler-Rate als Vielfaches der BaseFrq
@@ -449,6 +451,7 @@ async function boot() {
         const chk = document.createElement('input'); chk.type = 'checkbox'; chk.checked = state.get(key);
         chk.addEventListener('change', () => state.set(key, chk.checked));
         const span = document.createElement('span'); span.textContent = cfg.label;
+        if (cfg.title) wrap.title = cfg.title;   // Erklärung dort, wo das Label knapp ist
         // Nach oben ziehen = an, nach unten = aus (wie ein Regler); Trefferzone = ganzes Feld
         // außer der Checkbox. Klick auf die Checkbox bleibt normale Bedienung.
         span.classList.add('ctrl-label-drag');
@@ -598,6 +601,10 @@ async function boot() {
             label: def.label, min: def.min, max: def.max, step: def.step ?? 0,
             curve: def.curve, unit: def.unit, decimals: def.decimals, formatValue: def.formatValue,
             value: state.get(key),
+            // Auslieferungswert für den Doppelklick auf die Ansicht (@dpa 20260716_023817).
+            // Quelle ist State.DEFAULTS – der Wert, mit dem der Regler gedacht war, nicht
+            // die Mitte einer womöglich verstellten Skala.
+            defaultValue: DEFAULTS[key],
             onChange: (val) => state.set(key, val),
         });
         knob._defaultMeta = knob.getMeta();   // Original-Range/Kurve für „Zurücksetzen"
@@ -1064,17 +1071,57 @@ async function boot() {
         // additiv unter Controls: an-/abwählen (Auswahl wächst/schrumpft).
         if (selected.has(el)) removeSelected(el); else addSelected(el);
     }
+    // ── Gummiband-Auswahl im e-Mode (@dpa 20260716_023817: „select via mouse drag?") ──
+    // Auf freier Fläche aufziehen wählt alles aus, was das Rechteck berührt. Klick auf ein
+    // Control zieht dieses (wireCtrlMove) – hier kommt nur an, was DANEBEN beginnt. Ein
+    // Klick ohne Ziehen auf die freie Fläche hebt die Auswahl auf.
+    let _band = null;
+    panel.addEventListener('mousedown', (e) => {
+        if (!arranging || e.button !== 0) return;
+        if (e.target.closest('[data-ctrl], .group-title-bar')) return;   // Control/Gruppe: eigener Drag
+        e.preventDefault();
+        const pr = panel.getBoundingClientRect();
+        const x0 = e.clientX, y0 = e.clientY;
+        const additive = e.shiftKey || e.metaKey;
+        if (!additive) clearSelection();
+        const box = document.createElement('div'); box.className = 'select-band';
+        panel.appendChild(box); _band = box;
+        const draw = (ev) => {
+            const x = Math.min(x0, ev.clientX), y = Math.min(y0, ev.clientY);
+            const w = Math.abs(ev.clientX - x0), h = Math.abs(ev.clientY - y0);
+            box.style.left = (x - pr.left + panel.scrollLeft) + 'px';
+            box.style.top = (y - pr.top + panel.scrollTop) + 'px';
+            box.style.width = w + 'px'; box.style.height = h + 'px';
+            // Live mitmarkieren: man sieht beim Ziehen, was man bekommt.
+            const r = { left: x, top: y, right: x + w, bottom: y + h };
+            for (const el of panel.querySelectorAll('[data-ctrl]')) {
+                if (el.offsetParent === null) continue;
+                const b = el.getBoundingClientRect();
+                const hit = b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom;
+                if (hit) addSelected(el); else if (!additive) removeSelected(el);
+            }
+        };
+        const up = () => {
+            window.removeEventListener('mousemove', draw);
+            window.removeEventListener('mouseup', up);
+            if (_band) { _band.remove(); _band = null; }
+        };
+        window.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', up);
+    });
+
     for (const grp of GROUPS) {
         const g = document.createElement('div');
         g.className = 'group';
         g.dataset.group = grp.name;
 
-        // Titelleiste: Klapp-Button + (ziehbarer) Name + Settings-Knopf
+        // Titelleiste: Klapp-Button + (ziehbarer) Name. KEIN ⚙-Knopf (@dpa 20260716_011222):
+        // die rechte Maustaste ist überall im Instrument der Weg zu den Settings – ein Icon
+        // dafür ist Platzverschwendung und eine zweite Wahrheit daneben.
         const bar = document.createElement('div'); bar.className = 'group-title-bar';
         const collapseBtn = document.createElement('button'); collapseBtn.className = 'group-collapse'; collapseBtn.textContent = '▾'; collapseBtn.title = 'Ein-/Ausklappen';
-        const h = document.createElement('div'); h.className = 'group-title'; h.textContent = grp.name; h.title = 'Ziehen zum Verschieben';
-        const setBtn = document.createElement('button'); setBtn.className = 'group-settings-btn'; setBtn.textContent = '⚙'; setBtn.title = 'Gruppen-Einstellungen';
-        bar.appendChild(collapseBtn); bar.appendChild(h); bar.appendChild(setBtn);
+        const h = document.createElement('div'); h.className = 'group-title'; h.textContent = grp.name; h.title = 'Ziehen zum Verschieben · Rechtsklick = Einstellungen';
+        bar.appendChild(collapseBtn); bar.appendChild(h);
         g.appendChild(bar);
 
         const body = document.createElement('div'); body.className = 'group-body';
@@ -1114,6 +1161,15 @@ async function boot() {
             // Alle Nicht-Regler-Einheiten sind ebenfalls frei verschiebbar (data-ctrl-Tag).
             body.appendChild(makeMovable(makeRateReadout(), 'u:rate'));
             keyboard.mount(body); makeMovable(keyboard.element, 'u:keyboard');
+            // Keyboard = „special control" (@dpa 20260716_031100): Rechtsklick gibt ihm
+            // Größe und Farben wie jedem anderen Element. Die Werte gehen als CSS-Variablen
+            // ans Brett – die Tasten rechnen sich daraus selbst aus (12× gleich breit).
+            registerCtrlStyle('u:keyboard', 'keyboard', keyboard.element, (s) => {
+                keyboard.element.style.setProperty('--kb-key-w', s.boxSize ? s.boxSize + 'px' : '');
+                keyboard.element.style.setProperty('--kb-key-h', s.boxH ? s.boxH + 'px' : '');
+                keyboard.element.style.setProperty('--kb-on', s.fg || '');
+                keyboard.element.style.background = s.bg || '';
+            }, 'Keyboard');
             body.appendChild(makeMovable(makeScaleBar(), 'u:scale'));
             body.appendChild(makeMovable(makeP2Bar(), 'u:p2'));
         }
@@ -1128,6 +1184,16 @@ async function boot() {
                 el.style.width = s.boxSize ? s.boxSize + 'px' : '';
                 el.style.color = s.fg || '';
             };
+            // 12-Ton-Brett der Basis (@dpa 20260716_031100): bei Quelle 'Ton' bedienbar,
+            // sonst zeigt es, auf welchem Ton die eingestellte Frequenz landet.
+            baseKeyboard.mount(body); makeMovable(baseKeyboard.element, 'u:baseKeys');
+            registerCtrlStyle('u:baseKeys', 'keyboard', baseKeyboard.element, (s) => {
+                const el = baseKeyboard.element;
+                el.style.setProperty('--kb-key-w', s.boxSize ? s.boxSize + 'px' : '');
+                el.style.setProperty('--kb-key-h', s.boxH ? s.boxH + 'px' : '');
+                el.style.setProperty('--kb-on', s.fg || '');
+                el.style.background = s.bg || '';
+            }, 'Base-Keyboard');
             registerCtrlStyle('u:baseRead', 'readout', baseReadout, readoutStyle(baseReadout), 'Base-Readout');
             registerCtrlStyle('u:baseSpeed', 'readout', baseSpeed, readoutStyle(baseSpeed), 'Base-Speed');
         }
@@ -1163,7 +1229,7 @@ async function boot() {
             row.appendChild(makeNote('debugNote'));
             row.appendChild(makeText('debugPrompt'));
             // Rec-Buttons zeigen ihren Zustand IM Label (kein separates Status-Feld mehr):
-            // läuft die Aufnahme → ⏹, sonst ⏺ + Länge der letzten Aufnahme.
+            // läuft die Aufnahme → ⏹ + roter Knopf, sonst ⏺ + Länge der letzten Aufnahme.
             const recBtns = {};
             for (const [key, slot] of [['debugRec', 'a'], ['debugRec2', 'b']]) {
                 const el = makeButton(key, () => dbg.toggle(slot), (label) => {
@@ -1171,16 +1237,21 @@ async function boot() {
                     const s = dbg.lastSeconds(slot);
                     return s ? `⏺ ${label} · ${s.toFixed(1)} s` : `⏺ ${label}`;
                 });
-                el.querySelector('button').classList.toggle('debug-rec-on', dbg.recording(slot));
                 recBtns[slot] = el.querySelector('button');
                 row.appendChild(el);
             }
-            // Der rote Punkt am laufenden Recorder – nach jedem Klick beide prüfen.
-            for (const slot of ['a', 'b']) {
-                recBtns[slot].addEventListener('click', () => {
-                    for (const s of ['a', 'b']) recBtns[s].classList.toggle('debug-rec-on', dbg.recording(s));
-                });
-            }
+            // BEIDE Knöpfe nach jedem Klick neu zeichnen (@dpa 20260716_031100: „den zwei
+            // Rec Buttons muss man ansehen ob sie aufnehmen oder nicht"). Nötig, weil ein
+            // Start den ANDEREN Recorder stoppt: der zeichnete sich sonst nie neu und
+            // behauptete weiter „⏹" (= nimmt auf), obwohl er längst gestoppt war.
+            const paintRec = () => {
+                for (const s of ['a', 'b']) {
+                    recBtns[s].refresh();
+                    recBtns[s].classList.toggle('debug-rec-on', dbg.recording(s));
+                }
+            };
+            for (const slot of ['a', 'b']) recBtns[slot].addEventListener('click', paintRec);
+            paintRec();
             row.appendChild(makeButton('debugSave', () => dbg.saveBundle()));
             body.appendChild(row);
             registerArrange(row, grp.name + ':debug');
@@ -1189,7 +1260,6 @@ async function boot() {
 
         // Klappen / Settings
         collapseBtn.addEventListener('click', () => setGroupCollapsed(grp.name, !groupCollapsed(grp.name)));
-        setBtn.addEventListener('click', () => openGroupSettings(grp.name, setBtn));
         // Rechtsklick irgendwo auf der Gruppe = Gruppen-Settings an der Mausposition
         // (@dpa 20260711: „rechte Maustaste als Settings-Aufruf"). Knobs fangen es selbst ab
         // (eigener Meta-Editor). Gilt auch im e-Mode.
@@ -1420,6 +1490,25 @@ async function boot() {
                 const p = stored[u.dataset.ctrl] || nat.get(u) || { x: 0, y: 0 };
                 u.style.position = 'absolute'; u.style.left = Math.max(0, p.x) + 'px'; u.style.top = Math.max(0, p.y) + 'px';
             });
+            // Ein NEUES Control in einer schon angeordneten Gruppe hat keine gespeicherte
+            // Position – seine „natürliche" wäre der Fluss-Platz, den es in einem Layout,
+            // das längst umgebaut ist, nirgends mehr gibt: es landete quer über den anderen
+            // bzw. (bei fest eingestellter Gruppenbreite) außerhalb im Nachbarn. Deshalb:
+            // Neulinge unten anhängen, wo sie garantiert frei stehen und auffindbar sind.
+            // Nur wenn die Gruppe überhaupt schon angeordnet WAR – sonst bliebe der erste
+            // Freeze nicht sprungfrei (s. test/arrange.py, dd.md 873).
+            if (Object.keys(stored).length) {
+                let below = 0;
+                flat.forEach((u) => {
+                    if (!stored[u.dataset.ctrl]) return;
+                    below = Math.max(below, (parseFloat(u.style.top) || 0) + u.offsetHeight);
+                });
+                flat.forEach((u) => {
+                    if (stored[u.dataset.ctrl]) return;
+                    u.style.left = '0px'; u.style.top = (Math.ceil(below / GRID) * GRID + GRID) + 'px';
+                    below += u.offsetHeight + GRID;   // mehrere Neue stapeln, statt sich zu decken
+                });
+            }
             // Versteckte wieder verstecken – sie tragen jetzt eine gültige left/top und
             // erscheinen beim Wiedereinblenden (Einschalten / e-Mode) am richtigen Platz.
             wasHidden.forEach((u) => { u.style.display = 'none'; });
@@ -1573,6 +1662,12 @@ async function boot() {
         arranging = on;
         panel.classList.toggle('arranging', on);
         arrBtn.classList.toggle('on', on);   // Kopfzeilen-Schalter spiegeln
+        // Regler stumm schalten (@dpa 20260716_023817: „im e-mode werden keine Eingaben für
+        // die Controls angenommen … kein Value ändern beim draggen"). CSS schaltet nur das
+        // Dial stumm – der Wert-Drag hängt am Container, also genau an dem Element, das man
+        // hier greift, um es zu verschieben. Ohne diese Sperre verstellte jedes Anordnen
+        // nebenbei den Wert.
+        for (const kn of knobsById.values()) { kn.locked = on; if (on) kn.element.classList.remove('knob-selected'); }
         // Kein HTML5-Reorder-Drag mehr (Controls werden frei bewegt) → draggable aus.
         for (const { el } of arrangeRows) [...el.children].forEach((c) => { if (c.dataset.ctrl) c.draggable = false; });
         // REIHENFOLGE ist der Knackpunkt (@dpa 20260715): ERST einfrieren, DANN einblenden.
@@ -2045,7 +2140,10 @@ async function boot() {
     // – ein „übersichtlicher Kreis". Außerhalb der Panels (Overlays/Kopfzeile) bleibt
     // das native Tab-Verhalten. Rein/­raus per Klick oder erstem Tab in ein Panel-Control.
     function panelFocusables() {
-        return [...panel.querySelectorAll('.knob-container, select, input, button')]
+        // 'textarea' MUSS mit rein (@dpa 20260716_023817: „die Texteingabe ist noch nicht
+        // in der Tab selektier Sequenz") – die mehrzeilige Schrift-Eingabe ist kein <input>,
+        // und ohne sie sprang Tab an ihr vorbei zum nächsten Button.
+        return [...panel.querySelectorAll('.knob-container, select, input, textarea, button')]
             .filter((el) => el.offsetParent !== null && !el.disabled && el.tabIndex !== -1);
     }
     window.addEventListener('keydown', (e) => {
@@ -2069,6 +2167,7 @@ async function boot() {
     function frame() {
         const t0 = performance.now();
         keyboard.tick();
+        baseKeyboard.tick();
         scopes.tick();
         drawMeter();
         for (const w of seqWidgets) w.tick();

@@ -37,6 +37,14 @@ export class Knob {
         this._labelPos = config.labelPos ?? 'bottom';   // 'bottom'|'top'|'left'|'right'|'off'
         this._bg = config.bg ?? '';                      // '' = kein Hintergrund (Knob-BG-Farbe, z.B. #232833)
         this._hideValue = !!config.hideValue;            // true = Zahlen-Anzeige weg (nur Dial+Label, spart Platz)
+        // Auslieferungswert (Doppelklick auf die Ansicht springt hierhin). null = keiner
+        // bekannt → der Doppelklick fällt auf die Skalenmitte zurück.
+        this.defaultValue = config.defaultValue ?? null;
+        // Gesperrt = nimmt keine Bedienung an (e-Mode: „hier wird angeordnet, nicht
+        // bedient"). Das SVG schaltet CSS stumm; dieser Container-Handler liegt aber auf
+        // dem Element, das im e-Mode gerade GEZOGEN wird – er braucht ein eigenes Nein,
+        // sonst verstellt jedes Verschieben den Wert (@dpa 20260716_023817).
+        this.locked = false;
         this.formatValue = config.formatValue || null;
         this.onChange = config.onChange || null;
 
@@ -189,6 +197,10 @@ export class Knob {
         labelEl.className = 'knob-label';
         labelEl.textContent = this.label;
         this._labelEl = labelEl;   // Referenz: bei Umbenennung (setMeta) live aktualisieren
+        // Doppelklick auf das Label öffnet dieselbe Eingabe wie auf dem Wert (@dpa
+        // 20260716_023817: „auf Value und auf Label: Wert eingabe") – beides ist Schrift,
+        // beides meint denselben Wert.
+        labelEl.addEventListener('dblclick', (e) => { e.stopPropagation(); this._showValueInput(); });
         container.appendChild(labelEl);
 
         // (Kein ⚙-Settings-Icon mehr, @dpa 20260715: „settings icon kann weg (in allen)".
@@ -210,7 +222,11 @@ export class Knob {
         //     Label-Doppelklick = nichts); erst echtes Ziehen startet den Wert-Drag – relativ
         //     zum echten Startpunkt (nicht zum Slop-Punkt), damit nichts springt.
         container.addEventListener('mousedown', (e) => {
-            if (this._dragging) return;
+            if (this._dragging || this.locked) return;
+            // Klick IRGENDWO auf dem Control selektiert es (@dpa 20260716_023817: „ein
+            // select: click auf control") – vorher tat das nur ein Klick auf den Wert, und
+            // wer am Dial drehte, hatte den Regler danach trotzdem nicht unter den Pfeiltasten.
+            this.element.focus();
             if (e.target.closest('svg')) return;               // Dial: eigener Sofort-Drag oben
             e.preventDefault();
             const startEvt = e, sx = e.clientX, sy = e.clientY;
@@ -230,11 +246,15 @@ export class Knob {
             document.addEventListener('mouseup', slopUp);
         });
 
-        // Double-click on SVG to reset to center
+        // Doppelklick auf die ANSICHT (das Dial/den Fader) = zurück auf den Default-Wert
+        // (@dpa 20260716_023817). Vorher sprang er auf die Mitte der Skala – das ist bei
+        // einer log-Kurve oder einer verstellten Range irgendein Wert, nur nicht der, mit
+        // dem der Regler ausgeliefert wurde. `defaultValue` setzt app.js aus State.DEFAULTS;
+        // fehlt er (Knob ohne State-Bezug, z.B. in Popups), bleibt es bei der Mitte.
         svg.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            this._normValue = 0.5;
-            this._updateVisual();
+            if (this.defaultValue != null) this.value = this.defaultValue;   // Setter klemmt + zeichnet
+            else { this._normValue = 0.5; this._updateVisual(); }
             if (this.onChange) this.onChange(this.value);
         });
 
@@ -255,6 +275,7 @@ export class Knob {
     /* ──────────────── Keyboard & Text Input ──────────────── */
 
     _onKeyDown(e) {
+        if (this.locked) return;   // e-Mode: Pfeiltasten VERSCHIEBEN das Control (app.js)
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
             e.preventDefault();
             this._adjustValue(1, e);

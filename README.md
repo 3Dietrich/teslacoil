@@ -1,4 +1,4 @@
-# ⚡ Teslacoil – Ein getakteter Puls-Synth für den Browser
+# ⚡ Teslacoil – Ein getakteter Synth für den Browser
 
 > **Musik mit KI selber bauen** – Von der Tesla-Spule zum modularen Web-Audio-Synth
 
@@ -28,7 +28,11 @@ Der **Skalar** in Teslacoil ist der erste Schritt in diese Richtung: Frequenzen 
 
 ## 🎛️ Das Konzept
 
-Teslacoil ist ein **getakteter Puls-Synth** im Browser. Bei jedem Takt-Tick fällt ein Ton – gefiltert, verzerrt, verhallt. Kein Installieren, kein Speichern-Zwang. Alles läuft im Browser und merkt sich selbst, wo du aufgehört hast.
+Teslacoil ist ein **getakteter Synth** im Browser. Bei jedem Takt-Tick fällt ein Ton – gefiltert, verzerrt, verhallt. Angefangen hat er als reiner Puls-Synth; inzwischen hat er zwei Oszillatoren: den Puls mit einstellbarer Pulsweite und einen **Sine-FM**, der über sein Feedback vom reinen Sinus über den Sägezahn bis in einen obertonreichen Ton läuft.
+
+Der eigentliche Kern: **die Uhr gibt nicht nur den Takt vor, sondern über Oktavierung und ganzzahlige Vielfache auch die meisten Frequenzen.** Rhythmus und Tonhöhe sind hier zwei Enden derselben Skala. Und weil auf die nächste Frequenz `Basis × n` gerundet wird – also auf einen echten Oberton –, lassen sich „schräge" Töne bauen, die trotzdem sicher harmonisch sind.
+
+Kein Installieren, kein Speichern-Zwang. Alles läuft im Browser und merkt sich selbst, wo du aufgehört hast.
 
 ### Signalfluss
 
@@ -85,16 +89,21 @@ teslacoil/
 │   └── data/                     # PresetManager, Backup
 ├── css/main.css                  # Dark-Theme, Knob/Fader-Optik
 ├── index.html                    # Einstiegspunkt
-├── test/                         # Logic-Tests (111+), Playwright-Integration
+├── test/                         # Logic-Tests (144), Playwright-Integration
 └── docs/                         # Planung, Konzepte, Reviews
 ```
 
 ### Tests
 
-- **111+ Logic-Tests** – Headless in [test/logic.test.mjs](test/logic.test.mjs)
+- **144 Logic-Tests** – Headless in [test/logic.test.mjs](test/logic.test.mjs)
 - **Integration** – [test/smoke.py](test/smoke.py) (lädt, Audio erzeugt Signal)
 - **Performance** – [test/perf.py](test/perf.py) (≥45 FPS Render-Loop)
-- **Tastatur** – [test/arrange.py](test/arrange.py) (e-Mode, keyRoute)
+- **Tastatur/Layout** – [test/arrange.py](test/arrange.py) (e-Mode, keyRoute)
+- **Bedienregeln** – [test/controls.py](test/controls.py) (Selektion, Doppelklick, e-Mode sperrt Werte)
+- **Sichtbarkeit** – [test/visibility.py](test/visibility.py) (welches Control zeigt sich wann)
+- **Speicher** – [test/factory.py](test/factory.py) · [test/fileio.py](test/fileio.py)
+
+Die Bilder der Anleitung erzeugt [test/shots.py](test/shots.py) reproduzierbar neu.
 
 ---
 
@@ -125,10 +134,11 @@ teslacoil/
 
 ## 📚 Weiterführende Dokumente
 
-- **[anleitung.md](anleitung.md)** – Schritt-für-Schritt-Bedienungsanleitung
+- **[anleitung.md](anleitung.md)** – die Anleitung: jedes Bedienelement mit Bereich und Wirkung, mit Bildern
 - **[howto.md](howto.md)** – Technische Details zum Starten
-- **[CLAUDE.md](CLAUDE.md)** – Projekt-Kontext für KI-Chats
-- **[dd.md](dd.md)** – Chronologische Prompt-Historie (1300+ Zeilen!)
+
+> Die Arbeitsnotizen `dd.md` (Prompt-Historie) und `CLAUDE.md` (Projekt-Kontext für neue
+> KI-Chats) liegen bewusst nur lokal und sind nicht Teil dieses Repos.
 
 ---
 
@@ -145,7 +155,7 @@ Teslacoil ist lebendige Entwicklung. Die Vision von **Stimmungsfreiheit** jensei
 
 ## 👨‍💻 Entwickelt mit KI
 
-Teslacoil wurde **komplett per Prompt** mit verschiedenen KI-Modellen entwickelt – von der ersten Idee bis zum modularen Synth. Die gesamte Entwicklungsgeschichte steht in [dd.md](dd.md) – über 1300 Zeilen an Prompts, Fixes, Tests und Commits.
+Teslacoil wurde **komplett per Prompt** mit verschiedenen KI-Modellen entwickelt – von der ersten Idee bis zum modularen Synth. Die gesamte Entwicklungsgeschichte steht in einer lokalen Prompt-Historie: über 1400 Zeilen an Prompts, Fixes, Tests und Commits.
 
 **Modelle im Einsatz:** Claude Opus 4.8, Sonnet, DeepSeek, Qwen 3.5
 
@@ -153,5 +163,5 @@ Teslacoil wurde **komplett per Prompt** mit verschiedenen KI-Modellen entwickelt
 
 ---
 
-*Letzte Aktualisierung: 2026-07-15*  
+*Letzte Aktualisierung: 2026-07-16*  
 *by DD mit Claude Code*

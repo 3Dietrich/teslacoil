@@ -21,6 +21,8 @@
  * (target.applyStyle) – so bleibt das Panel generisch. Persistenz über onApply(id, style)
  * → state.ctrlStyles (Optik-Ebene, LAYOUT_KEYS).
  */
+import { makeDraggable } from './dragPanel.js';
+
 export class ElementSettings {
   constructor(state) {
     this._state = state || null;
@@ -38,49 +40,55 @@ export class ElementSettings {
         <button class="kme-close" title="Schließen">✕</button>
       </div>
       <div class="kme-body">
-        <div class="kme-row" data-f="label">
+        <div class="kme-row kme-wide" data-f="label">
           <label>Label</label>
           <input type="text" class="es-label" maxlength="24" />
         </div>
-        <div class="kme-row" data-f="labelOn">
-          <label>Label an</label>
-          <input type="checkbox" class="es-labelon" />
-        </div>
-        <div class="kme-row" data-f="labelPos">
-          <label>Label-Pos</label>
-          <select class="es-labelpos">
-            <option value="center">Mitte</option>
-            <option value="top">Oben</option>
-            <option value="left">Links</option>
-            <option value="right">Rechts</option>
-            <option value="bottom">Unten</option>
-          </select>
-        </div>
-        <div class="kme-row" data-f="bg">
-          <label>BG-Farbe</label>
-          <input type="color" class="es-bg" value="#222222" />
-          <button class="es-bg-clear" title="entfernen">✕</button>
-        </div>
-        <div class="kme-row" data-f="fg">
-          <label>Textfarbe</label>
-          <input type="color" class="es-fg" value="#dddddd" />
-          <button class="es-fg-clear" title="entfernen">✕</button>
-        </div>
-        <div class="kme-row" data-f="size">
-          <label>Größe</label>
-          <input type="number" class="es-size" min="7" max="28" step="1" />
-        </div>
-        <div class="kme-row" data-f="fontSize">
-          <label>Textgröße</label>
-          <input type="number" class="es-fontsize" min="7" max="28" step="1" />
-        </div>
-        <div class="kme-row" data-f="boxSize">
-          <label>Feldbreite</label>
-          <input type="number" class="es-boxsize" min="20" max="1200" step="2" />
-        </div>
-        <div class="kme-row" data-f="boxH">
-          <label>Feldhöhe</label>
-          <input type="number" class="es-boxh" min="16" max="1200" step="2" />
+        <!-- Zweispaltig wie der Regler-Editor (@dpa 20260716_011222: „bitte bei allen
+             Controls prüfen und Platz sparen"). Versteckte Felder fallen aus dem Raster,
+             die übrigen rücken auf – jeder Typ bekommt so ein dichtes Panel. -->
+        <div class="kme-grid">
+          <div class="kme-row" data-f="labelOn">
+            <label>Label an</label>
+            <input type="checkbox" class="es-labelon" />
+          </div>
+          <div class="kme-row" data-f="labelPos">
+            <label>Label-Pos</label>
+            <select class="es-labelpos">
+              <option value="center">Mitte</option>
+              <option value="top">Oben</option>
+              <option value="left">Links</option>
+              <option value="right">Rechts</option>
+              <option value="bottom">Unten</option>
+            </select>
+          </div>
+          <div class="kme-row" data-f="bg">
+            <label>BG</label>
+            <input type="color" class="es-bg" value="#222222" />
+            <button class="es-bg-clear" title="entfernen">✕</button>
+          </div>
+          <div class="kme-row" data-f="fg">
+            <label>Text</label>
+            <input type="color" class="es-fg" value="#dddddd" />
+            <button class="es-fg-clear" title="entfernen">✕</button>
+          </div>
+          <div class="kme-row" data-f="size">
+            <label>Größe</label>
+            <input type="number" class="es-size" min="7" max="28" step="1" />
+          </div>
+          <div class="kme-row" data-f="fontSize">
+            <label>Textgr.</label>
+            <input type="number" class="es-fontsize" min="7" max="28" step="1" />
+          </div>
+          <!-- 'Breite' wird beim Menü-Schalter zu 'Länge' (s. open()). -->
+          <div class="kme-row" data-f="boxSize">
+            <label>Breite</label>
+            <input type="number" class="es-boxsize" min="20" max="1200" step="2" />
+          </div>
+          <div class="kme-row" data-f="boxH">
+            <label>Höhe</label>
+            <input type="number" class="es-boxh" min="16" max="1200" step="2" />
+          </div>
         </div>
         <div class="kme-actions">
           <button class="es-reset">Zurücksetzen</button>
@@ -115,6 +123,7 @@ export class ElementSettings {
 
     document.body.appendChild(panel);
     this._panel = panel;
+    makeDraggable(panel, panel.querySelector('.kme-header'));
   }
 
   get isOpen() { return this._panel.style.display !== 'none'; }
@@ -138,6 +147,11 @@ export class ElementSettings {
     // Button (@dpa 20260715_223000): „Label, Label position (zusätzlich: mitte =
     // default), VG, BG, höhe, Breite".
     if (type === 'button') return ['label', 'labelPos', 'fg', 'bg', 'boxSize', 'boxH'];
+    // Keyboard (@dpa 20260716_031100: „muss ein (special) control werden: man muss die
+    // Größe und Farben ändern können"). Kein Label – seine Tasten sind seine Beschriftung.
+    // boxSize/boxH = Breite/Höhe EINER Taste (nicht des ganzen Bretts): so bleibt es bei
+    // 12 Tasten gleichmäßig, statt dass eine Gesamtbreite krumme Tasten erzeugt.
+    if (type === 'keyboard') return ['bg', 'fg', 'boxSize', 'boxH'];
     return ['label'];
   }
 
@@ -168,7 +182,27 @@ export class ElementSettings {
     this._panel.querySelector('.es-fontsize').value = style.fontSize || '';
     this._panel.querySelector('.es-boxsize').value = style.boxSize || '';
     this._panel.querySelector('.es-boxh').value = style.boxH || '';
-    this._panel.querySelector('.kme-title').textContent = '⚙ ' + (style.label ?? target.defLabel ?? 'Element');
+    // Beim Menü-Schalter heißt die Feldbreite 'Länge' (@dpa 20260716_011222, „z.B. bei
+    // Filter Typ wichtig") – dasselbe Wort wie beim Fader, denn es ist dieselbe Geste:
+    // wie lang darf das Ding werden. Wo es eine Feldhöhe daneben gibt (Text/Button),
+    // bleibt das Paar Breite/Höhe – dort wäre 'Länge' mehrdeutig.
+    const boxLab = this._panel.querySelector('.kme-row[data-f="boxSize"] label');
+    if (boxLab) boxLab.textContent = target.type === 'select' ? 'Länge' : 'Breite';
+    // Beim Keyboard geht es um EINE Taste – das muss dranstehen, sonst tippt man eine
+    // Gesamtbreite ein und bekommt ein 12× so breites Brett.
+    if (target.type === 'keyboard') {
+      if (boxLab) boxLab.textContent = 'Taste ↔';
+      const hLab = this._panel.querySelector('.kme-row[data-f="boxH"] label');
+      if (hLab) hLab.textContent = 'Taste ↕';
+      const fgLab = this._panel.querySelector('.kme-row[data-f="fg"] label');
+      if (fgLab) fgLab.textContent = 'Ton an';
+    } else {
+      const hLab = this._panel.querySelector('.kme-row[data-f="boxH"] label');
+      if (hLab) hLab.textContent = 'Höhe';
+      const fgLab = this._panel.querySelector('.kme-row[data-f="fg"] label');
+      if (fgLab) fgLab.textContent = 'Text';
+    }
+    this._panel.querySelector('.kme-title').textContent = style.label ?? target.defLabel ?? 'Element';
 
     const rect = target.el.getBoundingClientRect();
     this._panel.style.left = `${rect.right + 10}px`;

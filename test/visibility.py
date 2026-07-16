@@ -82,6 +82,41 @@ def main():
               pg.evaluate("()=>![...document.querySelectorAll('[data-ctrl]')]"
                           ".some(e=>e.dataset.ctrl.endsWith(':ampHoldCurve'))"))
 
+        # ── Der Obertöne-Schalter ist wieder raus (@dpa 20260716_023817, nach dem Hören) ──
+        check("Filter: Obertöne-Schalter existiert nicht mehr",
+              pg.evaluate("()=>![...document.querySelectorAll('[data-ctrl]')]"
+                          ".some(e=>e.dataset.ctrl.endsWith(':lpHarmQuant'))"))
+
+        # ── Base-Keyboard (@dpa 20260716_031100): bedienbar NUR bei Quelle 'Ton' ──
+        set_state({"baseSrc": "Ton", "baseNote": "C"})
+        pg.evaluate("()=>document.querySelectorAll('.base-keyboard .kb-key')[5].click()")
+        check("Base-Keyboard: Klick wählt die Tonklasse (Quelle Ton)",
+              pg.evaluate("()=>window.tesla.state.get('baseNote')") == "F")
+        on = pg.evaluate("()=>[...document.querySelectorAll('.base-keyboard .kb-key')]"
+                         ".map(k=>k.classList.contains('kb-on'))")
+        check("Base-Keyboard: genau EIN Ton an (single, keine Maske)",
+              on.count(True) == 1 and on[5], str(on))
+        # Quelle Freq: reine Anzeige – 440 Hz muss als A dastehen und Klicks ignorieren.
+        set_state({"baseSrc": "Freq", "baseHz": 440, "baseBand": 440, "baseNote": "F"})
+        check("Base-Keyboard: bei Quelle Freq nur Anzeige",
+              pg.evaluate("()=>document.querySelector('.base-keyboard').classList.contains('kb-readonly')"))
+        on2 = pg.evaluate("()=>[...document.querySelectorAll('.base-keyboard .kb-key')]"
+                          ".map(k=>k.classList.contains('kb-on'))")
+        check("Base-Keyboard: 440 Hz wird als A angezeigt", on2.count(True) == 1 and on2[9], str(on2))
+        pg.evaluate("()=>document.querySelectorAll('.base-keyboard .kb-key')[0].click()")
+        check("Base-Keyboard: Klick bei Quelle Freq ändert nichts",
+              pg.evaluate("()=>window.tesla.state.get('baseNote')") == "F")
+
+        # ── Settings sind Rechtsklick-Sache: kein ⚙ mehr an den Gruppen (@dpa 20260716) ──
+        check("Gruppen haben kein ⚙ mehr",
+              pg.evaluate("()=>!document.querySelector('.group-settings-btn')"))
+        check("Rechtsklick auf eine Gruppe öffnet ihre Settings", pg.evaluate("""()=>{
+            const g = document.querySelector("[data-group='Filter']");
+            g.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, clientX:10, clientY:10}));
+            const pop = document.querySelector('.group-settings');
+            const ok = !!pop; if (pop) pop.remove(); return ok;
+        }"""))
+
         # ── Skaler: Quant ist raus (@dpa 20260715_224643), die ×…Base-Anzeige bleibt ──
         for k in ("rateQuant", "rateNumMax", "rateDenMax"):
             check(f"Skaler: {k} existiert nicht mehr",
@@ -113,16 +148,31 @@ def main():
                         "b:debugRec", "b:debugRec2", "b:debugSave"], f"ist: {order}")
 
         # Tab in eine Schrift-Eingabe selektiert deren ganzen Inhalt. Start auf dem
-        # ⚙-Knopf der Gruppe – das Element DAVOR in der Tab-Kette (ein <div> lässt sich
-        # nicht fokussieren, von dort startete Tab wieder ganz vorn).
+        # Klapp-Knopf der Gruppe – das fokussierbare Element DAVOR in der Tab-Kette (ein
+        # <div> nimmt keinen Fokus, von dort startete Tab wieder ganz vorn). Früher hing
+        # das am ⚙ der Gruppe; das gibt es seit 20260716 nicht mehr (Settings = Rechtsklick).
         pg.evaluate("()=>{const i=document.querySelector(\"[data-ctrl='x:debugName'] input\");"
                     "i.value='alter-inhalt'; i.dispatchEvent(new Event('input',{bubbles:true}));"
-                    "document.querySelector(\"[data-group='Debug'] .group-settings-btn\").focus();}")
+                    "document.querySelector(\"[data-group='Debug'] .group-collapse\").focus();}")
         pg.keyboard.press("Tab")
         act = pg.evaluate("()=>{const i=document.activeElement; return {tag:i.tagName, "
                           "val:i.value||'', sel:(i.selectionEnd??0)-(i.selectionStart??0)};}")
         check("Debug: Tab landet auf der Name-Eingabe", act["val"] == "alter-inhalt", str(act))
         check("Debug: Tab selektiert den ganzen Textinhalt", act["sel"] == len("alter-inhalt"), str(act))
+
+        # Die MEHRZEILIGE Eingabe ist ein <textarea> – sie muss in der Tab-Kette liegen
+        # (@dpa 20260716_023817: „die Texteingabe ist noch nicht in der Tab selektier
+        # Sequenz"). panelFocusables() listete nur input/select/button → Tab sprang vorbei.
+        pg.evaluate("()=>{const t=document.querySelector(\"[data-ctrl='x:debugPrompt'] textarea\");"
+                    "t.value='prompt-inhalt'; t.dispatchEvent(new Event('input',{bubbles:true}));"
+                    "document.querySelector(\"[data-ctrl='x:debugName'] input\").focus();}")
+        pg.keyboard.press("Tab")
+        act2 = pg.evaluate("()=>{const i=document.activeElement; return {tag:i.tagName, "
+                           "val:i.value||'', sel:(i.selectionEnd??0)-(i.selectionStart??0)};}")
+        check("Debug: Tab erreicht die mehrzeilige Text-Eingabe",
+              act2["tag"] == "TEXTAREA", str(act2))
+        check("Debug: Tab selektiert auch dort den ganzen Inhalt",
+              act2["sel"] == len("prompt-inhalt"), str(act2))
 
         # Der Vergrößerungs-Zipfel: frei in beide Richtungen, Minimum bleibt erreichbar.
         css = pg.evaluate("()=>{const t=document.querySelector(\"[data-ctrl='x:debugPrompt'] textarea\");"

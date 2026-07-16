@@ -83,19 +83,27 @@ body {
 .sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
-.pb-select, .select-field select {
+.pb-select {
   background: var(--panel); color: var(--text); border: 1px solid var(--line);
   border-radius: 4px; padding: 5px 8px;
 }
+/* Menü-Schalter im Panel: knapperes Padding als in der Kopfzeile (@dpa 20260716_011222:
+   „ich will weniger padding"). Die Größe steuert weiter die Schrift, das Feld wächst mit
+   – nur eben ohne den Polstergürtel drumherum. */
+.select-field select {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 4px; padding: 2px 4px;
+}
 
 /* ── Selects ── */
-.select-field { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
-.toggle-field { flex-direction: row; align-items: center; gap: 6px; }
+.select-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; }
+/* Schalter: Kästchen und Beschriftung dichter zusammen (@dpa 20260716_011222). */
+.toggle-field { flex-direction: row; align-items: center; gap: 3px; }
 /* Toggle-Label-Position (@dpa 20260714, Element-Settings). DOM-Reihenfolge = Checkbox, Label. */
 .toggle-field.tgl-label-right { flex-direction: row; }
 .toggle-field.tgl-label-left { flex-direction: row-reverse; }
-.toggle-field.tgl-label-top { flex-direction: column-reverse; align-items: center; gap: 2px; }
-.toggle-field.tgl-label-bottom { flex-direction: column; align-items: center; gap: 2px; }
+.toggle-field.tgl-label-top { flex-direction: column-reverse; align-items: center; gap: 1px; }
+.toggle-field.tgl-label-bottom { flex-direction: column; align-items: center; gap: 1px; }
 /* Label von Controls ohne Knob (Select/Toggle) ist wie ein Regler draggbar (@dpa
    20260713) – Cursor zeigt das an; Klick auf den Value bleibt normale Bedienung. */
 .ctrl-label-drag { cursor: ns-resize; user-select: none; }
@@ -219,9 +227,16 @@ body {
 .refl-wrap { display: flex; align-items: flex-start; gap: 6px; }
 .refl-settings-btn { flex: 0 0 auto; }
 
-/* ── Tab-Fokus-Loop: klar sichtbarer Ring auf allen Panel-Bedienelementen ── */
-.panel select:focus-visible, .panel input:focus-visible, .panel button:focus-visible,
-.panel .knob-container:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+/* ── Selektion (Tab-Loop wie Klick): dezent (@dpa 20260716_023817 – „nicht mehr den
+   leuchtenden Rahmen, sondern nur eine leichte BG färbung evtl mit Rahmen, aber dezent").
+   Der 2px-Akzentring stach aus jedem Panel heraus; das Auge soll die Werte sehen, nicht
+   die Auswahl. Textfelder ausgenommen: dort ist der Ring die Schreib-Anzeige. ── */
+.panel select:focus-visible, .panel button:focus-visible,
+.panel input:not([type=text]):not([type=number]):focus-visible,
+.panel .knob-container:focus-visible {
+  outline: 1px solid rgba(90,209,255,.35); outline-offset: 1px; border-radius: 3px;
+  background: rgba(90,209,255,.08);
+}
 
 /* ── Envelope: Länge mit P→Len-Satelliten (kompakt, tief/hoch einzeln umsortierbar) ── */
 .sat-cluster { display: flex; align-items: flex-start; gap: 2px; }
@@ -248,21 +263,28 @@ body {
 /* Knob-BG (@dpa 20260714): der Punkt in der Mitte – zusammen mit dem inaktiven Ring-Rest
    (.knob-track oben) ist das der "graue Teil des Knopfes", der gefärbt wird. */
 .knob-center { fill: var(--knob-bg, var(--panel2)); }
-.knob-value { font-size: 11px; color: var(--knob-accent, var(--text)); margin-top: 2px; }
+/* Abstand Dial→Wert→Label (@dpa 20260716_011222: „weniger Platz"). Gemessen statt
+   geraten: das SVG ist quadratisch, der gezeichnete Bogen endet aber ~17 % über seiner
+   Unterkante – dieser Leerraum, nicht der Margin, drückte den Wert weg. Der negative
+   margin-bottom holt genau ihn zurück (je Größe, weil er mit dem SVG skaliert); erst
+   danach IST der margin-top der optische Abstand. line-height: 1 nimmt der Zeile ihren
+   unsichtbaren Puffer, sonst stimmen die px hier nicht mit dem Auge überein. */
+.knob-svg { margin-bottom: -9px; }
+.knob-value { font-size: 11px; line-height: 1; color: var(--knob-accent, var(--text)); margin-top: 5px; }
 /* Ansicht-Größen: groß / mittel (Default 64px) / klein / mini / ohne Knob.
    Die Control-Höhe „berechnet" sich aus der Ansicht mit: weniger/kein Knob → flacher,
    mini schrumpft zusätzlich die Breite (Wunsch @dpa – Controls wie Gruppen platzierbar). */
 .knob-size-small { width: 46px; }
-.knob-size-small .knob-svg { width: 38px; height: 38px; }
+.knob-size-small .knob-svg { width: 38px; height: 38px; margin-bottom: -6px; }
 /* Mini: kleiner als „klein" – Höhe UND Breite schrumpfen. */
 .knob-size-mini { width: 36px; }
-.knob-size-mini .knob-svg { width: 26px; height: 26px; }
+.knob-size-mini .knob-svg { width: 26px; height: 26px; margin-bottom: -4px; }
 .knob-size-mini .knob-label { font-size: 8px; }
-.knob-size-mini .knob-value { font-size: 9px; margin-top: 0; }
+.knob-size-mini .knob-value { font-size: 9px; margin-top: 3px; }
 .knob-size-large { width: 88px; }
-.knob-size-large .knob-svg { width: 80px; height: 80px; }
+.knob-size-large .knob-svg { width: 80px; height: 80px; margin-bottom: -13px; }
 /* Ohne Knob: kein reservierter Knob-Platz → Höhe nimmt deutlich ab. */
-.knob-size-none .knob-svg { display: none; }
+.knob-size-none .knob-svg { display: none; margin-bottom: 0; }
 .knob-size-none { width: 54px; }
 
 /* ── Fader-Gestalt (@dpa 20260715: „umschalten auf Fader, mit Längenangabe") ──
@@ -271,7 +293,8 @@ body {
    seine Maße selbst (width/height-Attribut aus der eingestellten Länge).
    Ausserdem: Dial-Teile sind gestrichene Pfade (stroke), die Fader-Teile sind Rechtecke
    → sie brauchen fill, sonst blieben sie unsichtbar bzw. schwarz. */
-.knob-shape-fader .knob-svg { width: auto; height: auto; }
+/* Der Fader zeichnet seine Bahn randlos aus – hier gibt es keinen Leerraum abzuziehen. */
+.knob-shape-fader .knob-svg { width: auto; height: auto; margin-bottom: 0; }
 /* Waagerechter Fader ('Fader W'): auch der Zieh-Cursor dreht sich mit – nach rechts
    ziehen erhöht, senkrecht zu ziehen waere hier widersinnig. */
 .knob-fader-w .knob-svg, .knob-fader-w .knob-value, .knob-fader-w .knob-label { cursor: ew-resize; }
@@ -281,9 +304,11 @@ body {
 .knob-size-none::before { content: ''; display: block; height: 4px; }
 .knob-size-none .knob-label { font-size: 9px; }
 .knob-size-none .knob-value { font-size: 10px; margin-top: 0; }
+/* Ohne Dial gibt es keinen Leerraum davor → der Wert braucht seinen Margin nicht. */
+.knob-size-none .knob-value, .knob-hide-value + .knob-label { margin-top: 0; }
 /* Zahlen-Anzeige weg (Dial+Label bleiben) – spart rechts Platz, z.B. Opaque-Regler in Popups. */
 .knob-hide-value .knob-value { display: none; }
-.knob-label { font-size: 10px; color: var(--muted); margin-top: 1px; text-align: center; }
+.knob-label { font-size: 10px; line-height: 1; color: var(--muted); margin-top: 3px; text-align: center; }
 /* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
 .knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
 .knob-label-off .knob-label { display: none; }
@@ -307,8 +332,10 @@ body {
 .knob-value-input { width: 48px; font-size: 11px; text-align: center; background: var(--panel2); color: var(--text); border: 1px solid var(--accent); border-radius: 2px; }
 
 /* ── Knob-Meta-Editor (übernommen aus octaver) ── */
+/* Zweispaltig statt Feld-unter-Feld (@dpa 20260716_011222): 2 × (Label + 70px-Eingabe)
+   passen nebeneinander → das Panel wird breiter, aber nur noch halb so hoch. */
 .knob-meta-editor {
-  position: fixed; z-index: 1000; width: 220px;
+  position: fixed; z-index: 1000; width: 296px;
   background: var(--panel2); border: 1px solid var(--accent);
   border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
   font-size: 12px; overflow: hidden;
@@ -317,31 +344,45 @@ body {
 .kme-title { color: var(--accent); font-weight: 600; font-size: 11px; }
 .kme-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; }
 .kme-close:hover { color: var(--accent2); }
-.kme-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.kme-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.kme-row label { color: var(--muted); font-size: 10px; min-width: 56px; }
+.kme-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.kme-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; row-gap: 6px; }
+.kme-row { display: flex; justify-content: flex-start; align-items: center; gap: 6px; }
+/* Labelspalte auf einen festen Standardwert – die Beschriftungen sind absichtlich kurz
+   gehalten ('Dez.', 'BG'), damit hier nichts unnötig Breite frisst (@dpa). */
+.kme-row label { color: var(--muted); font-size: 10px; flex: 0 0 44px; }
+/* Element-Settings haben die längeren Beschriftungen ('Label-Pos') – 44px brachen sie
+   auf zwei Zeilen um und machten die Zeile hoch (@dpa-Screenshot 20260716). */
+.elem-settings .kme-row label { flex: 0 0 54px; }
+.kme-wide input.kme-label { flex: 1 1 auto; }
+/* 70px reichen für jede Eingabe hier (@dpa) – Zahlen wie Kurz-Menüs. */
 .kme-row input, .kme-row select {
-  flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+  flex: 0 0 70px; width: 70px; min-width: 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
   padding: 3px 6px; color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums;
 }
 .kme-row input:focus, .kme-row select:focus { outline: none; border-color: var(--accent); }
-.kme-row input.kme-color { flex: 0 0 34px; padding: 1px; height: 22px; cursor: pointer; }
+.kme-row input.kme-color { flex: 0 0 34px; width: 34px; padding: 1px; height: 22px; cursor: pointer; }
+/* Der BG-Farbwähler steht mit seinem ✕ zu zweit in einer Rasterzelle → er darf nicht die
+   vollen 70px nehmen, sonst quillt die Zelle über. */
+.kme-row input.kme-bg { flex: 0 0 34px; width: 34px; padding: 1px; height: 22px; cursor: pointer; }
+.kme-bg-clear { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-size: 10px; padding: 2px 5px; cursor: pointer; }
 /* Farb-Preset-Menü + Speichern-Icon (ersetzt den früheren „Standard"-Button) */
-.kme-color-preset { flex: 1 1 auto; min-width: 0; }
+.kme-color-preset { flex: 1 1 auto; width: auto; min-width: 0; }
 .kme-color-save, .kme-color-del { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-size: 13px; padding: 2px 7px; cursor: pointer; }
 .kme-color-save:hover { border-color: var(--accent); }
 .kme-color-del:hover { border-color: #ff7a7a; }
-.kme-curve-preview { display: flex; justify-content: center; margin: 4px 0; }
+.kme-curve-preview { display: flex; justify-content: center; margin: 2px 0; }
 .kme-curve-preview canvas { border: 1px solid var(--line); border-radius: 3px; background: #0e1116; }
-.kme-actions { display: flex; gap: 8px; }
-.kme-actions button { flex: 1; padding: 5px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
+/* „Übernehmen" reicht schmal und rechts – „Zurücksetzen" ist raus (@dpa). */
+.kme-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.kme-actions button { flex: 0 0 auto; padding: 3px 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
 .kme-apply { border-color: var(--accent) !important; color: var(--accent) !important; }
 .kme-apply:hover { background: rgba(90,209,255,.15) !important; }
 .kme-reset:hover { border-color: var(--accent2); color: var(--accent2); }
 .knob-active .knob-value-arc { stroke: var(--accent2); }
-/* ausgewählter Regler (Klick auf Wert) → Pfeiltasten aktiv */
-.knob-selected { background: rgba(90,209,255,.06); border-radius: 5px; }
-.knob-selected .knob-value { color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+/* Ausgewählter Regler (Klick irgendwo auf dem Control) → Pfeiltasten bedienen ihn.
+   Dezent: leichte Färbung + feiner Rahmen, kein Balken unter dem Wert (@dpa 20260716). */
+.knob-selected { background: rgba(90,209,255,.08); outline: 1px solid rgba(90,209,255,.35); border-radius: 5px; }
 
 /* ── Keyboard (kompakt) ── */
 .keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: fit-content; }
@@ -371,9 +412,12 @@ body {
 .keyboard.kb-transpose-mode .kb-readout-hint:hover { background: rgba(255,159,90,.14); box-shadow: inset 0 0 0 1px rgba(255,159,90,.5); }
 /* Skala-Anker im Transponier-Modus – leuchtet wie eine selektierte Frequenz */
 .kb-key.kb-anchor { box-shadow: inset 0 0 0 2px var(--accent2), 0 0 8px rgba(255,159,90,.6); z-index: 2; }
-.kb-keys { display: grid; grid-template-columns: repeat(12, 26px); gap: 2px; }
+/* Größe/Farben sind Optik-Variablen (@dpa 20260716_031100: „man muss die Größe und
+   Farben ändern können") – die Element-Settings setzen sie am .keyboard, die Defaults
+   hier bleiben die Auslieferungsoptik. */
+.kb-keys { display: grid; grid-template-columns: repeat(12, var(--kb-key-w, 26px)); gap: 2px; }
 .kb-key {
-  position: relative; height: 46px; border-radius: 0 0 2px 2px; cursor: pointer;
+  position: relative; height: var(--kb-key-h, 46px); border-radius: 0 0 2px 2px; cursor: pointer;
   border: 1px solid var(--line); padding: 0; overflow: hidden;
   display: flex; flex-direction: column; background: transparent;
   transition: box-shadow .1s;
@@ -384,7 +428,7 @@ body {
 .kb-key:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* obere Hälfte: Zustand (aus = sehr dezent, an = helles Orange, +0.2 Opazität) */
 .kb-ind { height: 50%; background: rgba(255,154,46,.16); transition: background .1s; }
-.kb-key.kb-on .kb-ind { background: rgba(255,154,46,.6); }
+.kb-key.kb-on .kb-ind { background: var(--kb-on, rgba(255,154,46,.6)); }
 /* untere Hälfte: Original-Tastenidentität (s/w) + Notenname */
 .kb-id { height: 50%; display: flex; justify-content: center; align-items: center; font-size: 9px; font-weight: 600; }
 .kb-white .kb-id { background: #cdd3dc; color: #2a2f3a; }
@@ -395,6 +439,17 @@ body {
 .keyboard.kb-skal2 .kb-slot-active .kb-id { box-shadow: inset 0 0 0 2px var(--accent2); font-weight: 800; }
 .keyboard.kb-skal2 .kb-white.kb-slot-active .kb-id { background: #ffd9b0; color: #3a2412; }
 .keyboard.kb-skal2 .kb-black.kb-slot-active .kb-id { background: #6a4527; color: #ffe6cc; }
+
+/* ── Base-Keyboard (Base-Frq-Gruppe, @dpa 20260716_031100) ──
+   Teilt die Optik des Skaler-Keyboards. Bei Quelle 'Ton' bedienbar; sonst ist es eine
+   ANZEIGE – dann darf es nicht nach Knopf aussehen (kein Zeiger, kein Hover-Fingerzeig),
+   sondern nur zeigen, wo die Frequenz im Tonraum liegt. */
+/* Kompakter als das Skaler-Brett: es zeigt EINEN Ton, statt eine Maske zu editieren –
+   und die Base-Frq-Gruppe ist schmal. Per Rechtsklick (Taste ↔ / ↕) jederzeit größer. */
+.base-keyboard { padding: 6px; --kb-key-w: 18px; --kb-key-h: 30px; }
+.base-keyboard .kb-id { font-size: 8px; }
+.base-keyboard.kb-readonly .kb-key { cursor: default; }
+.base-keyboard.kb-readonly { opacity: .85; }
 
 /* ── Scopes ── */
 .scopes { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -437,11 +492,12 @@ body {
 /* ── Arrange-Modus: ALLE Elemente in Gruppen umsortieren (experimentell) ── */
 /* Interaktive Leaf-Elemente stumm schalten, damit der Drag greift (nur im Panel;
    der Settings-Knopf in der Kopfzeile bleibt bedienbar → Modus abschaltbar). */
-.arranging button, .arranging select, .arranging input,
+.arranging button, .arranging select, .arranging input, .arranging textarea,
 .arranging .knob-svg, .arranging .keyboard * { pointer-events: none; }
-/* Ausnahme (@dpa): die Zahnrad-Knöpfe bleiben im e-Mode bedienbar → EINSTELLUNGEN
-   weiterhin erreichbar (Gruppen-⚙ und je-Regler-⚙), ebenso der Klapp-Pfeil. */
-.arranging .group-settings-btn, .arranging .group-collapse,
+/* Ausnahme: der Klapp-Pfeil bleibt bedienbar (Gruppen zu-/aufklappen beim Anordnen).
+   Hier stand mal eine zweite Ausnahme für die ⚙-Knöpfe – die gibt es nicht mehr, und ihr
+   Selektor hing (Komma!) an der Panel-Regel darunter, war also nie eine Ausnahme. */
+.arranging .group-collapse { pointer-events: auto; }
 /* Klar sichtbarer „Anordnen-Modus": das ganze Panel wird dezent eingefärbt +
    schraffiert, jedes Element bekommt einen kräftigen Greif-Rahmen und getönten
    Hintergrund → man sieht sofort, dass hier verschoben (nicht bedient) wird. */
@@ -461,6 +517,9 @@ body {
 .ctrl-moving { opacity: .7; z-index: 6; }
 /* Ausgewähltes Element (Gruppe ODER Control): Pfeiltasten bewegen es → orange Markierung. */
 .arranging .arrange-selected { outline: 2px solid var(--accent2) !important; outline-offset: 3px; z-index: 5; }
+/* Gummiband: nur eine Andeutung – es soll zeigen, was es umfasst, nicht selbst leuchten. */
+.select-band { position: absolute; z-index: 20; pointer-events: none;
+  border: 1px solid var(--accent2); background: rgba(255,159,90,.12); border-radius: 2px; }
 /* Kleines Hinweis-Badge oben links im Panel (nur im Anordnen-Modus). */
 .arrange-hint {
   position: fixed; top: 60px; left: 18px; z-index: 500;
@@ -481,6 +540,11 @@ body {
 
 /* ── Schrift-Eingabe (TEXTS) ── */
 .text-field .gs-text { flex: none; }
+/* Im freien Canvas stapelt die DOM-Reihenfolge: die Buttons kommen NACH der Eingabe und
+   lagen deshalb über ihr, sobald man sie am Zipfel größer zog (@dpa 20260716_023817:
+   „die Texteingabe ist hinter den anderen Buttons"). Wer angefasst wird oder den Fokus
+   hat, kommt nach vorn – das gilt für jedes Control, nicht nur für die Eingabe. */
+.free-canvas > [data-ctrl]:hover, .free-canvas > [data-ctrl]:focus-within { z-index: 5; }
 /* Der Vergrößerungs-Zipfel (@dpa 20260715_223000): frei in BEIDE Richtungen ziehbar,
    „den Text beliebig groß machen können". Das Minimum hält ihn erreichbar – wer ihn ganz
    klein zieht, kommt noch an den Zipfel, um ihn wieder aufzuziehen. */

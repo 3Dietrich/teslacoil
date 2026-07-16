@@ -107,6 +107,9 @@ export const DEFAULTS = Object.freeze({
                          // Cutoff. 0 % = nur Cutoff, 100 % = Cutoff + gespielte Frequenz.
     lpGlide: 0.015,      // Glide-Zeitkonstante (τ, s) für Keytrack-Cutoff-Sprünge zwischen
                          // Noten ('Option A', @dpa). 0 = harter Sprung (kein Glide).
+    // (Oberton-Raster auf dem Cutoff: 20260716_011222 als Test gebaut, 20260716_023817
+    //  nach dem Hören wieder raus – „Obertöne aus und weg". Kein State-Key mehr; ein alter
+    //  gespeicherter lpHarmQuant wird beim Laden schlicht ignoriert.)
     // Env-Trig (@dpa 20260713, ersetzt das alte Bool 'filterSeqEnabled'): dreistufig,
     // steuert WANN/WIE die Filter-Hüllkurve (lpEnv/lpAttack/lpDecay) getriggert wird.
     //   'off'  – Env komplett aus (kein Trigger, kein Cutoff-Hub)

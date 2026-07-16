@@ -35,13 +35,26 @@ export class DebugPanel {
     /** @param {'a'|'b'} slot */
     recording(slot) { return this.slots[slot].rec.recording; }
 
-    /** Aufnahme dieses Slots starten/stoppen. @returns {number|null} Sekunden nach dem Stopp. */
+    /**
+     * Aufnahme dieses Slots starten/stoppen (@dpa 20260716_031100).
+     * Zwei feste Regeln, bewusst HIER und nicht in der UI – sie gelten für den Recorder,
+     * egal wer ihn auslöst:
+     *   • **Nie zwei gleichzeitig.** Startet man den einen, während der andere läuft, wird
+     *     der andere sauber gestoppt (seine Aufnahme bleibt erhalten und vergleichbar).
+     *   • **Ein neuer Start verwirft die vorherige Aufnahme DIESES Recorders** – der Slot
+     *     hält immer genau einen Take, nie einen halb überschriebenen Zustand.
+     * @returns {number|null} Sekunden nach dem Stopp, null beim Start.
+     */
     toggle(slot) {
         const s = this.slots[slot];
         if (s.rec.recording) {
             s.last = s.rec.stop();
             return s.last.length / this.engine.ctx.sampleRate;
         }
+        for (const [k, o] of Object.entries(this.slots)) {
+            if (k !== slot && o.rec.recording) o.last = o.rec.stop();
+        }
+        s.last = null;
         s.rec.start();
         return null;
     }

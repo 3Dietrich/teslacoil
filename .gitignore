@@ -9,4 +9,5 @@ restore.html
 # Persoenliche Arbeitsnotizen (lokal, nicht veroeffentlichen)
 dd.md
 CLAUDE.md
-image.png
+# Die Screenshots, die in dd.md-Prompts hängen (frühere lagen lose im Root herum).
+_notes_img/
