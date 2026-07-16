@@ -64,23 +64,25 @@ export class ElementSettings {
           </div>
           <div class="kme-row" data-f="bg">
             <label>BG</label>
-            <input type="color" class="es-bg" value="#222222" />
-            <button class="es-bg-clear" title="entfernen">✕</button>
+            <input type="color" class="es-bg" value="#222222" title="Hintergrundfarbe" />
+            <button class="es-bg-clear kme-x" title="Hintergrundfarbe entfernen">✕</button>
           </div>
           <div class="kme-row" data-f="fg">
             <label>Text</label>
-            <input type="color" class="es-fg" value="#dddddd" />
-            <button class="es-fg-clear" title="entfernen">✕</button>
+            <input type="color" class="es-fg" value="#dddddd" title="Vordergrund-/Textfarbe" />
+            <button class="es-fg-clear kme-x" title="Vordergrundfarbe entfernen">✕</button>
           </div>
           <div class="kme-row" data-f="size">
             <label>Größe</label>
-            <input type="number" class="es-size" min="7" max="28" step="1" />
+            <input type="number" class="es-size" min="7" max="28" step="1" title="Schriftgröße im Feld (px)" />
           </div>
           <div class="kme-row" data-f="fontSize">
             <label>Textgr.</label>
-            <input type="number" class="es-fontsize" min="7" max="28" step="1" />
+            <input type="number" class="es-fontsize" min="7" max="28" step="1" title="Textgröße (px)" />
           </div>
-          <!-- 'Breite' wird beim Menü-Schalter zu 'Länge' (s. open()). -->
+          <!-- 'Breite' wird beim Menü-Schalter zu 'Länge' und beim Keyboard zu 'Taste ↔'
+               (s. open()); die Grenzen setzt open() gleich mit, weil eine Taste einen
+               anderen Bereich braucht als ein Textfeld. -->
           <div class="kme-row" data-f="boxSize">
             <label>Breite</label>
             <input type="number" class="es-boxsize" min="20" max="1200" step="2" />
@@ -89,19 +91,21 @@ export class ElementSettings {
             <label>Höhe</label>
             <input type="number" class="es-boxh" min="16" max="1200" step="2" />
           </div>
-        </div>
-        <div class="kme-actions">
-          <button class="es-reset">Zurücksetzen</button>
+          <!-- Nur beim Keyboard: Abstand ZWISCHEN den Tasten. Bei kleinen Tasten wirkte
+               der feste Abstand viel zu groß (@dpa 20260716_132014). -->
+          <div class="kme-row" data-f="gap">
+            <label>Abstand</label>
+            <input type="number" class="es-gap" min="0" max="10" step="1" title="Abstand zwischen den Tasten (0–10 px)" />
+          </div>
         </div>
       </div>
     `;
     panel.querySelector('.kme-close').addEventListener('click', () => this.close());
-    panel.querySelector('.es-reset').addEventListener('click', () => this._reset());
 
     // Alle Felder wenden sofort an (live), wie beim Knob-Editor die Farbe/Ansicht.
     // Die Farbfelder brauchen dedizierte Handler: erst „aktiv"-Flag setzen, DANN _apply –
     // sonst sammelt _apply die Farbe noch vor dem Flag ein (Reihenfolge-Bug).
-    const live = ['.es-label', '.es-labelon', '.es-labelpos', '.es-size', '.es-fontsize', '.es-boxsize', '.es-boxh'];
+    const live = ['.es-label', '.es-labelon', '.es-labelpos', '.es-size', '.es-fontsize', '.es-boxsize', '.es-boxh', '.es-gap'];
     live.forEach((sel) => {
       const el = panel.querySelector(sel);
       const ev = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
@@ -151,7 +155,7 @@ export class ElementSettings {
     // Größe und Farben ändern können"). Kein Label – seine Tasten sind seine Beschriftung.
     // boxSize/boxH = Breite/Höhe EINER Taste (nicht des ganzen Bretts): so bleibt es bei
     // 12 Tasten gleichmäßig, statt dass eine Gesamtbreite krumme Tasten erzeugt.
-    if (type === 'keyboard') return ['bg', 'fg', 'boxSize', 'boxH'];
+    if (type === 'keyboard') return ['bg', 'fg', 'boxSize', 'boxH', 'gap'];
     return ['label'];
   }
 
@@ -182,6 +186,7 @@ export class ElementSettings {
     this._panel.querySelector('.es-fontsize').value = style.fontSize || '';
     this._panel.querySelector('.es-boxsize').value = style.boxSize || '';
     this._panel.querySelector('.es-boxh').value = style.boxH || '';
+    this._panel.querySelector('.es-gap').value = style.gap ?? '';
     // Beim Menü-Schalter heißt die Feldbreite 'Länge' (@dpa 20260716_011222, „z.B. bei
     // Filter Typ wichtig") – dasselbe Wort wie beim Fader, denn es ist dieselbe Geste:
     // wie lang darf das Ding werden. Wo es eine Feldhöhe daneben gibt (Text/Button),
@@ -189,18 +194,25 @@ export class ElementSettings {
     const boxLab = this._panel.querySelector('.kme-row[data-f="boxSize"] label');
     if (boxLab) boxLab.textContent = target.type === 'select' ? 'Länge' : 'Breite';
     // Beim Keyboard geht es um EINE Taste – das muss dranstehen, sonst tippt man eine
-    // Gesamtbreite ein und bekommt ein 12× so breites Brett.
+    // Gesamtbreite ein und bekommt ein 12× so breites Brett. Und es braucht eigene
+    // Grenzen (@dpa 20260716_132014: „Taste ↔ minimum 10, maximum 999 · Taste ↕ min 10,
+    // max 500") – die Textfeld-Grenzen (20/1200) ließen 12 Tasten ins Uferlose wachsen
+    // und verboten zugleich die schmalen, die @dpa in seiner 194px-Gruppe braucht.
+    const wIn = this._panel.querySelector('.es-boxsize');
+    const hIn = this._panel.querySelector('.es-boxh');
+    const hLab = this._panel.querySelector('.kme-row[data-f="boxH"] label');
+    const fgLab = this._panel.querySelector('.kme-row[data-f="fg"] label');
     if (target.type === 'keyboard') {
       if (boxLab) boxLab.textContent = 'Taste ↔';
-      const hLab = this._panel.querySelector('.kme-row[data-f="boxH"] label');
       if (hLab) hLab.textContent = 'Taste ↕';
-      const fgLab = this._panel.querySelector('.kme-row[data-f="fg"] label');
       if (fgLab) fgLab.textContent = 'Ton an';
+      wIn.min = 10; wIn.max = 999; wIn.step = 1; wIn.title = 'Breite EINER Taste (10–999 px)';
+      hIn.min = 10; hIn.max = 500; hIn.step = 1; hIn.title = 'Höhe EINER Taste (10–500 px)';
     } else {
-      const hLab = this._panel.querySelector('.kme-row[data-f="boxH"] label');
       if (hLab) hLab.textContent = 'Höhe';
-      const fgLab = this._panel.querySelector('.kme-row[data-f="fg"] label');
       if (fgLab) fgLab.textContent = 'Text';
+      wIn.min = 20; wIn.max = 1200; wIn.step = 2; wIn.title = 'Breite des Feldes (px)';
+      hIn.min = 16; hIn.max = 1200; hIn.step = 2; hIn.title = 'Höhe des Feldes (px)';
     }
     this._panel.querySelector('.kme-title').textContent = style.label ?? target.defLabel ?? 'Element';
 
@@ -232,6 +244,9 @@ export class ElementSettings {
     if (fields.has('fontSize')) { const v = parseInt(P('.es-fontsize').value); if (v) s.fontSize = v; }
     if (fields.has('boxSize')) { const v = parseInt(P('.es-boxsize').value); if (v) s.boxSize = v; }
     if (fields.has('boxH')) { const v = parseInt(P('.es-boxh').value); if (v) s.boxH = v; }
+    // Abstand 0 ist eine gültige Ansage („Tasten auf Stoß") – deshalb hier NICHT auf
+    // Wahrheit prüfen wie oben, sonst fiele genau die 0 durchs Raster.
+    if (fields.has('gap')) { const v = parseInt(P('.es-gap').value); if (Number.isFinite(v)) s.gap = Math.max(0, Math.min(10, v)); }
     return s;
   }
 
@@ -239,15 +254,7 @@ export class ElementSettings {
     if (!this._target) return;
     const style = this._collect();
     this._target.applyStyle(style);
-    this._panel.querySelector('.kme-title').textContent = '⚙ ' + (style.label || this._target.defLabel || 'Element');
+    this._panel.querySelector('.kme-title').textContent = style.label || this._target.defLabel || 'Element';
     if (this.onApply) this.onApply(this._target.id, style);
-  }
-
-  _reset() {
-    if (!this._target) return;
-    const t = this._target;
-    this._target.applyStyle({});
-    if (this.onApply) this.onApply(t.id, {});
-    this.open(t);   // Felder aus dem geleerten Style neu füllen
   }
 }

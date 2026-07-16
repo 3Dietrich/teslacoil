@@ -59,6 +59,15 @@ def main():
         check('Klick auf das Label selektiert das Control', pg.evaluate(
             "()=>document.querySelector('[data-ctrl=\"k:amp\"]').classList.contains('knob-selected')"))
 
+        # Auch der Klick auf die GRAFIK selektiert (@dpa 20260716_132014: „Selektionsrahmen
+        # erscheint noch nicht beim click auf den knob/grafik"). Die Falle: der svg-Handler
+        # feuert zuerst und setzt _dragging – ein Ausstieg darauf VOR dem focus() lässt
+        # ausgerechnet das gerade gedrehte Control unmarkiert.
+        pg.evaluate("()=>document.activeElement.blur()")
+        amp.locator('.knob-svg').click()
+        check('Klick auf die Grafik selektiert das Control', pg.evaluate(
+            "()=>document.querySelector('[data-ctrl=\"k:amp\"]').classList.contains('knob-selected')"))
+
         style = pg.evaluate("""()=>{const e=document.querySelector('[data-ctrl="k:amp"]');
             const s=getComputedStyle(e); return {outline:s.outlineWidth, bg:s.backgroundColor};}""")
         check('Selektion ist dezent (Rahmen ≤ 1px + leichte Färbung)',
@@ -111,6 +120,38 @@ def main():
         check('e-Mode: Gummiband wählt mehrere Controls', n > 1, f'{n} selektiert')
         check('e-Mode: Gummiband verschwindet nach dem Loslassen',
               pg.evaluate("()=>!document.querySelector('.select-band')"))
+
+        # Der Bug-Bericht @dpa 20260716_132014, Schritt für Schritt nachgestellt:
+        #   „aktiv" im Gate-Reverb anklicken → es schaltete um (CSS stellt nur die Checkbox
+        #   stumm; geklickt wird aber ihr <label>, und das aktiviert sie trotzdem).
+        rv0 = pg.evaluate("()=>window.tesla.state.get('reverbEnabled')")
+        pg.locator('[data-ctrl="t:reverbEnabled"]').click()
+        rv1 = pg.evaluate("()=>window.tesla.state.get('reverbEnabled')")
+        check('e-Mode: Klick auf einen Schalter schaltet ihn NICHT um', rv0 == rv1, f'{rv0}->{rv1}')
+
+        #   …dann ESC (Auswahl weg, Fokus weg) → Pfeiltasten verstellten BaseFreq/Band.
+        #   Die Fernsteuerung hängt am Fenster und griff, sobald der Fokus auf dem Body lag.
+        pg.keyboard.press('Escape')
+        band0 = pg.evaluate("()=>window.tesla.state.get('baseBand')")
+        note0 = pg.evaluate("()=>window.tesla.state.get('baseNote')")
+        for k in ('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'):
+            pg.keyboard.press(k)
+        check('e-Mode: Pfeiltasten verstellen nach ESC nicht BaseFrq/Band',
+              pg.evaluate("()=>window.tesla.state.get('baseBand')") == band0
+              and pg.evaluate("()=>window.tesla.state.get('baseNote')") == note0,
+              f'Band {band0}, Ton {note0}')
+
+        # Tab schaltet im e-Mode durch die AUSWAHL, nicht durch den Fokus (@dpa: „Tab soll
+        # durch die Selektionen schalten").
+        pg.keyboard.press('Tab')
+        sel1 = pg.evaluate("()=>{const e=document.querySelector('.arrange-selected');return e?e.dataset.ctrl:null}")
+        pg.keyboard.press('Tab')
+        sel2 = pg.evaluate("()=>{const e=document.querySelector('.arrange-selected');return e?e.dataset.ctrl:null}")
+        check('e-Mode: Tab wählt aus und geht weiter',
+              sel1 is not None and sel2 is not None and sel1 != sel2, f'{sel1} -> {sel2}')
+        n_sel = pg.evaluate("()=>document.querySelectorAll('.arrange-selected').length")
+        check('e-Mode: Tab wählt immer genau eines aus', n_sel == 1, f'{n_sel} selektiert')
+
         pg.keyboard.press('e')
         pg.wait_for_timeout(200)
 

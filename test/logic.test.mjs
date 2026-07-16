@@ -860,5 +860,25 @@ t('Debug: ein neuer Start löscht die vorherige Aufnahme DIESES Recorders', () =
     assert.equal(d.recording('a'), true);
 });
 
+// Rücksetzen beider Slots (@dpa 20260716_132014: „ein extra Rücksetzen Icon zum
+// leeren/reseten beider Recs"). Auch das ist Logik in DebugPanel, nicht in der UI.
+t('Debug: Rücksetzen leert BEIDE Aufnahmen', () => {
+    const d = makeDbg();
+    d.toggle('a'); d.toggle('a');        // a: fertiger Take
+    d.toggle('b'); d.toggle('b');        // b: fertiger Take
+    assert.equal(d.lastSeconds('a'), 0.1);
+    assert.equal(d.lastSeconds('b'), 0.2);
+    d.resetAll();
+    assert.equal(d.lastSeconds('a'), 0, 'a muss leer sein');
+    assert.equal(d.lastSeconds('b'), 0, 'b muss leer sein');
+});
+t('Debug: Rücksetzen bricht eine laufende Aufnahme ab (hinterher ist nichts mehr da)', () => {
+    const d = makeDbg();
+    d.toggle('a');                       // läuft noch
+    d.resetAll();
+    assert.equal(d.recording('a'), false, 'darf nicht weiterlaufen');
+    assert.equal(d.lastSeconds('a'), 0, 'der abgebrochene Take darf nicht liegen bleiben');
+});
+
 await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind
 console.log(`\n${pass} Tests bestanden${process.exitCode ? ' (mit Fehlern!)' : ' ✅'}`);

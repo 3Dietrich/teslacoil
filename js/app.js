@@ -22,6 +22,7 @@ import { StepSeqUI } from './ui/StepSeqUI.js';
 import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { PresetBar } from './ui/PresetBar.js';
+import { PickMenu } from './ui/PickMenu.js';
 import { PresetManager } from './data/PresetManager.js';
 import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
 import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
@@ -131,6 +132,7 @@ const NOTES = {
 const BUTTONS = {
     debugRec:  { label: 'Rec',  title: 'Audio parallel am Master abgreifen (Hörweg unberührt) – Start/Stop' },
     debugRec2: { label: 'Rec2', title: 'Zweite Aufnahme zum Vergleich (vorher/nachher) – Start/Stop' },
+    debugRecReset: { label: '⟲', title: 'Beide Aufnahmen verwerfen (Rec und Rec2 leeren)' },
     debugSave: { label: 'Debug speichern', title: 'Audio (WAV, beide Aufnahmen) + Screenshot (PNG) + Zustand (JSON) + Prompt (TXT) einzeln herunterladen' },
 };
 
@@ -364,6 +366,17 @@ async function boot() {
             elemSettings.open({ id, type, el, defLabel, applyStyle });
         });
     }
+    // Optik eines Keyboard-Bretts (Skaler + Base teilen sie sich, @dpa 20260716_031100:
+    // „das neue Base-Keyboard ist ja ein Control, was ich ab jetzt Keyboard nenne").
+    // Die Werte gehen als CSS-Variablen ans Brett – die Tasten rechnen sich daraus selbst
+    // aus (12× gleich breit). boxSize/boxH sind EINE Taste, nicht das Brett.
+    const kbStyle = (el) => (s) => {
+        el.style.setProperty('--kb-key-w', s.boxSize ? s.boxSize + 'px' : '');
+        el.style.setProperty('--kb-key-h', s.boxH ? s.boxH + 'px' : '');
+        el.style.setProperty('--kb-gap', s.gap != null ? s.gap + 'px' : '');
+        el.style.setProperty('--kb-on', s.fg || '');
+        el.style.background = s.bg || '';
+    };
 
     const knobsById = new Map();
     const ctrlBindings = new Map();   // key → (data) => UI aktualisieren (Selects/Toggles)
@@ -661,62 +674,61 @@ async function boot() {
     // Skala-Presets (laden/sichern) – gehören in die Skaler-Gruppe.
     // Die getroffene Auswahl wird in der Optik gemerkt (state.scaleSel) → Recall/Reset-fest.
     function makeScaleBar() {
-        const sel = document.createElement('select'); sel.className = 'pb-select';
-        const refresh = () => {
-            const want = state.get('scaleSel');
-            const exists = want && presets.listScales().some((s) => s.name === want);
-            sel.innerHTML = '';
-            // Platzhalter trägt den geladenen Namen (↻ Name); Box bleibt auf Index 0, damit
-            // ein ERNEUTES Wählen desselben Eintrags wieder feuert und neu lädt (@dpa 20260713).
-            const ph = document.createElement('option'); ph.textContent = exists ? `↻ ${want}` : '— Skala —'; sel.appendChild(ph);
-            presets.listScales().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
-            sel.selectedIndex = 0;
-        };
-        scaleRefresh = refresh;   // vom Recall aufrufbar
-        refresh();
-        // Auswahl LÄDT direkt (wie Combo) und wird gemerkt – kein separater ↺-Button mehr.
-        sel.addEventListener('change', () => {
-            const i = sel.selectedIndex - 1;
-            if (i >= 0) { state.set('scaleSel', sel.value); presets.recallScale(i); }
-            else state.set('scaleSel', '');
-            refresh();
+        // Wie MainSnapshot (@dpa 20260716_132014) – dasselbe Widget, dieselbe Bedienung:
+        // geladene Skala steht auf dem Knopf und ist in der Liste markiert, erneutes
+        // Wählen lädt erneut, ✎/🗑 an der Zeile, ＋ in der Fußzeile.
+        const menu = new PickMenu({
+            label: 'Skala', empty: '— keine Skala —',
+            title: 'Skala wählen · die markierte erneut wählen lädt sie erneut',
+            list: () => presets.listScales(),
+            current: () => state.get('scaleSel') || '',
+            onPick: (i, it) => { state.set('scaleSel', it.name); presets.recallScale(i); },
+            onUpdate: (i) => presets.updateScale(i),
+            onDelete: (i, it) => {
+                if (!confirm('Skala „' + it.name + '" löschen?')) return;
+                presets.deleteScale(i);
+                if (state.get('scaleSel') === it.name) state.set('scaleSel', '');
+            },
+            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Maske als neue Skala speichern', () => {
+                const name = prompt('Skalen-Name?', '');
+                if (name === null) return;
+                const list = presets.saveScale(name);
+                state.set('scaleSel', name || (list[list.length - 1] && list[list.length - 1].name) || '');
+                menu.refresh();
+            }]],
         });
-        const curIdx = () => { const w = state.get('scaleSel'); return w ? presets.listScales().findIndex((s) => s.name === w) : -1; };
-        const bar = presetCluster('Skala', sel, [
-            ['✎', 'Geladene Skala mit aktueller Maske überschreiben (Update)', () => { const i = curIdx(); if (i >= 0) presets.updateScale(i); }, 'save'],
-            ['＋', 'Als neue Skala speichern', () => { const name = prompt('Skalen-Name?', ''); if (name !== null) { const list = presets.saveScale(name); state.set('scaleSel', name || (list[list.length - 1] && list[list.length - 1].name) || ''); refresh(); } }, 'new'],
-            ['🗑', 'Geladene Skala löschen', () => { const i = curIdx(), w = state.get('scaleSel'); if (i >= 0 && confirm('Skala „' + w + '" löschen?')) { presets.deleteScale(i); state.set('scaleSel', ''); refresh(); } }, 'del'],
-        ]);
-        bar.classList.add('group-extra');
+        scaleRefresh = () => menu.refresh();   // vom Recall aufrufbar
+        const bar = document.createElement('div'); bar.className = 'pb-cluster group-extra';
+        bar.appendChild(menu.element);
         return bar;
     }
 
     // P2 = die 12 skal2-Slots als benanntes Bündel (speichern/laden wie eine Skala,
     // nur der ganze Satz auf einmal). Nur im skal2-Modus sichtbar. Auswahl gemerkt (p2Sel).
     function makeP2Bar() {
-        const sel = document.createElement('select'); sel.className = 'pb-select';
-        const refresh = () => {
-            const want = state.get('p2Sel');
-            const exists = want && presets.listP2().some((s) => s.name === want);
-            sel.innerHTML = '';
-            const ph = document.createElement('option'); ph.textContent = exists ? `↻ ${want}` : '— P2 —'; sel.appendChild(ph);
-            presets.listP2().forEach((it) => { const o = document.createElement('option'); o.textContent = it.name; sel.appendChild(o); });
-            sel.selectedIndex = 0;
-        };
-        p2Refresh = refresh; refresh();
-        sel.addEventListener('change', () => {
-            const i = sel.selectedIndex - 1;
-            if (i >= 0) { state.set('p2Sel', sel.value); presets.recallP2(i); }
-            else state.set('p2Sel', '');
-            refresh();
+        const menu = new PickMenu({
+            label: 'P2', empty: '— kein P2 —',
+            title: 'Slot-Satz wählen · den markierten erneut wählen lädt ihn erneut',
+            list: () => presets.listP2(),
+            current: () => state.get('p2Sel') || '',
+            onPick: (i, it) => { state.set('p2Sel', it.name); presets.recallP2(i); },
+            onUpdate: (i) => presets.updateP2(i),
+            onDelete: (i, it) => {
+                if (!confirm('P2 „' + it.name + '" löschen?')) return;
+                presets.deleteP2(i);
+                if (state.get('p2Sel') === it.name) state.set('p2Sel', '');
+            },
+            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Die 12 Slots als neues P2 speichern', () => {
+                const name = prompt('P2-Name?', '');
+                if (name === null) return;
+                const list = presets.saveP2(name);
+                state.set('p2Sel', name || (list[list.length - 1] && list[list.length - 1].name) || '');
+                menu.refresh();
+            }]],
         });
-        const curIdx = () => { const w = state.get('p2Sel'); return w ? presets.listP2().findIndex((s) => s.name === w) : -1; };
-        const bar = presetCluster('P2', sel, [
-            ['✎', 'Geladenes P2 mit den 12 aktuellen Slots überschreiben (Update)', () => { const i = curIdx(); if (i >= 0) presets.updateP2(i); }, 'save'],
-            ['＋', 'Die 12 Slots als neues P2 speichern', () => { const name = prompt('P2-Name?', ''); if (name !== null) { const list = presets.saveP2(name); state.set('p2Sel', name || (list[list.length - 1] && list[list.length - 1].name) || ''); refresh(); } }, 'new'],
-            ['🗑', 'Geladenes P2 löschen', () => { const i = curIdx(), w = state.get('p2Sel'); if (i >= 0 && confirm('P2 „' + w + '" löschen?')) { presets.deleteP2(i); state.set('p2Sel', ''); refresh(); } }, 'del'],
-        ]);
-        bar.classList.add('group-extra');
+        p2Refresh = () => menu.refresh();
+        const bar = document.createElement('div'); bar.className = 'pb-cluster group-extra';
+        bar.appendChild(menu.element);
         bar.style.display = state.get('skal2On') ? '' : 'none';
         p2Bar = bar;
         return bar;
@@ -805,8 +817,12 @@ async function boot() {
         return wrap;
     }
     presetBar.element.appendChild(makeFxChainBar());
-    // DC-Block ans Ende der Transport-Zeile (Reihenfolge Start·Snapshot·Kette·DC, @dpa 20260713).
-    presetBar.element.appendChild(makeToggle('dcBlock'));
+    // DC-Block wohnt seit 20260716_132014 in den Einstellungen (@dpa: „DC-Block bitte in
+    // Einstellungen verschieben") – er wird einmal gesetzt und dann nie wieder angefasst,
+    // in der Transport-Zeile stand er nur im Weg. Der Schalter wird HIER gebaut (damit er
+    // wie jeder andere am State hängt und den Recall mitmacht) und unten ins Overlay
+    // gehängt; ein Neuaufbau pro Öffnen würde ihn doppelt registrieren.
+    const dcToggle = makeToggle('dcBlock');
 
     // ── Optisches Layout-System (Gruppen-Stil/-Position/-Klappen) – eigenständig ──
     // Beim ersten Start optische Einstellungen aus Snapshot "verschiebetest" übernehmen.
@@ -828,7 +844,10 @@ async function boot() {
     //    zieht in die vorher fast leere erste Zeile, Zeile 2 bleibt Start·Snapshot·Kette·DC). ──
     const settingsBtn = iconBtn('⚙', 'Einstellungen', () => openSettings());
     settingsBtn.classList.add('settings-btn');
-    const arrBtn = iconBtn('⇄', 'Alle Elemente in Gruppen frei anordnen (experimentell) – dann per Drag umsortieren', () => setArranging(!arranging));
+    // Hint sagt jetzt, was der Modus IST und wie man ihn ruft (@dpa 20260716_132014:
+    // „bitte Hint anpassen: shortcut, nicht mehr experimentell").
+    const arrBtn = iconBtn('⇄', 'Anordnen-Modus (Taste „e"): Elemente frei ziehen · Klick/Tab wählt aus · '
+        + 'Pfeiltasten verschieben (10px, Shift = 1px) · hier wird nichts bedient', () => setArranging(!arranging));
     arrBtn.classList.add('arrange-btn');
     const cpuEl = document.createElement('span'); cpuEl.className = 'hdr-cpu'; cpuEl.textContent = 'CPU –';
     const hdrRight = document.createElement('div'); hdrRight.className = 'topbar-right';
@@ -904,6 +923,17 @@ async function boot() {
         note.textContent = 'Auto-Restore ist aktiv: Sound- und Optik-Zustand werden automatisch '
             + 'gesichert und beim Neuladen/Aktualisieren wiederhergestellt.';
         win.appendChild(note);
+
+        // ── Ausgang: DC-Block (@dpa 20260716_132014 hierher verschoben) ──
+        const dcHead = document.createElement('div'); dcHead.className = 'sw-subhead'; dcHead.textContent = 'Ausgang';
+        win.appendChild(dcHead);
+        const dcNote = document.createElement('p'); dcNote.className = 'sw-note';
+        dcNote.textContent = 'Entfernt den Gleichanteil aus dem Ausgangssignal (Lautsprecherschutz). '
+            + 'Ein Puls-Synth erzeugt ihn zwangsläufig – aus lassen nur, wenn man ihn wirklich braucht.';
+        win.appendChild(dcNote);
+        const dcRow = document.createElement('div'); dcRow.className = 'sw-actions';
+        dcRow.appendChild(dcToggle);
+        win.appendChild(dcRow);
 
         // ── Backups (@dpa 20260714): vollständige Sicherungen aller Keys, gestaffelt
         // aufbewahrt. Auswahl + Laden (setzt ALLES zurück auf den Stand) + manuelles Sichern. ──
@@ -1075,6 +1105,18 @@ async function boot() {
     // Auf freier Fläche aufziehen wählt alles aus, was das Rechteck berührt. Klick auf ein
     // Control zieht dieses (wireCtrlMove) – hier kommt nur an, was DANEBEN beginnt. Ein
     // Klick ohne Ziehen auf die freie Fläche hebt die Auswahl auf.
+    // Im e-Mode nimmt das Panel GAR KEINE Bedienung an (@dpa 20260716_132014: „Wie
+    // vereinbart: im e-Mode soll gar keine Bedienung mehr ermöglicht werden" – gemeldet
+    // an „Gate Reverb aktiv anklicken schaltet es um"). Warum CSS dafür nicht reicht:
+    // jeder Schalter steckt in einem <label>, und ein Klick aufs Label aktiviert seine
+    // Checkbox — auch wenn die selbst `pointer-events: none` hat. Der Klick trifft ja das
+    // Label, nicht die Box. Also hier im Capture abfangen, bevor irgendjemand ihn sieht.
+    // Ausnahme bleibt der Klapp-Pfeil: Gruppen zu-/aufklappen ist Anordnen, nicht Bedienen.
+    panel.addEventListener('click', (e) => {
+        if (!arranging) return;
+        if (e.target.closest('.group-collapse')) return;
+        e.preventDefault(); e.stopPropagation();
+    }, true);
     let _band = null;
     panel.addEventListener('mousedown', (e) => {
         if (!arranging || e.button !== 0) return;
@@ -1164,12 +1206,7 @@ async function boot() {
             // Keyboard = „special control" (@dpa 20260716_031100): Rechtsklick gibt ihm
             // Größe und Farben wie jedem anderen Element. Die Werte gehen als CSS-Variablen
             // ans Brett – die Tasten rechnen sich daraus selbst aus (12× gleich breit).
-            registerCtrlStyle('u:keyboard', 'keyboard', keyboard.element, (s) => {
-                keyboard.element.style.setProperty('--kb-key-w', s.boxSize ? s.boxSize + 'px' : '');
-                keyboard.element.style.setProperty('--kb-key-h', s.boxH ? s.boxH + 'px' : '');
-                keyboard.element.style.setProperty('--kb-on', s.fg || '');
-                keyboard.element.style.background = s.bg || '';
-            }, 'Keyboard');
+            registerCtrlStyle('u:keyboard', 'keyboard', keyboard.element, kbStyle(keyboard.element), 'Keyboard');
             body.appendChild(makeMovable(makeScaleBar(), 'u:scale'));
             body.appendChild(makeMovable(makeP2Bar(), 'u:p2'));
         }
@@ -1187,13 +1224,7 @@ async function boot() {
             // 12-Ton-Brett der Basis (@dpa 20260716_031100): bei Quelle 'Ton' bedienbar,
             // sonst zeigt es, auf welchem Ton die eingestellte Frequenz landet.
             baseKeyboard.mount(body); makeMovable(baseKeyboard.element, 'u:baseKeys');
-            registerCtrlStyle('u:baseKeys', 'keyboard', baseKeyboard.element, (s) => {
-                const el = baseKeyboard.element;
-                el.style.setProperty('--kb-key-w', s.boxSize ? s.boxSize + 'px' : '');
-                el.style.setProperty('--kb-key-h', s.boxH ? s.boxH + 'px' : '');
-                el.style.setProperty('--kb-on', s.fg || '');
-                el.style.background = s.bg || '';
-            }, 'Base-Keyboard');
+            registerCtrlStyle('u:baseKeys', 'keyboard', baseKeyboard.element, kbStyle(baseKeyboard.element), 'Base-Keyboard');
             registerCtrlStyle('u:baseRead', 'readout', baseReadout, readoutStyle(baseReadout), 'Base-Readout');
             registerCtrlStyle('u:baseSpeed', 'readout', baseSpeed, readoutStyle(baseSpeed), 'Base-Speed');
         }
@@ -1251,6 +1282,11 @@ async function boot() {
                 }
             };
             for (const slot of ['a', 'b']) recBtns[slot].addEventListener('click', paintRec);
+            // Rücksetzen (@dpa 20260716_132014): leert BEIDE Slots. Steht direkt hinter den
+            // beiden Rec-Knöpfen – es gehört zu ihnen, nicht zum Speichern. Danach zeigen
+            // beide wieder „⏺ Rec" ohne Länge, also genau den leeren Zustand.
+            const recReset = makeButton('debugRecReset', () => { dbg.resetAll(); paintRec(); });
+            row.appendChild(recReset);
             paintRec();
             row.appendChild(makeButton('debugSave', () => dbg.saveBundle()));
             body.appendChild(row);
@@ -1744,44 +1780,46 @@ async function boot() {
         mkSize('Breite', 'width', 800);
         mkSize('Höhe', 'height', 800);
 
-        // ── Combo (Farb-Preset): gleiche Bedienung wie ein Snapshot – laden per
-        //    Menü-Auswahl, Icons für Überschreiben/Neu/Löschen direkt in der Zeile. ──
-        const presetSel = document.createElement('select'); presetSel.className = 'gs-text gs-combo-sel';
-        // Platzhalter-reflektiert (↻ Name) + Reselect (@dpa 20260713): Box bleibt auf Index 0,
-        // der geladene Combo ergibt sich aus comboSel. Icons wirken auf diesen.
-        const comboIdx = () => { const w = state.get('comboSel'); return w ? state.get('groupStylePresets').findIndex((p) => p.name === w) : -1; };
-        const fillPresets = () => { const want = state.get('comboSel'); const exists = want && state.get('groupStylePresets').some((p) => p.name === want); presetSel.innerHTML = ''; const ph = document.createElement('option'); ph.textContent = exists ? `↻ ${want}` : '— Combo —'; presetSel.appendChild(ph); state.get('groupStylePresets').forEach((p) => { const o = document.createElement('option'); o.textContent = p.name; presetSel.appendChild(o); }); presetSel.selectedIndex = 0; };
-        fillPresets();
+        // ── Combo (Farb-Preset): jetzt exakt wie der Haupt-Snapshot bedienbar (@dpa
+        //    20260716_132014: „die anderen Snapshot menus sollen wie MainSnapshot
+        //    funktionieren … Vor allem wenn geschlossen: den letzten Snap anzeigen (und
+        //    nicht 'Snapshot' oder 'Combo' – das ist sinnlos)"). Der geladene Combo steht
+        //    auf dem Knopf, ✎/🗑 hängen an ihrer Zeile, ＋ in der Fußzeile. ──
         const curColors = () => ({ bg: hexA(bgCol.value, parseFloat(bgA.value)), headColor: hexA(hCol.value, parseFloat(hA.value)) });
-        presetSel.addEventListener('change', () => { const i = presetSel.selectedIndex - 1; const p = i >= 0 ? state.get('groupStylePresets')[i] : null; state.set('comboSel', p ? p.name : ''); if (p) { setGroupStyle(name, { bg: p.bg, headColor: p.headColor }); bgCol.value = parseHex(p.bg, '#1c2027'); bgA.value = parseA(p.bg, 1); hCol.value = parseHex(p.headColor, '#8a93a3'); hA.value = parseA(p.headColor, 1); } fillPresets(); });
+        const comboMenu = new PickMenu({
+            label: 'Combo', empty: '— kein Combo —',
+            title: 'Farb-Combo wählen · den markierten erneut wählen wendet ihn erneut an',
+            list: () => state.get('groupStylePresets'),
+            current: () => state.get('comboSel') || '',
+            onPick: (i, p) => {
+                state.set('comboSel', p.name);
+                setGroupStyle(name, { bg: p.bg, headColor: p.headColor });
+                bgCol.value = parseHex(p.bg, '#1c2027'); bgA.value = parseA(p.bg, 1);
+                hCol.value = parseHex(p.headColor, '#8a93a3'); hA.value = parseA(p.headColor, 1);
+            },
+            onUpdate: (i) => { const list = state.get('groupStylePresets').slice(); list[i] = { ...list[i], ...curColors() }; state.set('groupStylePresets', list); },
+            onDelete: (i, p) => {
+                if (!confirm('Combo „' + p.name + '" löschen?')) return;
+                const list = state.get('groupStylePresets').slice(); list.splice(i, 1);
+                state.set('groupStylePresets', list);
+                if (state.get('comboSel') === p.name) state.set('comboSel', '');
+            },
+            foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Farben als neuen Combo speichern', () => {
+                const pn = prompt('Combo-Name?', '');
+                if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); state.set('comboSel', pn); comboMenu.refresh(); }
+            }]],
+        });
         const comboRow = document.createElement('div'); comboRow.className = 'gs-row gs-combo-row';
-        const comboLab = document.createElement('span'); comboLab.className = 'gs-lab'; comboLab.textContent = 'Combo';
-        comboRow.appendChild(comboLab); comboRow.appendChild(presetSel);
-        [
-            ['✎', 'Geladenen Combo mit den aktuellen Farben überschreiben', () => { const i = comboIdx(); if (i < 0) { alert('Erst einen Combo im Menü wählen.'); return; } const list = state.get('groupStylePresets').slice(); list[i] = { ...list[i], ...curColors() }; state.set('groupStylePresets', list); fillPresets(); }, 'save'],
-            ['＋', 'Aktuelle Farben als neuen Combo speichern', () => { const pn = prompt('Combo-Name?', ''); if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); state.set('comboSel', pn); fillPresets(); } }, 'new'],
-            ['🗑', 'Geladenen Combo löschen', () => { const i = comboIdx(), w = state.get('comboSel'); if (i >= 0 && confirm('Combo „' + w + '" löschen?')) { const list = state.get('groupStylePresets').slice(); list.splice(i, 1); state.set('groupStylePresets', list); state.set('comboSel', ''); fillPresets(); } }, 'del'],
-        ].forEach(([g, t, fn, kind]) => comboRow.appendChild(iconBtn(g, t, fn, kind)));
+        comboRow.appendChild(comboMenu.element);
         pop.appendChild(comboRow);
 
         // ── Gruppen-Snapshot: eigenes Snapshot-System nur für die Sound-Parameter
         //    DIESER Gruppe (unabhängig vom globalen Ensemble-Snapshot & von der Optik). ──
         const grp = GROUPS.find((g) => g.name === name);
         if (grp) {
-            const gsSel = document.createElement('select'); gsSel.className = 'gs-text gs-snap-sel';
             const remembered = () => (state.get('groupSnapSel') || {})[name] || '';
             const remember = (nm) => state.set('groupSnapSel', { ...state.get('groupSnapSel'), [name]: nm || '' });
-            // Der geladene Snapshot ergibt sich aus dem gemerkten Namen (Box bleibt auf
-            // Index 0, Platzhalter zeigt ↻ Name) → Reselect lädt erneut (@dpa 20260713).
             const gsIdx = () => { const w = remembered(); return w ? presets.listGroupSnaps(name).findIndex((s) => s.name === w) : -1; };
-            const gsFill = () => {
-                const want = remembered();
-                const exists = want && presets.listGroupSnaps(name).some((s) => s.name === want);
-                gsSel.innerHTML = '';
-                const ph = document.createElement('option'); ph.textContent = exists ? `↻ ${want}` : '— Snapshot —'; gsSel.appendChild(ph);
-                presets.listGroupSnaps(name).forEach((s) => { const o = document.createElement('option'); o.textContent = s.name; gsSel.appendChild(o); });
-                gsSel.selectedIndex = 0;
-            };
             const keys = () => groupSoundKeys(grp);
             const metaKeys = () => groupKnobKeys(grp);
             // Dirty-Marker: zeigt, ob der aktuelle Gruppen-Zustand vom geladenen
@@ -1793,28 +1831,32 @@ async function boot() {
                 gsMark.textContent = dirtyMark(d);
                 gsMark.title = d && d.changed ? `${d.changed}/${d.total} Parameter gegenüber „${remembered()}" verändert` : '';
             };
-            gsFill(); updMark();
-            // Auswahl im Menü LÄDT direkt (kein separater Laden-Button mehr) und wird
-            // gemerkt; erneutes Wählen desselben Eintrags lädt wieder.
-            gsSel.addEventListener('change', () => {
-                const i = gsSel.selectedIndex - 1;
-                if (i >= 0) { remember(gsSel.value); presets.recallGroupSnap(name, i); }
-                else remember('');
-                gsFill(); updMark();
+            updMark();
+            const gsMenu = new PickMenu({
+                label: 'Snapshot', empty: '— kein Snapshot —',
+                title: 'Gruppen-Snapshot wählen · den markierten erneut wählen lädt ihn erneut',
+                list: () => presets.listGroupSnaps(name),
+                current: remembered,
+                onPick: (i, it) => { remember(it.name); presets.recallGroupSnap(name, i); updMark(); },
+                onUpdate: (i) => { presets.updateGroupSnap(name, i, keys(), metaKeys()); updMark(); },
+                onDelete: (i, it) => {
+                    if (!confirm('Gruppen-Snapshot „' + it.name + '" löschen?')) return;
+                    presets.deleteGroupSnap(name, i);
+                    if (remembered() === it.name) remember('');
+                    updMark();
+                },
+                foot: [['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Sound + Control-Settings dieser Gruppe als neuen Snapshot speichern', () => {
+                    const nm = prompt('Snapshot-Name für „' + name + '"?', '');
+                    if (nm) { presets.saveGroupSnap(name, nm, keys(), metaKeys()); remember(nm); gsMenu.refresh(); updMark(); }
+                }]],
             });
             const gsRow = document.createElement('div'); gsRow.className = 'gs-row gs-snap-row';
-            const gsLab = document.createElement('span'); gsLab.className = 'gs-lab'; gsLab.textContent = 'Snapshot';
-            gsRow.appendChild(gsLab); gsRow.appendChild(gsSel); gsRow.appendChild(gsMark);
-            [
-                ['✎', 'Geladenen Gruppen-Snapshot überschreiben (Sound + Control-Settings)', () => { const i = gsIdx(); if (i >= 0) { presets.updateGroupSnap(name, i, keys(), metaKeys()); updMark(); } }, 'save'],
-                ['＋', 'Sound + Control-Settings dieser Gruppe als neuen Snapshot speichern', () => { const nm = prompt('Snapshot-Name für „' + name + '"?', ''); if (nm) { presets.saveGroupSnap(name, nm, keys(), metaKeys()); remember(nm); gsFill(); updMark(); } }, 'new'],
-                ['🗑', 'Geladenen Gruppen-Snapshot löschen', () => { const i = gsIdx(), w = remembered(); if (i >= 0 && confirm('Gruppen-Snapshot „' + w + '" löschen?')) { presets.deleteGroupSnap(name, i); remember(''); gsFill(); updMark(); } }, 'del'],
-            ].forEach(([g, t, fn, kind]) => gsRow.appendChild(iconBtn(g, t, fn, kind)));
+            gsRow.appendChild(gsMenu.element); gsRow.appendChild(gsMark);
             pop.appendChild(gsRow);
         }
 
-        // Combo speichern/überschreiben/löschen liegt jetzt als Icons in der Combo-Zeile
-        // (gleiches Verhalten wie die Snapshot-Zeile) → hier nur noch „Fertig".
+        // Speichern/Überschreiben/Löschen liegen in den beiden Menüs (Combo/Snapshot)
+        // → hier nur noch „Fertig".
         const acts = document.createElement('div'); acts.className = 'gs-actions';
         const doneBtn = document.createElement('button'); doneBtn.className = 'pb-btn'; doneBtn.textContent = 'Fertig';
         doneBtn.addEventListener('click', closeGroupSettings);
@@ -2119,6 +2161,14 @@ async function boot() {
             if (d) { e.preventDefault(); nudgeSelected(d[0], d[1], e.shiftKey); return; }
         }
 
+        // Ab hier wird BEDIENT – im e-Mode gibt es das nicht (@dpa 20260716_132014,
+        // „warum das immer auf Base-Freq Band springt.. weiß der Geier"): die
+        // BaseFrq-Fernsteuerung unten hängt am Fenster und griff, sobald der Fokus auf
+        // dem Body lag. Genau das war der Zustand nach ESC – Auswahl weg, Fokus weg,
+        // und die nächste Pfeiltaste verstellte im Anordnen-Modus den Klang. Die Regel
+        // ist einfacher als jede Sonderbehandlung: e-Mode = anordnen, sonst nichts.
+        if (arranging) return;
+
         // BaseFrq-Fernsteuerung (Band-Regler für ALLE Quellen):
         //   ↑/↓ = Band oktavweise (×2 / ÷2) verschieben, in JEDEM Modus.
         //   ←/→ = Tonklasse (nur im Ton-Modus).
@@ -2146,8 +2196,35 @@ async function boot() {
         return [...panel.querySelectorAll('.knob-container, select, input, textarea, button')]
             .filter((el) => el.offsetParent !== null && !el.disabled && el.tabIndex !== -1);
     }
+    // Alle verschiebbaren Einheiten in Bildschirm-Lesereihenfolge (Zeile für Zeile, links
+    // nach rechts) – im e-Mode liegen sie frei im Canvas, die DOM-Reihenfolge sagt dort
+    // nichts mehr über ihre Lage aus. 24px Zeilentoleranz: was ungefähr nebeneinander
+    // steht, gilt als eine Zeile.
+    function arrangeUnits() {
+        return [...panel.querySelectorAll('[data-ctrl]')]
+            .filter((el) => el.offsetParent !== null)
+            .map((el) => ({ el, r: el.getBoundingClientRect() }))
+            .sort((a, b) => (Math.abs(a.r.top - b.r.top) > 24 ? a.r.top - b.r.top : a.r.left - b.r.left))
+            .map((x) => x.el);
+    }
     window.addEventListener('keydown', (e) => {
         if (e.key !== 'Tab') return;
+        // Im e-Mode schaltet Tab durch die AUSWAHL, nicht durch den Fokus (@dpa
+        // 20260716_132014: „Tab soll durch die Selektionen schalten"). Der Fokus wäre hier
+        // die falsche Währung: bedient wird nichts, und die Pfeiltasten bewegen das
+        // ausgewählte Element – also muss Tab genau das weiterreichen.
+        if (arranging) {
+            const units = arrangeUnits();
+            if (!units.length) return;
+            e.preventDefault();
+            const cur = [...selected].find((s) => units.includes(s));
+            const at = cur ? units.indexOf(cur) : -1;
+            const next = at < 0 ? (e.shiftKey ? units.length - 1 : 0)
+                : (at + (e.shiftKey ? -1 : 1) + units.length) % units.length;
+            setSelected(units[next]);
+            units[next].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            return;
+        }
         const cur = document.activeElement;
         if (!cur || !panel.contains(cur)) return;   // nur innerhalb der Panels loopen
         const items = panelFocusables();

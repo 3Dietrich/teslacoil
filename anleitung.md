@@ -141,7 +141,6 @@ und Feldgröße. Diese Einstellungen sind **rein optisch** – sie verstellen ni
 | **Snapshot** | Klang-Speicher, siehe [Speichern](#9-speichern-snapshot-skala-p2-optik-backup) |
 | **`*` / `‼`** | Dirty-Marker: der aktuelle Zustand weicht vom geladenen Snapshot ab (`‼` = über 60 % der Parameter) |
 | **Kette** | Signalweg, siehe unten |
-| **DC-Block** | Rumpel-/Gleichspannungsfilter am Ausgang. Aus = Extreme erlaubt |
 
 Rechts an der Fensterkante steht das **Ausgangs-Pegelmeter** (dBFS, Peak-Hold, Skala
 0 bis −48 dB).
@@ -235,8 +234,9 @@ Größe und Farben stellst du per Rechtsklick ein (Tastenbreite/-höhe, Farbe de
 - **skal2**: dieselben 12 Tasten werden zu 12 abrufbaren Skala-Slots. Unten (Name) =
   Slot laden, Doppelklick = umbenennen; oben schaltet weiterhin Töne an/aus und schreibt
   in den aktiven Slot zurück.
-- **Skala** ✎ ＋ 🗑: die 12-Ton-Maske speichern/laden/löschen.
-- **P2** ✎ ＋ 🗑: alle 12 skal2-Slots zusammen als ein Bündel. Nur im skal2-Modus sichtbar.
+- **Skala**: die 12-Ton-Maske speichern/laden/löschen (Bedienung wie jeder Speicher,
+  siehe [Speichern](#9-speichern-snapshot-skala-p2-optik-backup)).
+- **P2**: alle 12 skal2-Slots zusammen als ein Bündel. Nur im skal2-Modus sichtbar.
 
 ### Base-Frq
 
@@ -432,21 +432,24 @@ Speicher darüber hinaus:
 | **Optik/Layout** | Positionen, Farben, Beschriftungen, Regler-Skalen | automatisch |
 | **Backup** | wirklich alles | Einstellungen (⚙) |
 
-Die Icons sind überall dieselben: **✎** geladenen Eintrag überschreiben · **＋** neu
-speichern (gleicher Name = überschreiben) · **⤓** exportieren · **⤒** aus Datei laden ·
-**🗑** löschen.
+Alle diese Speicher werden gleich bedient: ein Knopf, auf dem der **geladene Eintrag
+steht**, und darin die Liste. Der geladene ist markiert – bei einer langen Liste springt
+sie beim Öffnen direkt zu ihm.
 
-Zwei Gewohnheiten, die den Alltag tragen:
-
-- **＋ speichern springt direkt auf den neuen Eintrag.** Kein Nachsuchen im Menü.
-- **Denselben Eintrag nochmal wählen stellt ihn wieder her.** Der geladene Name steht als
-  `↻ Name` im Menü. Verschraubt? Nochmal anklicken → alles wie gespeichert. Das gilt für
-  Snapshot, Skala, P2, Combo und Gruppen-Snapshots gleichermaßen.
+- **Klick auf einen Eintrag lädt ihn.** Auch auf den markierten: Verschraubt? Nochmal
+  anklicken → alles wieder wie gespeichert.
+- **In der Zeile** liegen die Aktionen, die genau diesen Eintrag meinen: **✎**
+  überschreiben (mit dem aktuellen Zustand) · **🗑** löschen.
+- **In der Fußzeile** liegt, was die ganze Liste betrifft: **＋ Neu…** speichern (gleicher
+  Name = überschreiben, und es springt direkt auf den neuen Eintrag), beim Snapshot
+  zusätzlich **⤓ Export** / **⤒ Import** als Datei.
 
 ### Einstellungen: Backups, Datei, Werkseinstellung
 
 ![Einstellungen](anleitung_img/05_einstellungen.png)
 
+- **Ausgang – DC-Block**: Rumpel-/Gleichspannungsfilter am Ausgang (Lautsprecherschutz).
+  Aus = Extreme erlaubt.
 - **Backups**: vollständige Sicherungen, automatisch nach jeder Ruhephase, gestaffelt
   aufbewahrt (max. 2/Min, 5/Std, 1/Tag, 1/Woche). *Laden* ersetzt den kompletten Zustand –
   Sound, Optik, Snapshots, Skalen, Layouts. Vorher wird automatisch gesichert.

@@ -104,7 +104,16 @@ def main():
         check("Import: Backup-Datei stellt den Zustand wieder her", "MARKER" in snaps, snaps[:80])
         check("Import: hat vorher gefragt (confirm)", any("laden?" in m for m in dialogs), str(dialogs))
 
-        # ── 3. Snapshot-Import über ⤒ ──
+        # ── 3. Snapshot-Import über „Import" in der Menü-Fußzeile ──
+        # Seit 20260716_132014 ist die Icon-Reihe neben dem Snapshot-Menü weg (@dpa: „zu
+        # lang, zu cryptisch, unansehlich"): Import/Export/Neu liegen in der Fußzeile des
+        # PickMenus, also erst das Menü öffnen.
+        def snap_foot(kind):
+            """Knopf in der Fußzeile des Snapshot-Menüs anklicken (öffnet es vorher)."""
+            pg.click(".pickmenu .pm-btn")
+            pg.wait_for_selector(".pm-foot", timeout=3000)
+            pg.click(f".pm-foot .pm-foot-btn:has(.pb-ic-{kind})")
+
         snap_path = os.path.join(tmp, "snap.json")
         with open(snap_path, "w") as f:
             json.dump({"kind": "teslacoil-snapshot", "name": "AusDatei", "ts": 1, "version": 1,
@@ -112,7 +121,7 @@ def main():
         pg.reload(wait_until="load")
         pg.wait_for_timeout(700)
         with pg.expect_file_chooser(timeout=5000) as fc:
-            pg.click(".pb-cluster .pb-ic-import")
+            snap_foot("import")
         fc.value.set_files(snap_path)
         pg.wait_for_timeout(900)
         names = pg.evaluate("() => (JSON.parse(localStorage.getItem('teslacoil_snapshots')||'[]')).map(s=>s.name)")
@@ -125,7 +134,7 @@ def main():
         state["accept"] = False
         before = pg.evaluate("() => localStorage.getItem('teslacoil_snapshots')")
         with pg.expect_file_chooser(timeout=5000) as fc:
-            pg.click(".pb-cluster .pb-ic-import")
+            snap_foot("import")
         fc.value.set_files(path)
         pg.wait_for_timeout(900)
         after = pg.evaluate("() => localStorage.getItem('teslacoil_snapshots')")

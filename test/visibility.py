@@ -134,6 +134,7 @@ def main():
                           ("x:debugPrompt", "Text-Eingabe"),
                           ("b:debugRec", "Rec"),
                           ("b:debugRec2", "Rec2"),
+                          ("b:debugRecReset", "Rec-Rücksetzen"),
                           ("b:debugSave", "Debug speichern")]:
             check(f"Debug: {name} ist ein eigenes Control",
                   pg.evaluate("(s)=>!!document.querySelector(`[data-ctrl='${s}']`)", sel))
@@ -143,9 +144,12 @@ def main():
         # die Controls hängen direkt im Gruppen-Body (die DOM-Reihenfolge bleibt dabei).
         order = pg.evaluate(
             "()=>[...document.querySelectorAll(\"[data-group='Debug'] [data-ctrl]\")].map(e=>e.dataset.ctrl)")
-        check("Debug: Text steht zwischen Name und Rec",
+        # Das Rücksetzen steht bei den Rec-Knöpfen, nicht beim Speichern (@dpa 20260716_132014:
+        # „Rec: bitte ein extra Rücksetzen Icon zum leeren/reseten beider Recs") – es gehört
+        # zu ihnen, also kommt es direkt hinter sie und vor „Debug speichern".
+        check("Debug: Text steht zwischen Name und Rec, Rücksetzen direkt hinter den Recs",
               order == ["x:debugName", "n:debugNote", "x:debugPrompt",
-                        "b:debugRec", "b:debugRec2", "b:debugSave"], f"ist: {order}")
+                        "b:debugRec", "b:debugRec2", "b:debugRecReset", "b:debugSave"], f"ist: {order}")
 
         # Tab in eine Schrift-Eingabe selektiert deren ganzen Inhalt. Start auf dem
         # Klapp-Knopf der Gruppe – das fokussierbare Element DAVOR in der Tab-Kette (ein

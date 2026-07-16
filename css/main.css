@@ -8,6 +8,17 @@
   --accent: #5ad1ff;
   --accent2: #ff9f5a;
   --on: #6ee7a8;
+  /* ── „Selektionsrahmen" (@dpa 20260716_132014: „bitte merk Dir diesen Kontrast") ──
+     Der Kontrast, mit dem ein ausgewähltes Control markiert wird: leichte Färbung +
+     feiner Rahmen, KEIN Leuchtring. Ab hier ist das die eine Quelle für „dezent
+     hervorgehoben": auch die schwebenden Settings-Panels und die e-Mode-Auswahl
+     benutzen ihn (dort in der Anordnen-Farbe), damit im Instrument genau EIN
+     Kontrast für „das hier ist gerade gemeint" existiert. */
+  --sel-bg: rgba(90,209,255,.08);
+  --sel-line: rgba(90,209,255,.35);
+  /* Gleicher Kontrast in der e-Mode-Farbe (Anordnen = orange). */
+  --sel2-bg: rgba(255,159,90,.10);
+  --sel2-line: rgba(255,159,90,.45);
 }
 
 * { box-sizing: border-box; }
@@ -68,6 +79,61 @@ body {
   padding: 4px 6px;
 }
 .pb-cluster-label { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 9px; }
+
+/* ── PickMenu: ein Knopf mit dem geladenen Namen + Klapp-Liste (js/ui/PickMenu.js) ──
+   Ersetzt „<select> + Icon-Reihe daneben" (@dpa 20260716_132014: „zu lang, zu cryptisch,
+   unansehlich"). Draußen steht nur noch der Name; die Aktionen wohnen im Menü. */
+.pickmenu { display: flex; align-items: center; gap: 5px; }
+.pm-label { color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-size: 9px; }
+.pm-btn {
+  display: flex; align-items: center; gap: 6px; min-width: 140px; max-width: 260px;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 4px; padding: 4px 6px 4px 9px; font-size: 11px; cursor: pointer;
+}
+.pm-btn:hover, .pm-btn:focus { outline: none; border-color: var(--accent); }
+.pm-name { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-name.pm-none { color: var(--muted); }   /* nichts geladen */
+.pm-caret { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
+.pm-pop {
+  position: fixed; z-index: 1200; min-width: 200px; max-width: 320px;
+  background: var(--panel2); border: 1px solid var(--sel-line); border-radius: 6px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.6); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+/* Die Liste darf lang werden – sie scrollt und springt beim Öffnen auf den geladenen
+   Eintrag (@dpa: „wenn die Liste groß ist … soll die Liste gescrollt werden"). */
+.pm-list { overflow-y: auto; max-height: min(52vh, 420px); padding: 4px; }
+.pm-item {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 4px 3px 8px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; color: var(--text);
+}
+.pm-item:hover { background: rgba(255,255,255,.06); }
+/* Der geladene Eintrag trägt den „Selektionsrahmen" – derselbe Kontrast wie ein
+   ausgewähltes Control, nicht das grelle Blau des nativen Menüs. */
+.pm-item.pm-current { background: var(--sel-bg); box-shadow: inset 0 0 0 1px var(--sel-line); }
+.pm-item-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Zeilen-Aktionen: erst beim Darüberfahren sichtbar – die Liste soll eine Liste bleiben
+   und nicht wieder zur Icon-Wand werden. Icons deutlich größer als der Text (@dpa: „die
+   Icons sind noch immer zu klein"), aber ohne Kästchen drumherum. */
+.pm-act {
+  flex: 0 0 auto; visibility: hidden; background: none; border: none; border-radius: 3px;
+  padding: 0 3px; line-height: 1; font-size: 16px; cursor: pointer; opacity: .75;
+}
+.pm-item:hover .pm-act, .pm-item.pm-current .pm-act { visibility: visible; }
+.pm-act:hover { opacity: 1; background: rgba(255,255,255,.10); }
+.pm-act.pm-ic-save { color: #ffcf7a; }
+.pm-act.pm-ic-del  { color: #ff7a7a; font-size: 14px; }
+.pm-empty { color: var(--muted); font-size: 11px; padding: 8px 10px; }
+/* Fußzeile = was die LISTE betrifft (Neu/Import/Export), nicht einen einzelnen Eintrag. */
+.pm-foot { display: flex; gap: 4px; padding: 5px; border-top: 1px solid var(--line); background: var(--panel); }
+.pm-foot-btn {
+  flex: 1 1 auto; background: var(--panel2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px;
+  font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.pm-foot-btn:hover { border-color: var(--accent); }
+.pm-foot-btn .pm-fic { font-size: 15px; line-height: 1; vertical-align: -2px; margin-right: 3px; }
 /* Dirty-Marker: geladener Snapshot wurde verändert (* leicht, ‼ >60% anders). */
 .snap-dirty, .gs-dirty { color: var(--accent2); font-weight: 700; min-width: 10px; font-size: 13px; }
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
@@ -333,10 +399,16 @@ body {
 
 /* ── Knob-Meta-Editor (übernommen aus octaver) ── */
 /* Zweispaltig statt Feld-unter-Feld (@dpa 20260716_011222): 2 × (Label + 70px-Eingabe)
-   passen nebeneinander → das Panel wird breiter, aber nur noch halb so hoch. */
+   passen nebeneinander → das Panel wird breiter, aber nur noch halb so hoch.
+   Breite NICHT mehr fest (@dpa 20260716_132014: „die Fensterbreite ist noch nicht
+   richtig" – die 296px schnitten die Labelspalte links ab und schoben die Farbwähler
+   rechts hinaus): das Panel rechnet sich seine Breite jetzt aus dem Raster
+   (fit-content), mit einer Untergrenze für die kurzen Panels (Keyboard) und einer
+   Obergrenze gegen ausufernde Namen. Rand = „Selektionsrahmen" statt vollem Akzent. */
 .knob-meta-editor {
-  position: fixed; z-index: 1000; width: 296px;
-  background: var(--panel2); border: 1px solid var(--accent);
+  position: fixed; z-index: 1000;
+  width: fit-content; min-width: 264px; max-width: 380px;
+  background: var(--panel2); border: 1px solid var(--sel-line);
   border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,.6);
   font-size: 12px; overflow: hidden;
 }
@@ -361,28 +433,39 @@ body {
   padding: 3px 6px; color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums;
 }
 .kme-row input:focus, .kme-row select:focus { outline: none; border-color: var(--accent); }
-.kme-row input.kme-color { flex: 0 0 34px; width: 34px; padding: 1px; height: 22px; cursor: pointer; }
-/* Der BG-Farbwähler steht mit seinem ✕ zu zweit in einer Rasterzelle → er darf nicht die
-   vollen 70px nehmen, sonst quillt die Zelle über. */
-.kme-row input.kme-bg { flex: 0 0 34px; width: 34px; padding: 1px; height: 22px; cursor: pointer; }
-.kme-bg-clear { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-size: 10px; padding: 2px 5px; cursor: pointer; }
-/* Farb-Preset-Menü + Speichern-Icon (ersetzt den früheren „Standard"-Button) */
-.kme-color-preset { flex: 1 1 auto; width: auto; min-width: 0; }
-.kme-color-save, .kme-color-del { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; color: var(--text); font-size: 13px; padding: 2px 7px; cursor: pointer; }
-.kme-color-save:hover { border-color: var(--accent); }
-.kme-color-del:hover { border-color: #ff7a7a; }
-.kme-curve-preview { display: flex; justify-content: center; margin: 2px 0; }
-.kme-curve-preview canvas { border: 1px solid var(--line); border-radius: 3px; background: #0e1116; }
-/* „Übernehmen" reicht schmal und rechts – „Zurücksetzen" ist raus (@dpa). */
+/* JEDER Farbwähler ist schmal (@dpa 20260716_132014: „die Farbwähler können schmaler") –
+   nach Typ, nicht nach Klasse. Vorher galt das nur für die beiden Knob-Editor-Klassen;
+   die Element-Settings (.es-bg/.es-fg) erbten die 70px, standen mit ihrem ✕ zu zweit in
+   EINER Rasterzelle und drückten das Panel auseinander (@dpa-Screenshots: Labels links
+   abgeschnitten, Farbfeld rechts draußen). Das war die eigentliche Ursache der
+   „Fensterbreite ist noch nicht richtig". */
+.kme-row input[type="color"] { flex: 0 0 28px; width: 28px; padding: 1px; height: 20px; cursor: pointer; }
+/* Das ✕ neben einem Farbwähler entfernt die Farbe – es ist eine Beigabe zum Feld, kein
+   eigener Knopf: gleiche Höhe wie der Wähler, Glyph klein (@dpa: „das zu große X soll
+   optisch angepasst werden"), Rahmen nur beim Darüberfahren. */
+.kme-x { flex: 0 0 auto; width: 18px; height: 20px; padding: 0; line-height: 1;
+  background: none; border: 1px solid transparent; border-radius: 3px;
+  color: var(--muted); font-size: 10px; cursor: pointer; }
+.kme-x:hover { color: var(--text); border-color: var(--line); }
+/* Farb-Presets: ein PickMenu statt Menü + Diskette + Mülleimer (@dpa 20260716_132014) –
+   es füllt den Rest der Zeile neben dem Farbwähler. */
+.kme-color-menu { flex: 1 1 auto; min-width: 0; }
+.kme-color-menu .pm-btn { width: 100%; min-width: 0; }
+/* Kurven-Vorschau: kleiner und RECHTS, der Hinweistext links daneben (@dpa
+   20260716_132014). Der Graph trägt denselben feinen Rahmen wie ein ausgewähltes
+   Control – er ist die Ansicht zu den Kurvenfeldern, kein eigenes Kästchen. */
+.kme-curve-preview { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 0; }
+.kme-curve-preview canvas { flex: 0 0 auto; border: 1px solid var(--sel-line); background: var(--sel-bg); border-radius: 3px; }
+/* Statt eines „Übernehmen"-Knopfes steht hier, welche Taste was tut (@dpa 20260716_132014):
+   das Panel wendet ohnehin alles sofort an, der Knopf war nur noch eine Beruhigung. */
+.kme-keyhint { flex: 1 1 auto; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.kme-keyhint b { color: var(--text); font-weight: 600; }
 .kme-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .kme-actions button { flex: 0 0 auto; padding: 3px 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 11px; }
-.kme-apply { border-color: var(--accent) !important; color: var(--accent) !important; }
-.kme-apply:hover { background: rgba(90,209,255,.15) !important; }
-.kme-reset:hover { border-color: var(--accent2); color: var(--accent2); }
 .knob-active .knob-value-arc { stroke: var(--accent2); }
 /* Ausgewählter Regler (Klick irgendwo auf dem Control) → Pfeiltasten bedienen ihn.
    Dezent: leichte Färbung + feiner Rahmen, kein Balken unter dem Wert (@dpa 20260716). */
-.knob-selected { background: rgba(90,209,255,.08); outline: 1px solid rgba(90,209,255,.35); border-radius: 5px; }
+.knob-selected { background: var(--sel-bg); outline: 1px solid var(--sel-line); border-radius: 5px; }
 
 /* ── Keyboard (kompakt) ── */
 .keyboard { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: fit-content; }
@@ -415,7 +498,10 @@ body {
 /* Größe/Farben sind Optik-Variablen (@dpa 20260716_031100: „man muss die Größe und
    Farben ändern können") – die Element-Settings setzen sie am .keyboard, die Defaults
    hier bleiben die Auslieferungsoptik. */
-.kb-keys { display: grid; grid-template-columns: repeat(12, var(--kb-key-w, 26px)); gap: 2px; }
+/* Tastenabstand einstellbar (@dpa 20260716_132014: „Tasten abstände werden bei kleinen
+   Darstellungen zu groß"): die festen 2px sind bei 40px-Tasten unsichtbar, bei 10px-Tasten
+   ein Fünftel der Taste. Jetzt Settings-Feld „Abstand" (0–10px), Default bleibt 2px. */
+.kb-keys { display: grid; grid-template-columns: repeat(12, var(--kb-key-w, 26px)); gap: var(--kb-gap, 2px); }
 .kb-key {
   position: relative; height: var(--kb-key-h, 46px); border-radius: 0 0 2px 2px; cursor: pointer;
   border: 1px solid var(--line); padding: 0; overflow: hidden;
@@ -494,6 +580,11 @@ body {
    der Settings-Knopf in der Kopfzeile bleibt bedienbar → Modus abschaltbar). */
 .arranging button, .arranging select, .arranging input, .arranging textarea,
 .arranging .knob-svg, .arranging .keyboard * { pointer-events: none; }
+/* pointer-events allein REICHT NICHT (@dpa 20260716_132014, „Gate Reverb aktiv schaltet
+   im e-Mode um"): jeder Schalter steckt in einem <label>, und ein Klick auf das Label
+   aktiviert seine Checkbox – auch wenn die selbst keine Maus mehr annimmt. Das Ereignis
+   fängt app.js im Capture ab; hier bleibt nur der Zeiger ehrlich. */
+.arranging .select-field, .arranging .toggle-field { cursor: grab; }
 /* Ausnahme: der Klapp-Pfeil bleibt bedienbar (Gruppen zu-/aufklappen beim Anordnen).
    Hier stand mal eine zweite Ausnahme für die ⚙-Knöpfe – die gibt es nicht mehr, und ihr
    Selektor hing (Komma!) an der Panel-Regel darunter, war also nie eine Ausnahme. */
@@ -515,8 +606,14 @@ body {
 .arranging [data-ctrl]:hover { outline-width: 2px; background: rgba(90,209,255,.18); }
 .ctrl-dragging { opacity: .4; }
 .ctrl-moving { opacity: .7; z-index: 6; }
-/* Ausgewähltes Element (Gruppe ODER Control): Pfeiltasten bewegen es → orange Markierung. */
-.arranging .arrange-selected { outline: 2px solid var(--accent2) !important; outline-offset: 3px; z-index: 5; }
+/* Ausgewähltes Element (Gruppe ODER Control): Pfeiltasten bewegen es. Kontrast wie der
+   „Selektionsrahmen" (@dpa 20260716_132014: „die Selektion: Kontrast mehr wie
+   Selektionsrahmen") – nur in der Anordnen-Farbe: feiner 1px-Rahmen + leichte Färbung
+   statt des 2px-Balkens, der hier vorher jedes ausgewählte Control zugekleistert hat. */
+.arranging .arrange-selected {
+  outline: 1px solid var(--sel2-line) !important; outline-offset: 3px; z-index: 5;
+  background: var(--sel2-bg) !important;
+}
 /* Gummiband: nur eine Andeutung – es soll zeigen, was es umfasst, nicht selbst leuchten. */
 .select-band { position: absolute; z-index: 20; pointer-events: none;
   border: 1px solid var(--accent2); background: rgba(255,159,90,.12); border-radius: 2px; }

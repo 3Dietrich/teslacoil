@@ -222,12 +222,17 @@ export class Knob {
         //     Label-Doppelklick = nichts); erst echtes Ziehen startet den Wert-Drag – relativ
         //     zum echten Startpunkt (nicht zum Slop-Punkt), damit nichts springt.
         container.addEventListener('mousedown', (e) => {
-            if (this._dragging || this.locked) return;
+            if (this.locked) return;
             // Klick IRGENDWO auf dem Control selektiert es (@dpa 20260716_023817: „ein
             // select: click auf control") – vorher tat das nur ein Klick auf den Wert, und
             // wer am Dial drehte, hatte den Regler danach trotzdem nicht unter den Pfeiltasten.
+            // MUSS VOR dem _dragging-Ausstieg stehen (@dpa 20260716_132014: „Selektionsrahmen
+            // erscheint noch nicht beim Klick auf den Knob/Grafik"): der svg-Handler feuert
+            // zuerst und setzt _dragging – der frühere Ausstieg oben sprang deshalb bei
+            // JEDEM Dial-Klick heraus, bevor irgendetwas fokussiert war. Genau das Control,
+            // das man gerade dreht, blieb so als einziges unmarkiert.
             this.element.focus();
-            if (e.target.closest('svg')) return;               // Dial: eigener Sofort-Drag oben
+            if (this._dragging || e.target.closest('svg')) return;   // Dial: eigener Sofort-Drag oben
             e.preventDefault();
             const startEvt = e, sx = e.clientX, sy = e.clientY;
             const slopMove = (ev) => {
@@ -610,6 +615,7 @@ export class Knob {
             bg: this._bg,
             shape: this._shape,
             faderLen: this._faderLen,
+            defaultValue: this.defaultValue,
         };
     }
 
@@ -636,6 +642,12 @@ export class Knob {
             || (meta.faderLen !== undefined && meta.faderLen !== this._faderLen);
         if (shape !== undefined) this._shape = shape;
         if (meta.faderLen !== undefined) this._faderLen = meta.faderLen;
+        if (meta.defaultValue !== undefined) this.defaultValue = meta.defaultValue;
+        // Der eigene Default ist ein Wert auf DIESER Skala – verstellt man später Min/Max,
+        // darf er nicht draußen liegen bleiben (@dpa 20260716_132014: „wenn außerhalb der
+        // Range: min/max limiten"). Er wird dabei nur geklemmt, nie neu erfunden: @dpa
+        // setzt ihn nach seinen Wünschen, und das bleibt so.
+        if (this.defaultValue != null) this.defaultValue = Math.max(this._min, Math.min(this._max, this.defaultValue));
 
         this._normValue = this._valueToNorm(
             Math.max(this._min, Math.min(this._max, currentValue))

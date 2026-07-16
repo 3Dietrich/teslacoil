@@ -11,6 +11,7 @@
  */
 import { Knob } from './Knob.js';   // nur für Knob.migrateShape (alte Gestalt-Namen)
 import { makeDraggable } from './dragPanel.js';
+import { PickMenu } from './PickMenu.js';
 export class KnobMetaEditor {
   /** @param {import('../core/State.js').State} [state] – für die Farb-Presets (Optik). */
   constructor(state) {
@@ -41,23 +42,23 @@ export class KnobMetaEditor {
         <div class="kme-grid">
           <div class="kme-row">
             <label>Min</label>
-            <input type="number" class="kme-min" step="any" />
+            <input type="number" class="kme-min" step="any" title="Kleinster Wert, den dieser Regler annehmen kann (linkes Ende der Skala)" />
           </div>
           <div class="kme-row">
             <label>Max</label>
-            <input type="number" class="kme-max" step="any" />
+            <input type="number" class="kme-max" step="any" title="Größter Wert, den dieser Regler annehmen kann (rechtes Ende der Skala)" />
           </div>
           <div class="kme-row">
             <label>Step</label>
-            <input type="number" class="kme-step" step="any" min="0" />
+            <input type="number" class="kme-step" step="any" min="0" title="Schrittweite der Pfeiltasten (0 = stufenlos)" />
           </div>
           <div class="kme-row">
             <label title="Nachkommastellen">Dez.</label>
-            <input type="number" class="kme-decimals" min="0" max="6" step="1" />
+            <input type="number" class="kme-decimals" min="0" max="6" step="1" title="Nachkommastellen der Wert-Anzeige" />
           </div>
           <div class="kme-row">
             <label>Kurve</label>
-            <select class="kme-curve">
+            <select class="kme-curve" title="Wie sich der Weg des Reglers auf den Wert abbildet – Linear (gleichmäßig), Log. (unten feiner), Exp. (oben feiner). Der Graph rechts zeigt die Form.">
               <option value="linear">Linear</option>
               <option value="log">Log.</option>
               <option value="exp">Exp.</option>
@@ -65,15 +66,22 @@ export class KnobMetaEditor {
           </div>
           <div class="kme-row">
             <label>Skew</label>
-            <input type="number" class="kme-skew" min="0.1" max="10" step="0.1" value="1" />
+            <input type="number" class="kme-skew" min="0.1" max="10" step="0.1" value="1" title="Verzieht die lineare Kurve: &lt;1 spreizt unten, &gt;1 spreizt oben (1 = unverzogen)" />
+          </div>
+          <!-- Der eigene Default (@dpa 20260716_132014: „für default einen extra Eintrag in
+               Settings … Ich setze es dann nach meinen Wünschen"). Beim ersten Anlegen steht
+               hier der Auslieferungswert; Doppelklick auf die Ansicht springt hierhin. -->
+          <div class="kme-row">
+            <label>Default</label>
+            <input type="number" class="kme-default" step="any" title="Wert, auf den ein Doppelklick auf Knob/Fader zurückspringt. Bleibt beim Verstellen von Min/Max erhalten (nur an die Range angelegt)." />
           </div>
           <div class="kme-row">
             <label>Einheit</label>
-            <input type="text" class="kme-unit" maxlength="8" />
+            <input type="text" class="kme-unit" maxlength="8" title="Einheit hinter dem Wert (z.B. Hz, %, s)" />
           </div>
           <div class="kme-row">
             <label>Label</label>
-            <select class="kme-labelpos" title="Label-Position">
+            <select class="kme-labelpos" title="Wo die Beschriftung sitzt (Aus = keine)">
               <option value="bottom">Unten</option>
               <option value="top">Oben</option>
               <option value="left">Links</option>
@@ -93,7 +101,7 @@ export class KnobMetaEditor {
           </div>
           <div class="kme-row" data-f="view">
             <label>Ansicht</label>
-            <select class="kme-view">
+            <select class="kme-view" title="Größe des Dials („Ohne Knob" = nur Wert und Label, spart Platz)">
               <option value="large">Groß</option>
               <option value="medium">Mittel</option>
               <option value="small">Klein</option>
@@ -103,32 +111,27 @@ export class KnobMetaEditor {
           </div>
           <div class="kme-row" data-f="faderLen">
             <label>Länge</label>
-            <input type="number" class="kme-faderlen" min="24" max="400" step="4" />
+            <input type="number" class="kme-faderlen" min="24" max="400" step="4" title="Länge der Fader-Bahn in px" />
           </div>
           <div class="kme-row">
             <label title="Knob-Hintergrund">BG</label>
-            <input type="color" class="kme-bg" value="#232833" />
-            <button class="kme-bg-clear" title="Hintergrund entfernen">✕</button>
+            <input type="color" class="kme-bg" value="#232833" title="Hintergrund hinter dem Regler" />
+            <button class="kme-bg-clear kme-x" title="Hintergrund entfernen">✕</button>
           </div>
         </div>
         <div class="kme-row kme-wide kme-color-row">
           <label>Farbe</label>
-          <input type="color" class="kme-color" value="#5ad1ff" />
-          <select class="kme-color-preset" title="Farbe wählen (Standard = zurücksetzen) – Tab/Pfeiltasten"></select>
-          <button class="kme-color-save" title="Aktuelle Farbe als Preset speichern">💾</button>
-          <button class="kme-color-del" title="Ausgewähltes Farb-Preset löschen">🗑</button>
+          <input type="color" class="kme-color" value="#5ad1ff" title="Farbe des Wertbogens / der Fader-Füllung" />
+          <div class="kme-color-menu"></div>
         </div>
         <div class="kme-curve-preview">
-          <canvas width="96" height="44"></canvas>
-        </div>
-        <div class="kme-actions">
-          <button class="kme-apply">Übernehmen</button>
+          <div class="kme-keyhint"><b>Enter</b> = Übernehmen<br><b>ESC</b> = Verlassen</div>
+          <canvas width="72" height="34" title="Vorschau der Kurve: links Reglerweg, rechts der Wert"></canvas>
         </div>
       </div>
     `;
 
     panel.querySelector('.kme-close').addEventListener('click', () => this.close());
-    panel.querySelector('.kme-apply').addEventListener('click', () => this._apply());
 
     // Enter = Übernehmen · ESC = Schließen. Bewusst auf document-Ebene (mit isOpen-
     // Guard): beim Öffnen liegt der Fokus AUSSERHALB des Panels (auf dem ⚙-Button des
@@ -155,21 +158,52 @@ export class KnobMetaEditor {
     // wie lang der Fader wird. Die Längen-Zeile zeigt sich nur bei shape='fader'.
     panel.querySelector('.kme-shape').addEventListener('change', () => { this._syncShapeRows(); this._apply(); });
     panel.querySelector('.kme-faderlen').addEventListener('input', () => this._apply());
-    // Farb-Preset-Menü: „Standard" (Index 0) verwirft die Farbe, sonst Preset anwenden.
-    // Auswahl greift SOFORT (übernimmt am Regler) – rein per Tastatur bedienbar.
-    panel.querySelector('.kme-color-preset').addEventListener('change', (e) => {
-      const sel = e.target;
-      if (sel.selectedIndex <= 0) { this._colorCustom = false; if (this._state) this._state.set('knobColorSel', ''); }
-      else {
-        const p = this._colorPresets()[sel.selectedIndex - 1];
-        if (p) { panel.querySelector('.kme-color').value = p.color; this._colorCustom = true; if (this._state) this._state.set('knobColorSel', p.name); }
-      }
-      this._apply();
+    panel.querySelector('.kme-default').addEventListener('input', () => this._apply());
+
+    // Farb-Presets als PickMenu (@dpa 20260716_132014) – dieselbe Bedienung wie bei den
+    // Snapshots: der geladene Name steht auf dem Knopf, Überschreiben/Löschen hängen an
+    // ihrer Zeile, „Neu…" unten. Damit sind Menü + Diskette + Mülleimer EIN Element.
+    this._colorMenu = new PickMenu({
+      empty: '— Standard —',
+      title: 'Gespeicherte Regler-Farbe wählen (Standard = Farbe verwerfen)',
+      list: () => this._colorPresets(),
+      current: () => (this._state && this._state.get('knobColorSel')) || '',
+      onPick: (i, p) => {
+        panel.querySelector('.kme-color').value = p.color;
+        this._colorCustom = true;
+        // Ein Farb-Preset trägt jetzt BEIDE Farben (@dpa 20260716_132014: „Die
+        // Speichersektion soll sich VG und BG Farbe speichern") – ein Regler-Look ist
+        // das Paar aus Bogen und Hintergrund, einzeln gespeichert war es nur die Hälfte.
+        // Ältere Presets haben kein `bg` → deren BG bleibt unangetastet.
+        if (p.bg !== undefined) {
+          this._bgCustom = !!p.bg;
+          if (p.bg) panel.querySelector('.kme-bg').value = p.bg;
+        }
+        if (this._state) this._state.set('knobColorSel', p.name);
+        this._apply();
+      },
+      onUpdate: (i) => {
+        const list = this._colorPresets().slice();
+        list[i] = { ...list[i], ...this._curColors() };
+        if (this._state) this._state.set('knobColorPresets', list);
+      },
+      onDelete: (i, p) => {
+        if (!confirm('Farb-Preset „' + p.name + '" löschen?')) return;
+        const list = this._colorPresets().slice(); list.splice(i, 1);
+        if (!this._state) return;
+        this._state.set('knobColorPresets', list);
+        if (this._state.get('knobColorSel') === p.name) this._state.set('knobColorSel', '');
+      },
+      foot: [
+        ['<span class="pm-fic pb-ic-new">＋</span>Neu…', 'Aktuelle Farbe + Hintergrund als Preset speichern', () => this._saveColorPreset()],
+        ['— Standard —', 'Eigene Farbe verwerfen (Regler nimmt wieder die Grundfarbe)', () => {
+          this._colorCustom = false;
+          if (this._state) this._state.set('knobColorSel', '');
+          this._apply(); this._colorMenu.refresh();
+        }],
+      ],
     });
-    // Speichern-Icon: aktuelle Farbe als benanntes Preset ablegen (Optik-Ebene).
-    panel.querySelector('.kme-color-save').addEventListener('click', () => this._saveColorPreset());
-    // Löschen-Icon: ausgewähltes Farb-Preset entfernen.
-    panel.querySelector('.kme-color-del').addEventListener('click', () => this._deleteColorPreset());
+    panel.querySelector('.kme-color-menu').appendChild(this._colorMenu.element);
 
     this._curveCanvas = panel.querySelector('canvas');
     this._panel = panel;
@@ -200,13 +234,17 @@ export class KnobMetaEditor {
     this._panel.querySelector('.kme-view').value = meta.viewSize || 'medium';
     this._panel.querySelector('.kme-shape').value = Knob.migrateShape(meta.shape) || 'knob';
     this._panel.querySelector('.kme-faderlen').value = meta.faderLen ?? 80;
+    // Kennt der Regler keinen eigenen Default (Knob ohne State-Bezug), steht hier die
+    // Skalenmitte – „beim ersten Kreieren einfach Mittelwert" (@dpa 20260716_132014).
+    this._panel.querySelector('.kme-default').value =
+      meta.defaultValue != null ? meta.defaultValue : (meta.min + meta.max) / 2;
     this._syncShapeRows();
     this._colorCustom = !!meta.color;
     this._panel.querySelector('.kme-color').value = meta.color || '#5ad1ff';
     this._panel.querySelector('.kme-labelpos').value = meta.labelPos || 'bottom';
     this._bgCustom = !!meta.bg;
     this._panel.querySelector('.kme-bg').value = meta.bg || '#232833';
-    this._fillColorPresets();
+    this._colorMenu.refresh();
     this._panel.querySelector('.kme-title').textContent = meta.label;
 
     const rect = knob.element.getBoundingClientRect();
@@ -235,48 +273,28 @@ export class KnobMetaEditor {
   /* ── Farb-Presets (Optik-Ebene, geteilte Regler-Farben) ── */
   _colorPresets() { return (this._state && this._state.get('knobColorPresets')) || []; }
 
-  /** Menü neu befüllen: „Standard" + alle gespeicherten Farben (mit Farbtupfer). */
-  _fillColorPresets() {
-    const sel = this._panel.querySelector('.kme-color-preset');
-    sel.innerHTML = '';
-    const std = document.createElement('option'); std.textContent = '— Standard —'; sel.appendChild(std);
-    const presets = this._colorPresets();
-    presets.forEach((p) => {
-      const o = document.createElement('option');
-      o.textContent = `● ${p.name}`; o.value = p.name; o.style.color = p.color; sel.appendChild(o);
-    });
-    // Gemerkte Auswahl (Optik) wiederherstellen, sonst Standard.
-    const want = this._state && this._state.get('knobColorSel');
-    const idx = want ? presets.findIndex((p) => p.name === want) : -1;
-    sel.selectedIndex = idx >= 0 ? idx + 1 : 0;
+  /** Was ein Preset speichert: Bogen-Farbe UND Hintergrund (@dpa 20260716_132014).
+   *  Ein ausgeschalteter BG wird als '' abgelegt – das ist eine Aussage („kein
+   *  Hintergrund"), kein fehlender Wert, und muss beim Anwenden auch so ankommen. */
+  _curColors() {
+    return {
+      color: this._panel.querySelector('.kme-color').value,
+      bg: this._bgCustom ? this._panel.querySelector('.kme-bg').value : '',
+    };
   }
 
-  /** Ausgewähltes Farb-Preset löschen. */
-  _deleteColorPreset() {
-    if (!this._state) return;
-    const sel = this._panel.querySelector('.kme-color-preset');
-    const i = sel.selectedIndex - 1;
-    const list = this._colorPresets();
-    if (i < 0 || !list[i]) return;
-    if (!confirm('Farb-Preset „' + list[i].name + '" löschen?')) return;
-    const next = list.slice(); next.splice(i, 1);
-    this._state.set('knobColorPresets', next);
-    this._state.set('knobColorSel', '');
-    this._fillColorPresets();
-  }
-
-  /** Aktuelle Farbe unter einem Namen als Preset speichern (in den State). */
+  /** Aktuelle Farben unter einem Namen als Preset speichern (in den State). */
   _saveColorPreset() {
     if (!this._state) return;
-    const color = this._panel.querySelector('.kme-color').value;
-    const name = prompt('Farb-Name?', color);
+    const cols = this._curColors();
+    const name = prompt('Farb-Name?', cols.color);
     if (name === null) return;
     const list = this._colorPresets().slice();
     const at = list.findIndex((p) => p.name === name);
-    if (at >= 0) list[at] = { name, color }; else list.push({ name, color });
+    if (at >= 0) list[at] = { name, ...cols }; else list.push({ name, ...cols });
     this._state.set('knobColorPresets', list);
     this._state.set('knobColorSel', name);
-    this._fillColorPresets();
+    this._colorMenu.refresh();
   }
 
   get isOpen() { return this._panel.style.display !== 'none'; }
@@ -298,6 +316,10 @@ export class KnobMetaEditor {
 
   _apply() {
     if (!this._currentKnob) return;
+    // Leeres Default-Feld heißt „keinen eigenen Default" → der Doppelklick fällt dann auf
+    // die Skalenmitte zurück (Knob.js). Ein leeres Feld darf NICHT als 0 durchgehen.
+    const defRaw = this._panel.querySelector('.kme-default').value.trim();
+    const defVal = defRaw === '' ? null : parseFloat(defRaw);
     this._currentKnob.setMeta({
       label: this._panel.querySelector('.kme-label').value.trim() || this._currentKnob.label,
       min: parseFloat(this._panel.querySelector('.kme-min').value) || 0,
@@ -313,6 +335,7 @@ export class KnobMetaEditor {
       color: this._colorCustom ? this._panel.querySelector('.kme-color').value : '',
       labelPos: this._panel.querySelector('.kme-labelpos').value,
       bg: this._bgCustom ? this._panel.querySelector('.kme-bg').value : '',
+      defaultValue: Number.isFinite(defVal) ? defVal : null,
     });
     this._panel.querySelector('.kme-title').textContent = this._currentKnob.label;
     if (this.onApply) this.onApply(this._currentKnob);   // Meta in State persistieren

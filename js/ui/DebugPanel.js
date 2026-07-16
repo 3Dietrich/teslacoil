@@ -59,6 +59,19 @@ export class DebugPanel {
         return null;
     }
 
+    /**
+     * Beide Slots leeren (@dpa 20260716_132014: „Rec: bitte ein extra Rücksetzen Icon zum
+     * leeren/reseten beider Recs"). Läuft gerade eine Aufnahme, wird sie abgebrochen –
+     * „zurücksetzen" heißt hier: hinterher ist nichts mehr da, auch kein laufender Take.
+     * Wie toggle() bewusst Logik statt UI, damit es headless prüfbar bleibt.
+     */
+    resetAll() {
+        for (const s of Object.values(this.slots)) {
+            if (s.rec.recording) s.rec.stop();
+            s.last = null;
+        }
+    }
+
     /** Länge der letzten Aufnahme dieses Slots in s (0 = noch keine). */
     lastSeconds(slot) {
         const l = this.slots[slot].last;
