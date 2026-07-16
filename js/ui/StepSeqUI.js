@@ -6,7 +6,8 @@
  *     Beim Ausschalten wird die Höhe gemerkt und beim Einschalten wiederhergestellt.
  *   - Ziehen (> DRAG_THRESH) → „Env-Höhe" (Velocity/Depth) setzen; horizontales
  *     Wischen malt mehrere Steps.
- * Kopfzeile: Steps-Eingabe · Fill · set0 · ⚙ (Optik: Größe/BG/Farben mit Alpha).
+ * Kopfzeile: Steps-Eingabe · Fill · set0. Die Optik (Größe/BG/Farben mit Alpha) kommt
+ * per RECHTSKLICK – wie überall sonst im Synth, s. _openSettings.
  *
  * Optik (Größe/Farben) liegt je Seq-Typ GETRENNT in state.seqStyles[which] (Optik-
  * Ebene → im Layout gespeichert). Filter- und Amp-Seq verstellen sich damit nicht
@@ -14,9 +15,9 @@
  * `${which}SeqSteps/-Len`, Edits gehen über state.set → Recall/Snapshot/Auto-Save.
  */
 import { fillSeq, SEQ_MAX } from '../dsp/stepSeq.js';
-import { Knob } from './Knob.js';
 import { icon } from './icons.js';
 import { hint } from '../core/i18n.js';
+import { MiniSettings } from './MiniSettings.js';
 
 const DRAG_THRESH = 4;   // px: darüber = Höhe ziehen, darunter = Klick (Gate toggeln)
 // Per-Typ-Default: Balkenfarbe unterscheidet Filter (cyan) und Amp (orange).
@@ -24,11 +25,6 @@ const SEQ_DEFAULT = {
     filter: { w: 270, h: 64, bg: '#0e1116', col: 'rgba(90,209,255,1)' },
     amp: { w: 270, h: 64, bg: '#0e1116', col: 'rgba(255,159,90,1)' },
 };
-
-// Farbe ↔ Hex/Alpha (selbstenthalten, kein Import).
-const parseHex = (rgba, fb) => { if (!rgba) return fb; const m = rgba.match(/\d+/g); if (!m) return fb; return '#' + [m[0], m[1], m[2]].map((v) => (+v).toString(16).padStart(2, '0')).join(''); };
-const parseA = (rgba, fb = 1) => { const m = rgba && rgba.match(/[\d.]+/g); return m && m.length >= 4 ? parseFloat(m[3]) : fb; };
-const hexA = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 
 export class StepSeqUI {
     /**
@@ -50,6 +46,7 @@ export class StepSeqUI {
             : () => !!this.state.get(this._enKey);
         this._lastH = new Array(SEQ_MAX).fill(1);  // gemerkte Höhe je Step (Gate-Toggle)
         this._lastPos = -2;
+        this._settings = new MiniSettings(which === 'amp' ? 'Amp-Sequenzer' : 'Filter-Sequenzer');
         this.element = this._build();
     }
 
@@ -82,11 +79,10 @@ export class StepSeqUI {
         s0.className = 'pb-btn seq-ic'; s0.appendChild(icon('rewind'));
         hint(s0, 'set0: der nächste Trigger startet wieder bei Step 1');
         s0.addEventListener('click', () => this.engine.resetSeq(this.which));
-        const cog = document.createElement('button');
-        cog.className = 'pb-btn seq-ic'; cog.appendChild(icon('gear'));
-        hint(cog, 'Anzeige: Größe, Hintergrund- & Balkenfarbe (mit Alpha)');
-        cog.addEventListener('click', () => this._openSettings(cog));
-        head.appendChild(lab); head.appendChild(num); head.appendChild(fill); head.appendChild(s0); head.appendChild(cog);
+        // Kein ⚙ mehr in der Kopfzeile (@dpa 20260716_174111: „settings-Icons weg").
+        // Die Settings kommen per Rechtsklick – das ist die eine Regel im ganzen Synth,
+        // ein Icon daneben war die Ausnahme, die man sich extra merken musste.
+        head.appendChild(lab); head.appendChild(num); head.appendChild(fill); head.appendChild(s0);
 
         const cv = document.createElement('canvas'); cv.className = 'seq-canvas';
         cv.width = this._w(); cv.height = this._h();
@@ -149,72 +145,24 @@ export class StepSeqUI {
         });
     }
 
-    /** Kleines Optik-Popup: Größe (Breite/Höhe), BG-Farbe, Balkenfarbe (mit Alpha).
+    /** Optik: Größe (Breite/Höhe), BG-Farbe, Balkenfarbe (mit Alpha).
      *  ALLES gilt je Seq-Typ (Filter/Amp getrennt) – Schreiben nur in seqStyles[which].
-     *  Fenster ist per Linksklick auf ein Label verschiebbar, ESC/Außenklick schließt
-     *  (kein „Fertig"-Button mehr nötig). */
+     *  Das Panel ist ab 20260716_174111 das geteilte MiniSettings (Titelleiste zum Ziehen,
+     *  zweispaltig, ESC/Außenklick) – vorher ein handgebautes Popover, das an einem Label
+     *  hing und einspaltig in die Höhe wuchs. */
     _openSettings(anchor) {
-        this._closeSettings();
-        const colKey = 'col';
         const patch = (p) => this.state.set('seqStyles', { ...(this.state.get('seqStyles') || {}), [this.which]: { ...this._style(), ...p } });
-        const pop = document.createElement('div'); pop.className = 'group-settings seq-settings-pop';
-        // Linksklick auf ein Label zieht das ganze Popup; Klick auf den Value/Regler
-        // bleibt normale Bedienung (kein Drag-Konflikt, da eigener Listener auf dem Label).
-        const wireDrag = (labelEl) => {
-            labelEl.style.cursor = 'move';
-            labelEl.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                const sx = e.clientX, sy = e.clientY;
-                const startL = parseFloat(pop.style.left) || 0, startT = parseFloat(pop.style.top) || 0;
-                const onMove = (ev) => {
-                    pop.style.left = Math.max(0, startL + (ev.clientX - sx)) + 'px';
-                    pop.style.top = Math.max(0, startT + (ev.clientY - sy)) + 'px';
-                };
-                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        this._settings.open(anchor, (f) => {
+            f.num('Breite', { min: 120, max: 900, get: () => this._style().w, set: (v) => patch({ w: v }) });
+            f.num('Höhe', { min: 32, max: 240, get: () => this._style().h, set: (v) => patch({ h: v }) });
+            f.color('BG', { get: () => this._style().bg, set: (v) => patch({ bg: v }), title: 'Hintergrund der Anzeige' });
+            f.colorA(this.which === 'amp' ? 'Amp' : 'Filter', {
+                get: () => this._style().col, set: (v) => patch({ col: v }),
+                fallback: this.which === 'amp' ? '#ff9f5a' : '#5ad1ff',
             });
-        };
-        const row = (label, ...els) => {
-            const r = document.createElement('div'); r.className = 'gs-row';
-            const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label;
-            wireDrag(l);
-            r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r);
-        };
-        const num = (key, min, max) => {
-            const i = document.createElement('input'); i.type = 'number'; i.min = min; i.max = max; i.step = 1; i.className = 'gs-text'; i.value = this._style()[key];
-            i.addEventListener('input', () => { const v = parseInt(i.value); if (!isNaN(v)) patch({ [key]: Math.max(min, Math.min(max, v)) }); });
-            return i;
-        };
-        row('Breite', num('w', 120, 900));
-        row('Höhe', num('h', 32, 240));
-        const bg = document.createElement('input'); bg.type = 'color'; bg.value = this._style().bg;
-        bg.addEventListener('input', () => patch({ bg: bg.value }));
-        row('BG', bg);
-        const col = document.createElement('input'); col.type = 'color'; col.value = parseHex(this._style()[colKey], '#5ad1ff');
-        // Opaque-Regler: kleiner Knob OHNE Value-Anzeige statt Slider (spart rechts Platz).
-        const alphaKnob = new Knob({
-            label: 'A', min: 0, max: 1, step: 0.01, curve: 'linear', decimals: 2,
-            viewSize: 'mini', hideValue: true, value: parseA(this._style()[colKey], 1),
-            onChange: (v) => patch({ [colKey]: hexA(col.value, v) }),
         });
-        col.addEventListener('input', () => patch({ [colKey]: hexA(col.value, alphaKnob.value) }));
-        row(this.which === 'amp' ? 'Amp' : 'Filter', col, alphaKnob.element);
-        const r = anchor.getBoundingClientRect();
-        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 220))}px`;
-        pop.style.top = `${r.bottom + 4}px`;
-        document.body.appendChild(pop); this._pop = pop;
-        this._outside = (e) => { if (this._pop && !this._pop.contains(e.target) && e.target !== anchor) this._closeSettings(); };
-        this._escClose = (e) => { if (e.key === 'Escape') this._closeSettings(); };
-        setTimeout(() => document.addEventListener('mousedown', this._outside, true), 0);
-        document.addEventListener('keydown', this._escClose, true);
     }
-    _closeSettings() {
-        if (this._pop) {
-            this._pop.remove(); this._pop = null;
-            document.removeEventListener('mousedown', this._outside, true);
-            document.removeEventListener('keydown', this._escClose, true);
-        }
-    }
+    _closeSettings() { this._settings.close(); }
 
     /** Aus dem State neu zeichnen (Recall/Edit). Größe kann sich geändert haben. */
     refresh() {

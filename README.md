@@ -89,19 +89,21 @@ teslacoil/
 │   └── data/                     # PresetManager, Backup
 ├── css/main.css                  # Dark-Theme, Knob/Fader-Optik
 ├── index.html                    # Einstiegspunkt
-├── test/                         # Logic-Tests (144), Playwright-Integration
+├── test/                         # Logic-Tests (170), Playwright-Integration
 └── docs/                         # Planung, Konzepte, Reviews
 ```
 
 ### Tests
 
-- **144 Logic-Tests** – Headless in [test/logic.test.mjs](test/logic.test.mjs)
+- **170 Logic-Tests** – Headless in [test/logic.test.mjs](test/logic.test.mjs)
 - **Integration** – [test/smoke.py](test/smoke.py) (lädt, Audio erzeugt Signal)
 - **Performance** – [test/perf.py](test/perf.py) (≥45 FPS Render-Loop)
 - **Tastatur/Layout** – [test/arrange.py](test/arrange.py) (e-Mode, keyRoute)
 - **Bedienregeln** – [test/controls.py](test/controls.py) (Selektion, Doppelklick, e-Mode sperrt Werte)
 - **Sichtbarkeit** – [test/visibility.py](test/visibility.py) (welches Control zeigt sich wann)
 - **Speicher** – [test/factory.py](test/factory.py) · [test/fileio.py](test/fileio.py)
+- **Hilfe-Blasen** – [test/hints.py](test/hints.py) (Verzögerung, Schalter, eigene Texte)
+- **Farben** – [test/colors.py](test/colors.py) (Farbwähler + Presets der Controls)
 
 Die Bilder der Anleitung erzeugt [test/shots.py](test/shots.py) reproduzierbar neu.
 

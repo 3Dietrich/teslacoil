@@ -90,7 +90,49 @@ const EN = {
     'Ziehen zum Verschieben · Rechtsklick = Einstellungen': 'Drag to move · right-click = settings',
     'Klick = auswählen (dann Pfeiltasten), Doppelklick = Wert eingeben':
         'Click = select (then arrow keys), double-click = type a value',
-    'Reflections-Anzeige: Größe & Farben': 'Reflections display: size & colours',
+    'Hintergrund der Anzeige': 'Display background',
+
+    // ── Beschriftung, global (@dpa 20260716_204921) ──
+    'Beschriftung': 'Labels',
+    'Gilt für ALLE Beschriftungen und Werte-Anzeigen auf einmal. Leer bzw. ✕ = wie ausgeliefert. Einzelne Regler-Farben bleiben davon unberührt (Rechtsklick auf den Regler).':
+        'Applies to ALL labels and value readouts at once. Empty or ✕ = as shipped. Individual knob colours stay untouched (right-click the knob).',
+    'Vorgabe entfernen (wieder wie ausgeliefert)': 'Remove the setting (back to as shipped)',
+    'Schrift': 'Text',
+    'Wert-BG': 'Value BG',
+    'Größe': 'Size',
+    'Schriftgröße der Beschriftungen (6–12 px, leer = wie ausgeliefert)':
+        'Font size of the labels (6–12 px, empty = as shipped)',
+
+    // ── Hilfe-Blasen (@dpa 20260716_174111) ──
+    // Die Hilfetexte der Controls selbst stehen NICHT hier, sondern als {de,en}-Paar in
+    // js/data/hints.js – sie hängen an der Control-Kennung statt am Wortlaut, damit ein
+    // umformulierter Text seine Übersetzung nicht verliert. Hier steht nur die Bedienung
+    // des Hilfe-Systems.
+    'Hilfe': 'Help',
+    'Hilfe-Blasen ein-/ausschalten (die Verzögerung steht in den Einstellungen)':
+        'Turn help bubbles on/off (the delay lives in the settings)',
+    'Wie lange die Maus stillstehen muss, bis die Hilfe-Blase erscheint. Den Text jedes Controls ändert man in dessen Einstellungen (Rechtsklick), „Alle zurücksetzen" holt die mitgelieferten Texte zurück.':
+        'How long the mouse must rest before the help bubble appears. Each control’s text is edited in its own settings (right-click); “Reset all” brings the shipped texts back.',
+    'Verzögerung der Hilfe-Blase in Millisekunden (0 = sofort)':
+        'Delay of the help bubble in milliseconds (0 = instantly)',
+    'Alle zurücksetzen': 'Reset all',
+    'Alle selbst geschriebenen Hilfetexte verwerfen (die mitgelieferten gelten wieder)':
+        'Discard all self-written help texts (the shipped ones apply again)',
+    'Alle eigenen Hilfetexte verwerfen?': 'Discard all your own help texts?',
+    'Es sind keine eigenen Hilfetexte gespeichert.': 'There are no self-written help texts stored.',
+    'Hilfetexte sichern': 'Save help texts',
+    'Nur die selbst geschriebenen Hilfetexte als eigene JSON-Datei herunterladen':
+        'Download only the self-written help texts as their own JSON file',
+    'Hilfetexte laden': 'Load help texts',
+    'Hilfetexte aus einer teslacoil-Hilfetext-Datei einlesen (ersetzt nur die Texte, sonst nichts)':
+        'Read help texts from a teslacoil help-text file (replaces only the texts, nothing else)',
+    'Hilfetexte laden?': 'Load help texts?',
+    'Die eigenen Hilfetexte werden ersetzt. Sound, Optik und Snapshots bleiben unberührt.':
+        'Your own help texts will be replaced. Sound, look and snapshots stay untouched.',
+    'Import nicht möglich:': 'Import not possible:',
+    'Standard': 'Default',
+    'Eigene Farbe verwerfen (Regler nimmt wieder die Grundfarbe)':
+        'Discard the custom colour (knob returns to the base colour)',
     'Schließen': 'Close',
     'Anzeige an/aus': 'Display on/off',
 
@@ -99,8 +141,6 @@ const EN = {
         'Fill: repeat the visible pattern across the hidden remainder',
     'set0: der nächste Trigger startet wieder bei Step 1':
         'set0: the next trigger starts at step 1 again',
-    'Anzeige: Größe, Hintergrund- & Balkenfarbe (mit Alpha)':
-        'Display: size, background & bar colour (with alpha)',
 
     // ── Skaler-Keyboard ──
     'Klick: Skala auf der Frequenzachse verschieben (Anker)':
@@ -180,11 +220,20 @@ export function t(de) {
     return EN[de] ?? de;
 }
 
-/** Hint (title + aria-label) setzen und für die Live-Umschaltung merken. */
+/**
+ * Hint setzen und für die Live-Umschaltung merken.
+ *
+ * Seit 20260716_174111 steht der Text in `data-hint` statt in `title`: die Hilfe-Blase
+ * (ui/HintBubble.js) zeigt ihn an, damit @dpa sie global abschalten und ihre Verzögerung
+ * einstellen kann – beides gibt ein natives `title` nicht her. Ein zurückgebliebenes
+ * `title` würde zusätzlich als zweiter, unabschaltbarer Tooltip erscheinen.
+ *
+ * `aria-label` bleibt: das ist der Weg zur Vorlesehilfe, nicht zur Optik.
+ */
 export function hint(el, de) {
     if (!el) return el;
     _hints.set(el, de);
-    el.title = t(de);
+    el.dataset.hint = t(de);
     if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t(de));
     return el;
 }
@@ -207,7 +256,7 @@ export function setLang(l) {
     _lang = next;
     for (const [el, de] of _hints) {
         if (!el.isConnected) { _hints.delete(el); continue; }   // aufgeräumt statt geleakt
-        el.title = t(de);
+        el.dataset.hint = t(de);
         if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', t(de));
     }
     for (const [el, de] of _texts) {

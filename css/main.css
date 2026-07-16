@@ -87,9 +87,34 @@ body {
 /* Master Vol/Settings/CPU/e-Mode sitzen jetzt in .topbar-right (Kopfzeile Zeile 1).
    „Alles zeigen" an der Kette (fx-showall-btn) bekommt dieselbe Icon+Viereck-Größe. */
 .hdr-cpu { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; min-width: 52px; text-align: right; }
-/* @dpa 20260716_164359 zu diesen dreien: ⚙ „etwas zu klein", ⤢ „Button zu groß, Icon
+/* @dpa 20260716_164359 zu diesen: ⚙ „etwas zu klein", ⤢ „Button zu groß, Icon
    trotzdem zu klein". Jetzt: knapperer Rahmen, Icon füllt ihn. */
-.settings-btn, .arrange-btn, .fx-showall-btn { --ico: 21px; padding: 4px; min-width: 29px; }
+.settings-btn, .arrange-btn, .hint-btn { --ico: 21px; padding: 4px; min-width: 29px; }
+/* Hilfe-Blasen an/aus: AN ist der Normalfall, deshalb ist „an" dezent eingefärbt und
+   „aus" das stumme Grau – andersherum würde die Kopfzeile im Alltag dauerleuchten. */
+.hint-btn { color: var(--muted); }
+.hint-btn.on { color: var(--accent); }
+
+/* ── Hilfe-Blase (js/ui/HintBubble.js) ──
+   Eigenes Tooltip statt `title`: nur so sind „global aus" und eine einstellbare
+   Verzögerung möglich (@dpa 20260716_174111). pointer-events:none ist PFLICHT – die Blase
+   erscheint neben dem Zeiger, und sobald sie ihn selbst überdeckt, käme ein mouseout, das
+   sie wieder wegnimmt: sie würde flackern. */
+.hint-bubble {
+  position: fixed; z-index: 2000; pointer-events: none;
+  max-width: 320px; padding: 6px 9px;
+  background: var(--panel2); color: var(--text);
+  border: 1px solid var(--sel-line); border-radius: 4px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.55);
+  font-size: 11px; line-height: 1.45;
+}
+
+/* Der ⤢ der Kette ist eine Nummer kleiner als die beiden in der Kopfzeile (@dpa
+   20260716_174111: „ist vom Rahmen her etwas zu groß (Icongröße im Verhältnis zum Rahmen
+   ist super jetzt!)"). Er steht in der FX-Zeile zwischen kleinen Namensplaketten, nicht
+   oben rechts neben Master Vol. Gemeint war NUR der Rahmen – das gelobte Verhältnis
+   Icon:Rahmen (~0.68) bleibt gleich, beide Maße schrumpfen zusammen. */
+.fx-showall-btn { --ico: 18px; padding: 3px; min-width: 26px; }
 .arrange-btn.on { background: #26333a; border-color: var(--accent); color: var(--accent); }
 
 /* Ausgangs-Pegelmeter: fest an der rechten Kante, hoch & schmal, mit dB-Skala */
@@ -186,7 +211,7 @@ body {
 }
 
 /* ── Selects ── */
-.select-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 11px; }
+.select-field { display: flex; flex-direction: column; gap: 2px; color: var(--lab-col, var(--muted)); font-size: var(--lab-size, 11px); }
 /* Schalter: Kästchen und Beschriftung dichter zusammen (@dpa 20260716_011222). */
 .toggle-field { flex-direction: row; align-items: center; gap: 3px; }
 /* Toggle-Label-Position (@dpa 20260714, Element-Settings). DOM-Reihenfolge = Checkbox, Label. */
@@ -273,9 +298,6 @@ body {
 /* Snapshot-/Combo-Zeile: alles linksbündig, Menü schmal → ＋/🗑 passen auf die Zeile
    (kein Umbruch mehr). Der gemerkte Snapshot-Name bleibt im Menü stehen. */
 .group-settings .gs-snap-row, .group-settings .gs-combo-row { flex-wrap: nowrap; justify-content: flex-start; gap: 4px; }
-/* StepSeq-Settings (Filter/Amp): weniger Inhalt (kein Name/Combo) → schmaler, der
-   Opaque-Knob (statt Slider) spart zusätzlich rechts Platz. */
-.seq-settings-pop { width: 190px; }
 .gs-snap-sel, .gs-combo-sel { flex: 0 1 118px; min-width: 0; }
 .gs-row { display: flex; align-items: center; gap: 6px; }
 .gs-lab { color: var(--muted); min-width: 40px; font-size: 10px; }
@@ -314,14 +336,20 @@ body {
 .seq-lab { color: var(--muted); font-size: 11px; }
 .seq-steps { width: 52px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 2px; padding: 2px 4px; font: inherit; }
 .seq-canvas { display: block; border: 1px solid var(--line); border-radius: 4px; background: #0e1116; cursor: crosshair; touch-action: none; }
-/* Seq-Header-Buttons: kompakter Button, größeres Glyph (Mittelmaß, @dpa). */
-/* Seq-Kopfzeile (Fill/set0/⚙): Icon füllt den Rahmen, s. .ico-Regel oben. */
+/* Seq-Kopfzeile (nur noch Fill/set0 – das ⚙ ist raus, Settings kommen per Rechtsklick):
+   Icon füllt den Rahmen, s. .ico-Regel oben. */
 .seq-ic { --ico: 16px; display: inline-flex; align-items: center; justify-content: center;
   padding: 3px; min-width: 24px; line-height: 1; }
 
-/* ── Reflections-Anzeige mit eigenem Settings-Knopf ── */
+/* ── Reflections-Anzeige (Settings per Rechtsklick, kein Knopf daneben) ── */
 .refl-wrap { display: flex; align-items: flex-start; gap: 6px; }
-.refl-settings-btn { flex: 0 0 auto; }
+
+/* ── MiniSettings (Step-Seq / Reflections) ──
+   Teilt die Optik des Regler-Editors, ist aber schmaler: hier stehen nur Zahlen und
+   Farben, keine Namen. Die Alpha-Zeile (Farbe + Mini-Knob) läuft über beide Spalten. */
+.mini-settings { min-width: 208px; }
+.mini-settings .kme-row label { flex: 0 0 40px; }
+.mini-settings .kme-wide { grid-column: 1 / -1; }
 
 /* ── Selektion (Tab-Loop wie Klick): dezent (@dpa 20260716_023817 – „nicht mehr den
    leuchtenden Rahmen, sondern nur eine leichte BG färbung evtl mit Rahmen, aber dezent").
@@ -366,7 +394,8 @@ body {
    danach IST der margin-top der optische Abstand. line-height: 1 nimmt der Zeile ihren
    unsichtbaren Puffer, sonst stimmen die px hier nicht mit dem Auge überein. */
 .knob-svg { margin-bottom: -9px; }
-.knob-value { font-size: 11px; line-height: 1; color: var(--knob-accent, var(--text)); margin-top: 5px; }
+.knob-value { font-size: 11px; line-height: 1; color: var(--knob-accent, var(--text)); margin-top: 5px;
+  background: var(--val-bg, transparent); padding: var(--val-pad, 0); border-radius: 2px; }
 /* Ansicht-Größen: groß / mittel (Default 64px) / klein / mini / ohne Knob.
    Die Control-Höhe „berechnet" sich aus der Ansicht mit: weniger/kein Knob → flacher,
    mini schrumpft zusätzlich die Breite (Wunsch @dpa – Controls wie Gruppen platzierbar). */
@@ -375,7 +404,7 @@ body {
 /* Mini: kleiner als „klein" – Höhe UND Breite schrumpfen. */
 .knob-size-mini { width: 36px; }
 .knob-size-mini .knob-svg { width: 26px; height: 26px; margin-bottom: -4px; }
-.knob-size-mini .knob-label { font-size: 8px; }
+.knob-size-mini .knob-label { font-size: var(--lab-size, 8px); }
 .knob-size-mini .knob-value { font-size: 9px; margin-top: 3px; }
 .knob-size-large { width: 88px; }
 .knob-size-large .knob-svg { width: 80px; height: 80px; margin-bottom: -13px; }
@@ -398,13 +427,17 @@ body {
 .knob-shape-fader .knob-value-arc { fill: var(--knob-accent, var(--accent)); stroke: none; }
 .knob-shape-fader .knob-indicator { fill: var(--knob-accent, var(--text)); stroke: none; }
 .knob-size-none::before { content: ''; display: block; height: 4px; }
-.knob-size-none .knob-label { font-size: 9px; }
+.knob-size-none .knob-label { font-size: var(--lab-size, 9px); }
 .knob-size-none .knob-value { font-size: 10px; margin-top: 0; }
 /* Ohne Dial gibt es keinen Leerraum davor → der Wert braucht seinen Margin nicht. */
 .knob-size-none .knob-value, .knob-hide-value + .knob-label { margin-top: 0; }
 /* Zahlen-Anzeige weg (Dial+Label bleiben) – spart rechts Platz, z.B. Opaque-Regler in Popups. */
 .knob-hide-value .knob-value { display: none; }
-.knob-label { font-size: 10px; line-height: 1; color: var(--muted); margin-top: 3px; text-align: center; }
+/* Beschriftung: Farbe und Größe kommen global (@dpa 20260716_204921: „Da sie m.M.nach alle
+   die gleiche Farbe haben sollten muss man sie irgendwie global vorgeben"). Die Variablen
+   setzt app.js aus dem State; ist nichts gesetzt, gilt der bisherige Wert als Fallback –
+   ein unangetastetes Instrument sieht also exakt aus wie vorher. */
+.knob-label { font-size: var(--lab-size, 10px); line-height: 1; color: var(--lab-col, var(--muted)); margin-top: 3px; text-align: center; }
 /* Label-Position (@dpa 20260714): oben = per flex-order vor den Dial, aus = weg. */
 .knob-label-top .knob-label { order: -1; margin-top: 0; margin-bottom: 1px; }
 .knob-label-off .knob-label { display: none; }
@@ -477,8 +510,33 @@ body {
   background: none; border: 1px solid transparent; border-radius: 3px;
   color: var(--muted); font-size: 10px; cursor: pointer; }
 .kme-x:hover { color: var(--text); border-color: var(--line); }
+/* Hilfe-Text (@dpa 20260716_174111): mehrzeilig, füllt die Zeile, das ✕ daneben holt die
+   Auslieferung zurück. Kein resize – das Panel soll seine Breite behalten. */
+.kme-help-row { align-items: flex-start; }
+.kme-help-row textarea {
+  flex: 1 1 auto; width: auto; min-width: 0; resize: vertical;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 3px;
+  padding: 4px 6px; color: var(--text); font: inherit; font-size: 11px; line-height: 1.4;
+}
+.kme-help-row textarea:focus { outline: none; border-color: var(--accent); }
+
+/* Farb-Zeile (@dpa 20260716_204921): Label · VG · BG · ✕ · Speicher – alles auf EINER
+   Linie. Die beiden Wähler tragen ihre Beschriftung ÜBER sich (schmaler als daneben),
+   der Speicher bekommt den ganzen Rest. */
+.kme-col-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; flex: 0 0 auto; }
+/* Dasselbe Muster in den Einstellungen (Beschriftung): Label über dem Feld, ✕ daneben. */
+.sw-col-cell { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+  flex-wrap: wrap; justify-content: center; }
+.sw-col-cell .kme-col-lab { flex: 1 0 100%; text-align: center; }
+.sw-col-cell input[type="color"] { width: 28px; height: 20px; padding: 1px; border: none;
+  border-radius: 2px; cursor: pointer; background: none; }
+.kme-col-lab { color: var(--muted); font-size: 8px; line-height: 1; }
+/* „die farbanzeige ohne extradunklen Rand": der Wähler IST die Farbe – ein Rahmen drum
+   macht ihn nur kleiner und dunkler, als er ist. */
+.kme-color-row input[type="color"] { border: none; border-radius: 2px; height: 18px; }
+
 /* Farb-Presets: ein PickMenu statt Menü + Diskette + Mülleimer (@dpa 20260716_132014) –
-   es füllt den Rest der Zeile neben dem Farbwähler. */
+   es füllt den Rest der Zeile neben den Farbwählern. */
 .kme-color-menu { flex: 1 1 auto; min-width: 0; }
 .kme-color-menu .pm-btn { width: 100%; min-width: 0; }
 /* Kurven-Vorschau: kleiner und RECHTS, der Hinweistext links daneben (@dpa
@@ -586,9 +644,16 @@ body {
   display: flex; align-items: flex-start; justify-content: center;
   padding-top: 12vh;
 }
+/* Das Fenster wächst mit seinem Inhalt – und hatte bis 20260716_174111 keine Grenze:
+   der Hilfe-Abschnitt hat es so weit verlängert, dass „Als Datei sichern" und die
+   Werkseinstellung unten aus dem Bild fielen, ohne dass man sie erreichen konnte (der
+   Overlay ist `fixed inset:0`, da gibt es nichts zu scrollen). Auf einem kleinen Laptop
+   wären damit genau die Knöpfe unerreichbar, die man im Ernstfall braucht.
+   Also: nie höher als das Bild, und was nicht passt, scrollt im Fenster selbst. */
 .settings-window {
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 14px 16px; width: min(420px, 92vw);
+  max-height: 82vh; overflow-y: auto;
   box-shadow: 0 12px 40px rgba(0,0,0,.5);
 }
 .sw-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -667,7 +732,16 @@ body {
 /* ── Debug (C7): Audio/Screenshot/Zustand/Prompt bündeln. Seit 20260715_223000 kein
    eigener Panel-Block mehr, sondern normale Controls (Text/Note/Button) in einer Zeile. ── */
 .debug-ctrls { align-items: flex-end; }
-.debug-rec-on { border-color: var(--accent2); color: var(--accent2); }
+/* Aufnahme LÄUFT – muss auf einen Blick vom Ruhezustand zu unterscheiden sein
+   (@dpa 20260716_174111: „die müssen einen AN/Active Zustand zeigen! im Kontrast zu
+   AUS"). !important, weil die Element-Settings ihre VG/BG INLINE an den Knopf schreiben
+   (btn.style.color/background in makeButton) – ohne das gewinnt die Eigenfarbe und der
+   laufende Recorder sieht aus wie der gestoppte. Rot statt --accent2: der Zustand ist
+   „nimmt gerade auf", nicht „ist ausgewählt". */
+.debug-rec-on {
+  background: #5a1e1e !important; border-color: #ff5a5a !important; color: #ffd7d7 !important;
+  box-shadow: inset 0 0 0 1px rgba(255,90,90,.5);
+}
 
 /* ── Schrift-Eingabe (TEXTS) ── */
 .text-field .gs-text { flex: none; }

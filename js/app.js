@@ -12,7 +12,8 @@
  */
 import { State, DEFAULTS } from './core/State.js';
 import { globalKeyOk, arrowKeyOk } from './core/keyRoute.js';
-import { t, hint, text as i18nText, setLang, onLangChange } from './core/i18n.js';
+import { normalizeFxOrder } from './core/fxChain.js';
+import { t, hint, text as i18nText, setLang, onLangChange, lang } from './core/i18n.js';
 import { TeslaEngine } from './engine/TeslaEngine.js';
 import { Knob } from './ui/Knob.js';
 import { KnobMetaEditor } from './ui/KnobMetaEditor.js';
@@ -24,7 +25,11 @@ import { Scopes } from './ui/Scopes.js';
 import { DebugPanel } from './ui/DebugPanel.js';
 import { PresetBar } from './ui/PresetBar.js';
 import { PickMenu } from './ui/PickMenu.js';
+import { MiniSettings } from './ui/MiniSettings.js';
+import { HintBubble } from './ui/HintBubble.js';
 import { icon } from './ui/icons.js';
+import { hexA } from './ui/rgba.js';
+import { factoryHint } from './data/hints.js';
 import { PresetManager } from './data/PresetManager.js';
 import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
 import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
@@ -175,7 +180,10 @@ const GROUPS = [
     // Geblieben ist die reine Anzeige (u:rate) als Text-Control.
     { name: 'Skaler', selects: ['pitchWave'], inlineKnobs: ['pitchRandSeed'], knobs: ['pitchRate', 'fromHz', 'pitchRange'], scale: true },
     // Base-Frq: eigene Gruppe; Sichtbarkeit der Controls hängt von der Quelle ab.
-    { name: 'Base-Frq', selects: ['baseSrc', 'baseNote'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
+    // Kein 'baseNote'-Menü mehr (@dpa 20260716_174111: „das Menu Ton kann weg (ist ja KB
+    // da)") – bei Quelle 'Ton' ist das Base-Keyboard bedienbar und sagt dasselbe, nur
+    // sichtbar. Der State-Key baseNote bleibt natürlich, das Brett schreibt ihn.
+    { name: 'Base-Frq', selects: ['baseSrc'], toggles: ['baseTestOn'], knobs: ['baseBand', 'baseHz', 'harmonizeMix', 'baseTestLevel'], baseFrq: true },
     { name: 'Audio-Osz', selects: ['oscEngine'], knobs: ['duty', 'fmFeedback', 'polyMax'], osc: true },
     // Lowpass auf dem OSC: Cutoff (+ Reso ab 2p) mit Decay-Env (Takt×Gate).
     // Filter-Sequenzer steuert Env-Trigger + -Depth pro Step.
@@ -305,6 +313,18 @@ async function boot() {
             state.set('fxOrder', order);
         }
     }
+    // …und ab jetzt bei JEDEM Recall, nicht nur beim Booten (@dpa 20260716_232709:
+    // „Metronom fehlt in der Kette!"). Die Migration oben lief einmal; danach setzte jeder
+    // ältere Snapshot seine eigene, metronomlose Kette ein und der Knoten war weg – aus der
+    // Ansicht UND aus der Verdrahtung. Ein Snapshot darf die Reihenfolge bestimmen, aber
+    // nicht, welche Knoten es gibt (s. js/core/fxChain.js).
+    const fixFxOrder = () => {
+        const want = normalizeFxOrder(state.get('fxOrder'), DEFAULTS.fxOrder);
+        const have = state.get('fxOrder') || [];
+        if (want.length !== have.length || want.some((n, i) => n !== have[i])) state.set('fxOrder', want);
+    };
+    fixFxOrder();
+    state.subscribe((key) => { if (key === '*' || key === 'fxOrder') fixFxOrder(); });
 
     // ── Auto-Save: jede Änderung (Sound + Optik) still sichern (leicht entprellt) ──
     let _liveTimer = null;
@@ -615,6 +635,14 @@ async function boot() {
             btn.style.color = s.fg || '';
             btn.style.width = s.boxSize ? s.boxSize + 'px' : '';
             btn.style.height = s.boxH ? s.boxH + 'px' : '';
+            // Das Icon MUSS mit dem Rahmen mitwachsen (@dpa 20260716_174111: „Recs
+            // Verwerfen … ist immernoch mini"). Ein festes --ico aus dem CSS passt nur
+            // zum Default-Rahmen (28px); zieht der User den Knopf in den Settings auf
+            // 60×50, bliebe das Icon bei 20px liegen – genau der gemeldete Zustand.
+            // Also: kleinere Kante minus Innenabstand = Icon-Kantenlänge.
+            const w = s.boxSize || 0, h = s.boxH || 0;
+            const box = (w && h) ? Math.min(w, h) : (w || h);
+            btn.style.setProperty('--ico', box ? Math.max(12, box - 8) + 'px' : '');
             // Label-Position = wohin der Text im Button rückt; 'center' ist der Default.
             btn.style.justifyContent = s.labelPos === 'left' ? 'flex-start' : s.labelPos === 'right' ? 'flex-end' : 'center';
             btn.style.alignItems = s.labelPos === 'top' ? 'flex-start' : s.labelPos === 'bottom' ? 'flex-end' : 'center';
@@ -898,10 +926,61 @@ async function boot() {
     const arrBtn = iconBtn('arrange', 'Anordnen-Modus (Taste „e"): Elemente frei ziehen · Klick/Tab wählt aus · Pfeiltasten verschieben (10px, Shift = 1px) · hier wird nichts bedient', () => setArranging(!arranging));
     arrBtn.classList.add('arrange-btn');
     const cpuEl = document.createElement('span'); cpuEl.className = 'hdr-cpu'; cpuEl.textContent = 'CPU –';
+    // Hilfe-Blasen global an/aus (@dpa 20260716_174111: „falls das aufpopen der hints
+    // stört"). Steht in der Kopfzeile, weil man den Schalter genau dann sucht, wenn die
+    // Blasen gerade stören – und dann will man nicht erst die Settings öffnen.
+    const hintBtn = iconBtn('help', 'Hilfe-Blasen ein-/ausschalten (die Verzögerung steht in den Einstellungen)', () => {
+        state.set('hintsOn', !state.get('hintsOn'));
+    });
+    hintBtn.classList.add('hint-btn');
+    const paintHintBtn = () => hintBtn.classList.toggle('on', !!state.get('hintsOn'));
+    paintHintBtn();
+    state.subscribe((key) => { if (key === '*' || key === 'hintsOn') paintHintBtn(); });
     const hdrRight = document.createElement('div'); hdrRight.className = 'topbar-right';
     hdrRight.appendChild(makeMasterVolBar());
-    hdrRight.appendChild(settingsBtn); hdrRight.appendChild(cpuEl); hdrRight.appendChild(arrBtn);
+    hdrRight.appendChild(settingsBtn); hdrRight.appendChild(hintBtn); hdrRight.appendChild(cpuEl); hdrRight.appendChild(arrBtn);
     document.querySelector('.topbar').appendChild(hdrRight);
+
+    // ── Globale Beschriftung (@dpa 20260716_204921) ──
+    // Drei CSS-Variablen am Wurzelelement, mehr braucht es nicht: die Regeln im Stylesheet
+    // lesen sie MIT FALLBACK auf ihren bisherigen Wert (--lab-col, --lab-size, --val-bg).
+    // Ist nichts vorgegeben, sieht das Instrument aus wie ausgeliefert – die Variablen
+    // werden dann gelöscht, nicht auf einen Ersatzwert gesetzt.
+    // Das Polster hinter dem Wert kommt NUR mit einer Farbe: ohne Farbe wäre es unsichtbar,
+    // würde aber die gemessenen Abstände (Dial→Wert) verschieben.
+    function applyLabelStyle() {
+        const r = document.documentElement.style;
+        const col = state.get('labelColor') || '';
+        const bg = state.get('valueBg') || '';
+        const size = state.get('labelSize') | 0;
+        col ? r.setProperty('--lab-col', col) : r.removeProperty('--lab-col');
+        bg ? r.setProperty('--val-bg', bg) : r.removeProperty('--val-bg');
+        bg ? r.setProperty('--val-pad', '1px 3px') : r.removeProperty('--val-pad');
+        size ? r.setProperty('--lab-size', size + 'px') : r.removeProperty('--lab-size');
+    }
+    applyLabelStyle();
+    state.subscribe((key) => {
+        if (key === '*' || key === 'labelColor' || key === 'valueBg' || key === 'labelSize') applyLabelStyle();
+    });
+
+    // ── Hilfe-Blasen: EIN Manager für alles, was einen Hint trägt ──
+    // Die Auflösung ist die ganze Kaskade an einem Ort: eigener Text → Auslieferung →
+    // der statisch gesetzte data-hint (Knöpfe/Menüs, die kein Control sind).
+    // `hintFor` ist auch die Quelle für das Hilfe-Feld in den Settings.
+    const hintFor = (id) => {
+        const own = (state.get('hintText') || {})[id];
+        if (own != null) return own;              // '' ist eine Ansage: „hier keine Hilfe"
+        return factoryHint(id, lang());
+    };
+    new HintBubble({
+        enabled: () => !!state.get('hintsOn'),
+        delay: () => state.get('hintDelay') ?? 600,
+        resolve: (el) => {
+            const id = el.dataset.ctrl;
+            if (id) { const h = hintFor(id); if (h) return h; }
+            return el.dataset.hint || '';
+        },
+    });
 
     // Audio-Last: echte Render-Kapazität des AudioContext (nur Chrome), sonst grobe UI-Last.
     let cpuLoad = 0, cpuHasAudio = false;
@@ -990,6 +1069,83 @@ async function boot() {
         lgSel.addEventListener('change', () => state.set('lang', lgSel.value));
         lgRow.appendChild(lgSel);
         win.appendChild(lgRow);
+
+        // ── Beschriftung, GLOBAL (@dpa 20260716_204921: „muss man sie irgendwie global
+        // vorgeben.. Da bleibt ja dann nur noch die main „Einstellungen".. gefällt mir
+        // nicht aber… Was anderes ist ja nicht übrig oder?"). Stimmt: alles andere im
+        // Instrument meint EIN Element (Rechtsklick darauf). Für „gilt überall" gibt es
+        // genau diesen einen Ort – und er steht direkt neben der Sprache, der anderen
+        // Einstellung, die alles auf einmal betrifft. ──
+        const lbHead = document.createElement('div'); lbHead.className = 'sw-subhead'; i18nText(lbHead, 'Beschriftung');
+        win.appendChild(lbHead);
+        const lbNote = document.createElement('p'); lbNote.className = 'sw-note';
+        i18nText(lbNote, 'Gilt für ALLE Beschriftungen und Werte-Anzeigen auf einmal. Leer bzw. ✕ = wie ausgeliefert. Einzelne Regler-Farben bleiben davon unberührt (Rechtsklick auf den Regler).');
+        win.appendChild(lbNote);
+        const lbRow = document.createElement('div'); lbRow.className = 'sw-actions';
+        // Farbwähler + ✕ (leeren) als Paar – ohne den Rückweg wäre eine einmal gesetzte
+        // Farbe nicht mehr loszuwerden: ein <input type=color> kennt kein „nichts".
+        const colorField = (label, key) => {
+            const cell = document.createElement('span'); cell.className = 'sw-col-cell';
+            const lab = document.createElement('span'); lab.className = 'kme-col-lab'; i18nText(lab, label);
+            const inp = document.createElement('input'); inp.type = 'color';
+            inp.value = state.get(key) || (key === 'valueBg' ? '#232833' : '#8a93a3');
+            inp.addEventListener('input', () => state.set(key, inp.value));
+            const clr = document.createElement('button'); clr.className = 'kme-x'; clr.textContent = '✕';
+            hint(clr, 'Vorgabe entfernen (wieder wie ausgeliefert)');
+            clr.addEventListener('click', () => state.set(key, ''));
+            cell.appendChild(lab); cell.appendChild(inp); cell.appendChild(clr);
+            return cell;
+        };
+        lbRow.appendChild(colorField('Schrift', 'labelColor'));
+        lbRow.appendChild(colorField('Wert-BG', 'valueBg'));
+        const lbSizeCell = document.createElement('span'); lbSizeCell.className = 'sw-col-cell';
+        const lbSizeLab = document.createElement('span'); lbSizeLab.className = 'kme-col-lab'; i18nText(lbSizeLab, 'Größe');
+        const lbSize = document.createElement('input');
+        lbSize.type = 'number'; lbSize.className = 'gs-text'; lbSize.min = 6; lbSize.max = 12; lbSize.step = 1;
+        lbSize.style.maxWidth = '58px';
+        lbSize.value = state.get('labelSize') || '';
+        lbSize.placeholder = '–';
+        hint(lbSize, 'Schriftgröße der Beschriftungen (6–12 px, leer = wie ausgeliefert)');
+        lbSize.addEventListener('input', () => {
+            const v = parseInt(lbSize.value);
+            // Leeres Feld = „keine Vorgabe" (0), nicht 6 – sonst gäbe es keinen Weg zurück.
+            state.set('labelSize', Number.isFinite(v) ? Math.max(6, Math.min(12, v)) : 0);
+        });
+        lbSizeCell.appendChild(lbSizeLab); lbSizeCell.appendChild(lbSize);
+        lbRow.appendChild(lbSizeCell);
+        win.appendChild(lbRow);
+
+        // ── Hilfe-Blasen (@dpa 20260716_174111): Verzögerung + der Rückweg zur
+        // Auslieferung. Der An/Aus-Schalter steht in der KOPFZEILE, nicht hier – man
+        // braucht ihn genau dann, wenn die Blasen stören, und dann will man nicht erst
+        // ein Fenster öffnen. Hier steht, was man selten einstellt. ──
+        const hpHead = document.createElement('div'); hpHead.className = 'sw-subhead'; i18nText(hpHead, 'Hilfe');
+        win.appendChild(hpHead);
+        const hpNote = document.createElement('p'); hpNote.className = 'sw-note';
+        i18nText(hpNote, 'Wie lange die Maus stillstehen muss, bis die Hilfe-Blase erscheint. Den Text jedes Controls ändert man in dessen Einstellungen (Rechtsklick), „Alle zurücksetzen" holt die mitgelieferten Texte zurück.');
+        win.appendChild(hpNote);
+        const hpRow = document.createElement('div'); hpRow.className = 'sw-actions';
+        const hpDelay = document.createElement('input');
+        hpDelay.type = 'number'; hpDelay.className = 'gs-text'; hpDelay.min = 0; hpDelay.max = 5000; hpDelay.step = 50;
+        hpDelay.value = state.get('hintDelay') ?? 600;
+        hpDelay.style.maxWidth = '90px';
+        hint(hpDelay, 'Verzögerung der Hilfe-Blase in Millisekunden (0 = sofort)');
+        hpDelay.addEventListener('input', () => {
+            const v = parseInt(hpDelay.value);
+            if (Number.isFinite(v)) state.set('hintDelay', Math.max(0, Math.min(5000, v)));
+        });
+        const hpUnit = document.createElement('span'); hpUnit.className = 'sw-note'; hpUnit.textContent = 'ms';
+        const hpReset = document.createElement('button'); hpReset.className = 'pb-btn';
+        i18nText(hpReset, 'Alle zurücksetzen');
+        hint(hpReset, 'Alle selbst geschriebenen Hilfetexte verwerfen (die mitgelieferten gelten wieder)');
+        hpReset.addEventListener('click', () => {
+            const n = Object.keys(state.get('hintText') || {}).length;
+            if (!n) { alert(t('Es sind keine eigenen Hilfetexte gespeichert.')); return; }
+            if (!confirm(t('Alle eigenen Hilfetexte verwerfen?'))) return;
+            state.set('hintText', {});
+        });
+        hpRow.appendChild(hpDelay); hpRow.appendChild(hpUnit); hpRow.appendChild(hpReset);
+        win.appendChild(hpRow);
 
         // ── Ausgang: DC-Block (@dpa 20260716_132014 hierher verschoben) ──
         const dcHead = document.createElement('div'); dcHead.className = 'sw-subhead'; i18nText(dcHead, 'Ausgang');
@@ -1080,6 +1236,49 @@ async function boot() {
         });
         flRow.appendChild(flExp); flRow.appendChild(flImp);
         win.appendChild(flRow);
+
+        // ── Hilfetexte als EIGENE Kategorie ex-/importieren (@dpa 20260716_174111: „Datei-
+        // Sektion ex- und im-portierbar · als eigene Kathegorie speicherbar"). Eigene Datei
+        // statt Teil des großen Backups: wer seine Hilfe weitergibt, will nicht sein ganzes
+        // Instrument mitgeben – und wer sie einliest, will nicht seinen Klang verlieren.
+        // Import ersetzt deshalb NUR hintText und lässt alles andere unangetastet. ──
+        const hxRow = document.createElement('div'); hxRow.className = 'sw-actions';
+        const hxExp = document.createElement('button'); hxExp.className = 'pb-btn';
+        hxExp.classList.add('sw-file-btn', 'pb-ic-export');
+        hxExp.appendChild(icon('export'));
+        hxExp.appendChild(i18nText(document.createElement('span'), 'Hilfetexte sichern'));
+        hint(hxExp, 'Nur die selbst geschriebenen Hilfetexte als eigene JSON-Datei herunterladen');
+        hxExp.addEventListener('click', () => {
+            const texts = state.get('hintText') || {};
+            if (!Object.keys(texts).length) { alert(t('Es sind keine eigenen Hilfetexte gespeichert.')); return; }
+            const now = Date.now();
+            downloadJSON({ kind: 'teslacoil-hints', version: 1, ts: now, texts },
+                `teslacoil_hints_${fileStamp(new Date(now))}.json`);
+        });
+        const hxImp = document.createElement('button'); hxImp.className = 'pb-btn';
+        hxImp.classList.add('sw-file-btn', 'pb-ic-import');
+        hxImp.appendChild(icon('import'));
+        hxImp.appendChild(i18nText(document.createElement('span'), 'Hilfetexte laden'));
+        hint(hxImp, 'Hilfetexte aus einer teslacoil-Hilfetext-Datei einlesen (ersetzt nur die Texte, sonst nichts)');
+        hxImp.addEventListener('click', async () => {
+            const f = await pickTextFile();
+            if (!f) return;
+            let parsed;
+            // Die Prüfung ist absichtlich streng: eine falsche Datei darf NICHTS ändern
+            // (dieselbe Regel wie beim Backup-Import, s. test/fileio.py).
+            try {
+                parsed = JSON.parse(f.text);
+                if (!parsed || parsed.kind !== 'teslacoil-hints' || typeof parsed.texts !== 'object' || !parsed.texts) {
+                    throw new Error('Das ist keine teslacoil-Hilfetext-Datei (erwartet kind: "teslacoil-hints").');
+                }
+            } catch (e) { alert(t('Import nicht möglich:') + '\n\n' + e.message); return; }
+            const n = Object.keys(parsed.texts).length;
+            if (!confirm(t('Hilfetexte laden?') + ' (' + n + ')\n\n'
+                + t('Die eigenen Hilfetexte werden ersetzt. Sound, Optik und Snapshots bleiben unberührt.'))) return;
+            state.set('hintText', parsed.texts);
+        });
+        hxRow.appendChild(hxExp); hxRow.appendChild(hxImp);
+        win.appendChild(hxRow);
 
         // ── Werkseinstellung: doppelte Warnung + Auto-Backup davor (@dpa 20260714).
         // Zielt seit 20260715 auf die AUSGELIEFERTE Werkseinstellung (presets/factory.json)
@@ -1292,6 +1491,7 @@ async function boot() {
             // 12-Ton-Brett der Basis (@dpa 20260716_031100): bei Quelle 'Ton' bedienbar,
             // sonst zeigt es, auf welchem Ton die eingestellte Frequenz landet.
             baseKeyboard.mount(body); makeMovable(baseKeyboard.element, 'u:baseKeys');
+            ctrlEls.set('u:baseKeys', baseKeyboard.element);   // → setVis: Brett nur bei Quelle 'Ton'
             registerCtrlStyle('u:baseKeys', 'keyboard', baseKeyboard.element, kbStyle(baseKeyboard.element), 'Base-Keyboard');
             registerCtrlStyle('u:baseRead', 'readout', baseReadout, readoutStyle(baseReadout), 'Base-Readout');
             registerCtrlStyle('u:baseSpeed', 'readout', baseSpeed, readoutStyle(baseSpeed), 'Base-Speed');
@@ -1301,9 +1501,15 @@ async function boot() {
             reflCanvas.width = Math.max(80, state.get('reflW') | 0);
             reflCanvas.height = Math.max(24, state.get('reflH') | 0);
             const wrap = document.createElement('div'); wrap.className = 'group-extra refl-wrap';
-            const rBtn = iconBtn('gear', 'Reflections-Anzeige: Größe & Farben', (e) => openReflSettings(e.currentTarget));
-            rBtn.classList.add('refl-settings-btn');
-            wrap.appendChild(reflCanvas); wrap.appendChild(rBtn);
+            wrap.appendChild(reflCanvas);
+            // Kein ⚙ mehr daneben (@dpa 20260716_174111: „settings-Icons weg") – Rechtsklick
+            // auf den Graph, wie bei jedem anderen Element. stopPropagation, damit nicht
+            // zusätzlich die Gruppen-Settings aufgehen. Anker = Mausposition.
+            wrap.addEventListener('contextmenu', (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const at = { getBoundingClientRect: () => ({ left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY, width: 0, height: 0 }) };
+                openReflSettings(at);
+            });
             ctrlEls.set('reflWrap', wrap);   // → setVis: Graph folgt dem Reverb-Bypass
             body.appendChild(makeMovable(wrap, 'u:refl'));
         }
@@ -1311,9 +1517,11 @@ async function boot() {
             const w = new StepSeqUI(state, engine, grp.seq);
             makeMovable(w.element, 'u:seq' + grp.seq);
             seqWidgets.push(w);
-            // Filter-Sequenzer hängt an Env-Trig ('seq') statt einem eigenen Toggle →
-            // generisch über setVis()/ctrlEls sichtbar/unsichtbar (Block B).
-            if (grp.seq === 'filter') ctrlEls.set('filterSeqWidget', w.element);
+            // BEIDE Sequenzer sind über setVis()/ctrlEls schaltbar – der Filter hängt an
+            // Env-Trig ('seq'), der Amp an seinem 'Seq'-Haken (@dpa 20260716_174111:
+            // „Amp Env bei Seq=off: seq unsichtbar"). Bis dahin war nur der Filter-Seq
+            // eingetragen und das Amp-Brett blieb ausgeschaltet stehen.
+            ctrlEls.set(grp.seq + 'SeqWidget', w.element);
             body.appendChild(w.element);
         }
         if (grp.debug) {
@@ -1854,13 +2062,21 @@ async function boot() {
         //    nicht 'Snapshot' oder 'Combo' – das ist sinnlos)"). Der geladene Combo steht
         //    auf dem Knopf, ✎/🗑 hängen an ihrer Zeile, ＋ in der Fußzeile. ──
         const curColors = () => ({ bg: hexA(bgCol.value, parseFloat(bgA.value)), headColor: hexA(hCol.value, parseFloat(hA.value)) });
+        // Die LISTE der Combos ist global („alle Combos sind überall verteilt (ok)"), die
+        // ANZEIGE hängt an der Gruppe (@dpa 20260716_174111: „deren name bitte für die jew.
+        // Gruppe merken … nicht für alle, sondern für jede einzelne Gruppe"). Vorher stand
+        // in `comboSel` EIN Name für den ganzen Synth: wer der Filter-Gruppe einen Combo
+        // gab, bekam ihn danach auch über den Settings der Gate-Gruppe angezeigt – obwohl
+        // die ganz anders aussieht. Dieselbe Bauform wie groupSnapSel eine Ebene tiefer.
+        const comboOf = () => (state.get('groupComboSel') || {})[name] || '';
+        const rememberCombo = (nm) => state.set('groupComboSel', { ...state.get('groupComboSel'), [name]: nm || '' });
         const comboMenu = new PickMenu({
             label: 'Combo', empty: '— kein Combo —',
             title: 'Farb-Combo wählen · den markierten erneut wählen wendet ihn erneut an',
             list: () => state.get('groupStylePresets'),
-            current: () => state.get('comboSel') || '',
+            current: comboOf,
             onPick: (i, p) => {
-                state.set('comboSel', p.name);
+                rememberCombo(p.name);
                 setGroupStyle(name, { bg: p.bg, headColor: p.headColor });
                 bgCol.value = parseHex(p.bg, '#1c2027'); bgA.value = parseA(p.bg, 1);
                 hCol.value = parseHex(p.headColor, '#8a93a3'); hA.value = parseA(p.headColor, 1);
@@ -1870,11 +2086,14 @@ async function boot() {
                 if (!confirm('Combo „' + p.name + '" löschen?')) return;
                 const list = state.get('groupStylePresets').slice(); list.splice(i, 1);
                 state.set('groupStylePresets', list);
-                if (state.get('comboSel') === p.name) state.set('comboSel', '');
+                // Ein gelöschter Combo darf in KEINER Gruppe mehr auf dem Knopf stehen.
+                const sel = { ...state.get('groupComboSel') };
+                for (const g of Object.keys(sel)) if (sel[g] === p.name) sel[g] = '';
+                state.set('groupComboSel', sel);
             },
             foot: [['plus', 'Neu…', 'Aktuelle Farben als neuen Combo speichern', () => {
                 const pn = prompt('Combo-Name?', '');
-                if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); state.set('comboSel', pn); comboMenu.refresh(); }
+                if (pn) { state.set('groupStylePresets', [...state.get('groupStylePresets'), { name: pn, ...curColors() }]); rememberCombo(pn); comboMenu.refresh(); }
             }]],
         });
         const comboRow = document.createElement('div'); comboRow.className = 'gs-row gs-combo-row';
@@ -1960,7 +2179,10 @@ async function boot() {
     function updateBaseVisibility() {
         const src = state.get('baseSrc');
         setVis('baseHz', src === 'Freq');     // Freq: Grundfrequenz wichtig
-        setVis('baseNote', src === 'Ton');    // Ton: Tonklasse
+        // Das Brett zeigt sich nur bei Quelle 'Ton' (@dpa 20260716_174111: „KB nur in Tone
+        // sichtbar"). Bei Freq/Tempo war es reine Anzeige – und als solche eine, die den
+        // Blick auf sich zieht, ohne dass man sie bedienen kann.
+        setVis('u:baseKeys', src === 'Ton');
         // baseBand ist der Register-/Band-Regler für ALLE Quellen (immer sichtbar).
         setVis('baseTestLevel', state.get('baseTestOn')); // Test-Vol nur wenn Test-Ton an
         baseSpeed.style.display = src === 'Freq' ? '' : 'none';  // BpM/Hz/P nur im Freq-Modus
@@ -1992,7 +2214,11 @@ async function boot() {
     function updateHoldVisibility() {
         ['ampHoldGlide'].forEach((k) => setVis(k, state.get('ampHold')));
         // Dyn wirkt nur, wenn der Amp-Sequenzer die Velocity liefert (sonst Gate fest 1).
-        setVis('ampSeqDynPct', state.get('ampSeqEnabled'));
+        const seqOn = state.get('ampSeqEnabled');
+        setVis('ampSeqDynPct', seqOn);
+        // Und das Step-Brett selbst geht mit (@dpa 20260716_174111: „Amp Env bei Seq=off:
+        // seq unsichtbar") – wie beim Filter-Seq, der schon immer an Env-Trig hing.
+        setVis('ampSeqWidget', seqOn);
     }
     // Distortion: 'aktiv' aus → bis auf Dry/Wet ALLES weg, auch das Kennlinien-Menü
     // (@dpa 20260715). Dry/Wet bleibt bewusst stehen: es ist der Regler, der auch im
@@ -2046,6 +2272,16 @@ async function boot() {
     applyControlOrder(state.toJSON());
     applyCtrlPos(state.toJSON());
 
+    /** Kanalfarbe der Reflections-Anzeige – inklusive ihrer Deckkraft.
+     *  Bis 20260716_174111 stand im State nur Hex und die 0.30 klebte im Zeichencode; jetzt
+     *  trägt die Farbe ihr Alpha selbst (einstellbar, wie beim Step-Seq). Gespeicherte
+     *  Layouts von vorher haben noch '#rrggbb' → die bekommen die alte feste Deckkraft,
+     *  damit ihr Graph unverändert aussieht. */
+    const reflCol = (key) => {
+        const v = state.get(key) || '';
+        return v.startsWith('#') ? hexA(v, 0.30) : v;
+    };
+
     // Reflections-Anzeige zeichnen: jede Reflexion = senkrechter Strich (Höhe = Pegel),
     // niedriges Alpha → dichte Wolken werden durch Überlagerung kräftiger.
     function drawReflections() {
@@ -2053,11 +2289,9 @@ async function boot() {
         const cx = reflCanvas.getContext('2d');
         const W = reflCanvas.width, H = reflCanvas.height;
         cx.clearRect(0, 0, W, H);
-        cx.fillStyle = '#0e1116'; cx.fillRect(0, 0, W, H);
+        cx.fillStyle = state.get('reflBg') || '#0e1116'; cx.fillRect(0, 0, W, H);
         if (!ir) return;
-        // hex → rgba mit fester Deck-Alpha (selbst-enthalten, keine Definitions-Reihenfolge).
-        const rgba = (hex, a) => { const n = parseInt((hex || '#5ad1ff').slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
-        const cL = rgba(state.get('reflColL'), 0.30), cR = rgba(state.get('reflColR'), 0.30);
+        const cL = reflCol('reflColL'), cR = reflCol('reflColR');
         const view = state.get('revView');
         const chans = view === 'L' ? [[ir.L, cL]]
             : view === 'R' ? [[ir.R, cR]]
@@ -2081,36 +2315,20 @@ async function boot() {
         reflCanvas.height = Math.max(24, Math.min(400, state.get('reflH') | 0));
         drawReflections();
     }
-    // Kleines Popover: Breite/Höhe + Kanalfarben der Reflections-Anzeige (Optik).
-    let _reflPop = null;
-    const _reflOutside = (e) => { if (_reflPop && !_reflPop.contains(e.target)) closeReflSettings(); };
-    function closeReflSettings() { if (_reflPop) { _reflPop.remove(); _reflPop = null; document.removeEventListener('mousedown', _reflOutside, true); } }
+    // Optik der Reflections-Anzeige: Größe, Hintergrund, Kanalfarben (mit Deckkraft).
+    // Seit 20260716_174111 dasselbe Panel wie beim Step-Seq (MiniSettings): verschiebbar,
+    // zweispaltig, ESC/Außenklick – vorher ein eigenes, unverschiebbares Popover mit
+    // „Fertig"-Knopf, das als einziges Settings-Fenster aus der Reihe tanzte.
+    const reflSettings = new MiniSettings('Reflections-Anzeige');
+    function closeReflSettings() { reflSettings.close(); }
     function openReflSettings(anchor) {
-        closeReflSettings();
-        const pop = document.createElement('div'); pop.className = 'group-settings';
-        const row = (label, ...els) => { const r = document.createElement('div'); r.className = 'gs-row'; const l = document.createElement('span'); l.className = 'gs-lab'; l.textContent = label; r.appendChild(l); els.forEach((e) => r.appendChild(e)); pop.appendChild(r); };
-        const num = (key, min, max) => {
-            const i = document.createElement('input'); i.type = 'number'; i.min = min; i.max = max; i.step = 1; i.className = 'gs-text'; i.value = state.get(key);
-            i.addEventListener('input', () => { const v = parseInt(i.value); if (!isNaN(v)) state.set(key, Math.max(min, Math.min(max, v))); });
-            return i;
-        };
-        const col = (key) => {
-            const c = document.createElement('input'); c.type = 'color'; c.value = state.get(key);
-            c.addEventListener('input', () => state.set(key, c.value));
-            return c;
-        };
-        row('Breite', num('reflW', 80, 1200));
-        row('Höhe', num('reflH', 24, 400));
-        row('Farbe L', col('reflColL'));
-        row('Farbe R', col('reflColR'));
-        const acts = document.createElement('div'); acts.className = 'gs-actions';
-        const done = document.createElement('button'); done.className = 'pb-btn'; i18nText(done, 'Fertig');
-        done.addEventListener('click', closeReflSettings); acts.appendChild(done); pop.appendChild(acts);
-        const r = anchor.getBoundingClientRect();
-        pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - 280))}px`;
-        pop.style.top = `${r.bottom + 4}px`;
-        document.body.appendChild(pop); _reflPop = pop;
-        setTimeout(() => document.addEventListener('mousedown', _reflOutside, true), 0);
+        reflSettings.open(anchor, (f) => {
+            f.num('Breite', { min: 80, max: 1200, get: () => state.get('reflW'), set: (v) => state.set('reflW', v) });
+            f.num('Höhe', { min: 24, max: 400, get: () => state.get('reflH'), set: (v) => state.set('reflH', v) });
+            f.color('BG', { get: () => state.get('reflBg') || '#0e1116', set: (v) => state.set('reflBg', v), title: 'Hintergrund der Anzeige' });
+            f.colorA('L', { get: () => reflCol('reflColL'), set: (v) => state.set('reflColL', v), fallback: '#5ad1ff' });
+            f.colorA('R', { get: () => reflCol('reflColR'), set: (v) => state.set('reflColR', v), fallback: '#ff9f5a' });
+        });
     }
     applyReflSize();
 
@@ -2172,7 +2390,7 @@ async function boot() {
             drawReflections();
         } else if (key === 'reflW' || key === 'reflH') {
             applyReflSize();
-        } else if (key === 'reflColL' || key === 'reflColR') {
+        } else if (key === 'reflColL' || key === 'reflColR' || key === 'reflBg') {
             drawReflections();
         } else if (key === 'knobMeta') {
             applyKnobMeta(data);

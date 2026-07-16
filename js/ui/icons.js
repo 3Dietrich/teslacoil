@@ -66,6 +66,10 @@ const PATHS = {
     rewind: '<path d="M21.4 3.6L7.6 12l13.8 8.4z" fill="currentColor" stroke="none"/><path d="M3.6 3.6v16.8"/>',
     // ▾ Klapp-Pfeil (PickMenu) – bleibt bewusst klein, er ist Beiwerk am Namen.
     caret: '<path d="M4.4 8.4L12 16.4l7.6-8"/>',
+    // ? Hilfe-Blasen an/aus – Fragezeichen im Kreis. Der Haken (wie beim Zahnrad): der
+    // Punkt ist gefüllt, nicht gestrichelt – ein 2px-Strich auf 1px Länge verschwindet.
+    help: '<circle cx="12" cy="12" r="10.4"/><path d="M8.6 9.1a3.4 3.4 0 1 1 3.4 3.9v1.8"/>'
+        + '<circle cx="12" cy="18.2" r="1.2" fill="currentColor" stroke="none"/>',
 };
 
 /**

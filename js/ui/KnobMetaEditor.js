@@ -12,6 +12,9 @@
 import { Knob } from './Knob.js';   // nur für Knob.migrateShape (alte Gestalt-Namen)
 import { makeDraggable } from './dragPanel.js';
 import { PickMenu } from './PickMenu.js';
+import { colorPickerBusy } from './colorPick.js';
+import { factoryHint } from '../data/hints.js';
+import { lang } from '../core/i18n.js';
 export class KnobMetaEditor {
   /** @param {import('../core/State.js').State} [state] – für die Farb-Presets (Optik). */
   constructor(state) {
@@ -113,16 +116,34 @@ export class KnobMetaEditor {
             <label>Länge</label>
             <input type="number" class="kme-faderlen" min="24" max="400" step="4" title="Länge der Fader-Bahn in px" />
           </div>
-          <div class="kme-row">
-            <label title="Knob-Hintergrund">BG</label>
-            <input type="color" class="kme-bg" value="#232833" title="Hintergrund hinter dem Regler" />
-            <button class="kme-bg-clear kme-x" title="Hintergrund entfernen">✕</button>
-          </div>
         </div>
+        <!-- „Farben" – EINE Zeile für alles Farbige (@dpa 20260716_204921: „Es wäre cooler
+             wenn du VG und BG kompakt nebeneinander stellst (die farbanzeige ohne
+             extradunklen Rand, Label darüber = wenig Platz) und rechts daneben, mit dem
+             meisten Platz den Farbspeicher").
+             Vorher stand BG oben rechts im Raster und „Farben" eine Zeile tiefer – zwei
+             Orte für dieselbe Sache. Jetzt: Label über dem Wähler (das ist schmaler als
+             daneben), beide Wähler nebeneinander, der Speicher bekommt den Rest.
+             Mehrzahl, weil der Speicher BEIDE Farben ablegt (Bogen UND Hintergrund). -->
         <div class="kme-row kme-wide kme-color-row">
-          <label>Farbe</label>
-          <input type="color" class="kme-color" value="#5ad1ff" title="Farbe des Wertbogens / der Fader-Füllung" />
+          <label>Farben</label>
+          <span class="kme-col-cell">
+            <span class="kme-col-lab">VG</span>
+            <input type="color" class="kme-color" value="#5ad1ff" title="Farbe des Wertbogens / der Fader-Füllung" />
+          </span>
+          <span class="kme-col-cell">
+            <span class="kme-col-lab">BG</span>
+            <input type="color" class="kme-bg" value="#232833" title="Hintergrund hinter dem Regler" />
+          </span>
+          <button class="kme-bg-clear kme-x" title="Hintergrund entfernen">✕</button>
           <div class="kme-color-menu"></div>
+        </div>
+        <!-- Hilfe-Text dieses Reglers (@dpa 20260716_174111) – wie bei den anderen
+             Controls: leer + ✕ = wieder der Auslieferungstext. -->
+        <div class="kme-row kme-wide kme-help-row">
+          <label>Hilfe</label>
+          <textarea class="kme-help" rows="2" title="Hilfe-Blase dieses Reglers. ✕ = wieder der Auslieferungstext."></textarea>
+          <button class="kme-help-reset kme-x" title="Auslieferungstext wiederherstellen">✕</button>
         </div>
         <div class="kme-curve-preview">
           <div class="kme-keyhint"><b>Enter</b> = Übernehmen<br><b>ESC</b> = Verlassen</div>
@@ -145,15 +166,22 @@ export class KnobMetaEditor {
 
     panel.querySelector('.kme-curve').addEventListener('change', () => this._drawCurvePreview());
     panel.querySelector('.kme-skew').addEventListener('input', () => this._drawCurvePreview());
-    // Farbe: eigenes Editieren markiert „custom".
+    // Farbe: eigenes Editieren markiert „custom" und wirkt SOFORT – wie der BG eine Zeile
+    // tiefer. Dass hier das _apply() fehlte, war der eigentliche Grund für „Farbe nicht
+    // speicherbar" (@dpa 20260716_174111): der Farbwähler änderte brav seinen Wert, aber
+    // niemand trug ihn an den Regler, und beim Zumachen des Panels war er verloren.
     this._colorCustom = false;
-    panel.querySelector('.kme-color').addEventListener('input', () => { this._colorCustom = true; });
+    panel.querySelector('.kme-color').addEventListener('input', () => { this._colorCustom = true; this._apply(); });
     // Knob-BG: eigenes Editieren aktiviert den Hintergrund, ✕ entfernt ihn wieder.
     this._bgCustom = false;
     panel.querySelector('.kme-bg').addEventListener('input', () => { this._bgCustom = true; this._apply(); });
     panel.querySelector('.kme-bg-clear').addEventListener('click', () => { this._bgCustom = false; this._apply(); });
     // Label-Position sofort anwenden.
     panel.querySelector('.kme-labelpos').addEventListener('change', () => this._apply());
+    // Hilfe-Text: eigene Kategorie (state.hintText), NICHT Teil des Regler-Metas – sonst
+    // hinge er am Snapshot-/Layout-Recall statt für sich zu stehen.
+    panel.querySelector('.kme-help').addEventListener('input', () => this._applyHelp());
+    panel.querySelector('.kme-help-reset').addEventListener('click', () => this._resetHelp());
     // Gestalt/Länge wirken sofort (@dpa 20260715) – man will beim Einstellen sehen,
     // wie lang der Fader wird. Die Längen-Zeile zeigt sich nur bei shape='fader'.
     panel.querySelector('.kme-shape').addEventListener('change', () => { this._syncShapeRows(); this._apply(); });
@@ -194,9 +222,16 @@ export class KnobMetaEditor {
         this._state.set('knobColorPresets', list);
         if (this._state.get('knobColorSel') === p.name) this._state.set('knobColorSel', '');
       },
+      // Fußzeile: [Icon-NAME, Text, Tooltip, Aktion] – vier Glieder, nicht drei.
+      // Genau hier hing „Farbe nicht speicherbar (Menu öffnet nicht)" (@dpa 20260716_174111):
+      // der zweite Eintrag stand noch in der alten dreigliedrigen Form, in der das erste
+      // Feld der fertige Glyph war. Nach der Umstellung auf SVG-Icons landete deshalb
+      // '— Standard —' als ICON-NAME bei icon() – das wirft („icon: unbekannt"), und der
+      // Wurf riss das halb gebaute Menü mit: das Popup wurde nie eingehängt. Aus Sicht der
+      // Bedienung passierte auf den Klick nichts. Wächter: test/colors.py.
       foot: [
         ['plus', 'Neu…', 'Aktuelle Farbe + Hintergrund als Preset speichern', () => this._saveColorPreset()],
-        ['— Standard —', 'Eigene Farbe verwerfen (Regler nimmt wieder die Grundfarbe)', () => {
+        ['close', 'Standard', 'Eigene Farbe verwerfen (Regler nimmt wieder die Grundfarbe)', () => {
           this._colorCustom = false;
           if (this._state) this._state.set('knobColorSel', '');
           this._apply(); this._colorMenu.refresh();
@@ -211,8 +246,16 @@ export class KnobMetaEditor {
 
     // Klick außerhalb schließt. (Die frühere ⚙-Ausnahme ist weg – das Icon gibt es nicht
     // mehr, Settings kommen per Rechtsklick, und der schließt/öffnet sauber neu.)
+    // ZWEI Ausnahmen, beide sind Bedienung DIESES Panels, nur außerhalb seines DOM:
+    //  • das Farb-PickMenu (Popup an <body>, s. PickMenu.contains),
+    //  • ein offener Farbwähler (s. colorPickerBusy) – der Klick, mit dem man ihn wieder
+    //    zumacht, hätte sonst das Panel mit weggerissen und die Farbe verworfen.
     document.addEventListener('mousedown', (e) => {
-      if (this._panel.style.display !== 'none' && !this._panel.contains(e.target)) this.close();
+      if (!this.isOpen) return;
+      if (this._panel.contains(e.target)) return;
+      if (this._colorMenu && this._colorMenu.contains(e.target)) return;
+      if (colorPickerBusy(this._panel)) return;
+      this.close();
     });
 
     document.body.appendChild(panel);
@@ -245,6 +288,7 @@ export class KnobMetaEditor {
     this._bgCustom = !!meta.bg;
     this._panel.querySelector('.kme-bg').value = meta.bg || '#232833';
     this._colorMenu.refresh();
+    this._loadHelp();
     this._panel.querySelector('.kme-title').textContent = meta.label;
 
     const rect = knob.element.getBoundingClientRect();
@@ -268,6 +312,40 @@ export class KnobMetaEditor {
   close() {
     this._panel.style.display = 'none';
     this._currentKnob = null;
+  }
+
+  /* ── Hilfe-Text (eigene Kategorie: state.hintText) ── */
+
+  /** Die Kennung, unter der dieser Regler seine Hilfe hat – dieselbe wie im e-Mode. */
+  _hintId() {
+    const el = this._currentKnob && this._currentKnob.element;
+    return (el && el.dataset.ctrl) || '';
+  }
+
+  _loadHelp() {
+    const id = this._hintId();
+    const help = this._panel.querySelector('.kme-help');
+    const own = id && this._state && (this._state.get('hintText') || {})[id];
+    help.value = own != null ? own : factoryHint(id, lang());
+    help.placeholder = factoryHint(id, lang()) || 'keine Hilfe hinterlegt';
+  }
+
+  _applyHelp() {
+    const id = this._hintId();
+    if (!id || !this._state) return;
+    const txt = this._panel.querySelector('.kme-help').value;
+    this._state.set('hintText', { ...this._state.get('hintText'), [id]: txt });
+  }
+
+  /** Override LÖSCHEN (nicht den Text hineinkopieren) – nur so bekommt der Regler
+   *  spätere Verbesserungen und die Übersetzung weiterhin mit. */
+  _resetHelp() {
+    const id = this._hintId();
+    if (!id || !this._state) return;
+    const all = { ...this._state.get('hintText') };
+    delete all[id];
+    this._state.set('hintText', all);
+    this._loadHelp();
   }
 
   /* ── Farb-Presets (Optik-Ebene, geteilte Regler-Farben) ── */

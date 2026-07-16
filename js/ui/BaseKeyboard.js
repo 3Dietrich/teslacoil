@@ -15,6 +15,7 @@
  */
 import { NOTE_NAMES } from '../pitch/ScaleModel.js';
 import { freqToMidi } from '../pitch/Scaler.js';
+import { hint } from '../core/i18n.js';
 
 const BLACK = new Set([1, 3, 6, 8, 10]);
 
@@ -61,9 +62,13 @@ export class BaseKeyboard {
     refresh() {
         const src = this.state.get('baseSrc');
         this.element.classList.toggle('kb-readonly', src !== 'Ton');
-        this.element.title = src === 'Ton'
+        // Über die Hilfe-Blase (data-hint), nicht per title – sonst stünde neben der Blase
+        // ein zweiter Tooltip, den der Schalter in der Kopfzeile nicht abschalten kann.
+        // Zwei ganze Literale statt einem zusammengesetzten Satz: der deutsche Text IST
+        // der i18n-Schlüssel (s. js/core/i18n.js).
+        hint(this.element, src === 'Ton'
             ? 'Basis-Tonklasse wählen (←/→ schalten sie ebenfalls durch)'
-            : 'Zeigt, auf welchem Ton die aktuelle BaseFrq liegt (wählbar nur bei Quelle „Ton")';
+            : 'Zeigt, auf welchem Ton die aktuelle BaseFrq liegt (wählbar nur bei Quelle „Ton")');
         this._lastSrc = src;
         this._lastPc = -1;   // Markierung im nächsten tick() neu setzen
         this.tick();

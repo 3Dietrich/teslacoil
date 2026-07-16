@@ -22,7 +22,9 @@
  * → state.ctrlStyles (Optik-Ebene, LAYOUT_KEYS).
  */
 import { makeDraggable } from './dragPanel.js';
-import { hint } from '../core/i18n.js';
+import { hint, lang } from '../core/i18n.js';
+import { colorPickerBusy } from './colorPick.js';
+import { factoryHint } from '../data/hints.js';
 
 export class ElementSettings {
   constructor(state) {
@@ -99,6 +101,15 @@ export class ElementSettings {
             <input type="number" class="es-gap" min="0" max="10" step="1" title="Abstand zwischen den Tasten (0–10 px)" />
           </div>
         </div>
+        <!-- Hilfe-Text dieses Controls (@dpa 20260716_174111: „diese hints sollten
+             (zumindest das deutsche) editierbar sein"). Leer = die Auslieferung gilt;
+             ✕ stellt sie wieder her. Eine bewusst leere Hilfe ist auch eine Ansage –
+             deshalb unterscheidet das Feld zwischen „nichts eingetragen" und „leer". -->
+        <div class="kme-row kme-wide kme-help-row">
+          <label>Hilfe</label>
+          <textarea class="es-help" rows="2" title="Hilfe-Blase dieses Controls. Leeren + ✕ = wieder der Auslieferungstext."></textarea>
+          <button class="es-help-reset kme-x" title="Auslieferungstext wiederherstellen">✕</button>
+        </div>
       </div>
     `;
     panel.querySelector('.kme-close').addEventListener('click', () => this.close());
@@ -116,14 +127,27 @@ export class ElementSettings {
     panel.querySelector('.es-fg').addEventListener('input', () => { this._fgOn = true; this._apply(); });
     panel.querySelector('.es-bg-clear').addEventListener('click', () => { this._bgOn = false; this._apply(); });
     panel.querySelector('.es-fg-clear').addEventListener('click', () => { this._fgOn = false; this._apply(); });
+    // Hilfe-Text: geht NICHT durch _apply/ctrlStyles – er ist eine eigene Kategorie
+    // (state.hintText), damit er sich unabhängig sichern und zurücksetzen lässt.
+    panel.querySelector('.es-help').addEventListener('input', () => this._applyHelp());
+    panel.querySelector('.es-help-reset').addEventListener('click', () => this._resetHelp());
 
     document.addEventListener('keydown', (e) => {
       if (!this.isOpen) return;
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.close(); }
+      // Enter übernimmt – wie im Regler-Editor. Die Felder wirken zwar ohnehin live, aber
+      // die Fußzeile verspricht „Enter = Übernehmen" (@dpa 20260716_174111: „dann haben
+      // wir noch Enter"), und ein Versprechen, das nur der andere Editor einlöst, ist eins
+      // zu viel.
+      else if (e.key === 'Enter') { e.preventDefault(); this._apply(); }
     }, true);
     // Außenklick schließt (nicht bei Klick auf ein Element-Settings-Ziel selbst).
+    // Ausnahme: ein offener Farbwähler – der lebt außerhalb des DOM, s. colorPick.js.
     document.addEventListener('mousedown', (e) => {
-      if (this.isOpen && !panel.contains(e.target) && !e.target.closest('[data-ctrl]')) this.close();
+      if (!this.isOpen) return;
+      if (panel.contains(e.target) || e.target.closest('[data-ctrl]')) return;
+      if (colorPickerBusy(panel)) return;
+      this.close();
     });
 
     document.body.appendChild(panel);
@@ -216,6 +240,7 @@ export class ElementSettings {
       hIn.min = 16; hIn.max = 1200; hIn.step = 2; hint(hIn, 'Höhe des Feldes (px)');
     }
     this._panel.querySelector('.kme-title').textContent = style.label ?? target.defLabel ?? 'Element';
+    this._loadHelp(target.id);
 
     const rect = target.el.getBoundingClientRect();
     this._panel.style.left = `${rect.right + 10}px`;
@@ -257,5 +282,34 @@ export class ElementSettings {
     this._target.applyStyle(style);
     this._panel.querySelector('.kme-title').textContent = style.label || this._target.defLabel || 'Element';
     if (this.onApply) this.onApply(this._target.id, style);
+  }
+
+  /* ── Hilfe-Text (eigene Kategorie: state.hintText) ── */
+
+  /** Feld füllen: eigener Text, sonst der Auslieferungstext als Ausgangspunkt. */
+  _loadHelp(id) {
+    const own = (this._state && (this._state.get('hintText') || {})[id]);
+    const help = this._panel.querySelector('.es-help');
+    help.value = own != null ? own : factoryHint(id, lang());
+    // Ist es (noch) der Auslieferungstext, sagt das der Platzhalter – sonst weiß man nicht,
+    // ob man gerade sein eigenes liest oder das mitgelieferte.
+    help.placeholder = factoryHint(id, lang()) || 'keine Hilfe hinterlegt';
+  }
+
+  _applyHelp() {
+    if (!this._target || !this._state) return;
+    const txt = this._panel.querySelector('.es-help').value;
+    this._state.set('hintText', { ...this._state.get('hintText'), [this._target.id]: txt });
+  }
+
+  /** Zurück zur Auslieferung: den Override LÖSCHEN, nicht den Text hineinkopieren –
+   *  sonst friert er auf dem heutigen Wortlaut ein und bekäme spätere Verbesserungen
+   *  (und die Übersetzung!) nie mit. */
+  _resetHelp() {
+    if (!this._target || !this._state) return;
+    const all = { ...this._state.get('hintText') };
+    delete all[this._target.id];
+    this._state.set('hintText', all);
+    this._loadHelp(this._target.id);
   }
 }

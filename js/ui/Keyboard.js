@@ -97,7 +97,10 @@ export class Keyboard {
             key.dataset.index = String(i);
             // oben: Orange-Zustandsanzeige (aus/an) · unten: s/w-Tastenidentität + Note/Slot-Name
             key.innerHTML = `<span class="kb-ind"></span><span class="kb-id">${name}</span>`;
-            key.title = name;
+            // data-hint statt title: die Hilfe-Blase zeigt es, damit auch die Tasten dem
+            // globalen Schalter und der Verzögerung folgen (@dpa 20260716_174111). Ein
+            // title daneben wäre ein zweiter Tooltip, den man nicht abschalten kann.
+            key.dataset.hint = name;
             key.classList.toggle('kb-on', !!mask[i]);
             key.addEventListener('click', (e) => this._onKey(i, e));
             key.addEventListener('dblclick', (e) => this._onDblKey(i, e));
@@ -197,7 +200,8 @@ export class Keyboard {
             const id = k.querySelector('.kb-id');
             const label = sk ? ((slots[i] && slots[i].name) || String(i + 1)) : (rel ? REL_NAMES[i] : NOTE_NAMES[i]);
             if (id) id.textContent = label;
-            k.title = sk ? `Slot ${i + 1}: ${(slots[i] && slots[i].name) || i + 1} (Doppelklick = umbenennen)`
+            // Live-Info je Taste (Slot-Name/Tonname) – über die Hilfe-Blase, nicht per title.
+            k.dataset.hint = sk ? `Slot ${i + 1}: ${(slots[i] && slots[i].name) || i + 1} (Doppelklick = umbenennen)`
                 : rel ? `${REL_NAMES[i] || '·'} (relativ zur Basis)` : NOTE_NAMES[i];
         });
     }

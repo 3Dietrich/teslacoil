@@ -101,10 +101,15 @@ export class PresetManager {
     static LAYOUT_KEYS = [
         'groupOrder', 'groupPos', 'groupStyles', 'groupStylePresets', 'controlOrder', 'ctrlPos',
         'knobMeta', 'knobColorPresets', 'ctrlStyles',
-        'reflW', 'reflH', 'reflColL', 'reflColR',
+        'reflW', 'reflH', 'reflBg', 'reflColL', 'reflColR',
         'scopeOn', 'specOn', 'scopeSync', 'scopeRange', 'specGain',
-        'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'knobColorSel', 'groupSnapSel', 'p2Sel',
+        'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'groupComboSel', 'knobColorSel', 'groupSnapSel', 'p2Sel',
         'seqStyles',
+        // Hilfe-Blasen: Schalter, Verzögerung und @dpas eigene Texte (@dpa 20260716_174111).
+        // Optik, kein Klang – ein Snapshot-Recall darf niemandem die Hilfe umschreiben.
+        'hintsOn', 'hintDelay', 'hintText',
+        // Globale Beschriftung (@dpa 20260716_204921).
+        'labelColor', 'valueBg', 'labelSize',
         'skal2On', 'skal2Active', 'skal2Slots',
         'debugName', 'debugPrompt',
         // Sprache ist eine Anzeige-Einstellung, kein Klang (@dpa 20260716_164359: „wird auch

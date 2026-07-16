@@ -74,7 +74,11 @@ def main():
                     " JSON.stringify([{name:'MARKER',ts:1,version:1,state:{bpm:137}}]))")
 
         def open_settings():
-            pg.click(".topbar-right button[title*='Einstellung']")
+            # Über die Klasse, nicht über den Tooltip: seit die Hints in der Hilfe-Blase
+            # stehen (data-hint statt title, @dpa 20260716_174111) gibt es hier kein
+            # title-Attribut mehr – und ein Selektor auf deutschen Text wäre ohnehin beim
+            # ersten Umformulieren gebrochen.
+            pg.click(".topbar-right .settings-btn")
             pg.wait_for_selector(".settings-window", timeout=5000)
 
         # ── 1. Export ──
@@ -109,10 +113,15 @@ def main():
         # lang, zu cryptisch, unansehlich"): Import/Export/Neu liegen in der Fußzeile des
         # PickMenus, also erst das Menü öffnen.
         def snap_foot(kind):
-            """Knopf in der Fußzeile des Snapshot-Menüs anklicken (öffnet es vorher)."""
+            """Knopf in der Fußzeile des Snapshot-Menüs anklicken (öffnet es vorher).
+
+            Der Knopf SELBST trägt die Aktions-Klasse (pb-ic-export/-import) – nicht ein
+            Kind darin. Der frühere `:has(.pb-ic-…)` traf deshalb nichts und ließ den
+            Wächter in einen 30-s-Timeout laufen, statt Import/Export zu prüfen.
+            """
             pg.click(".pickmenu .pm-btn")
             pg.wait_for_selector(".pm-foot", timeout=3000)
-            pg.click(f".pm-foot .pm-foot-btn:has(.pb-ic-{kind})")
+            pg.click(f".pm-foot .pm-foot-btn.pb-ic-{kind}")
 
         snap_path = os.path.join(tmp, "snap.json")
         with open(snap_path, "w") as f:

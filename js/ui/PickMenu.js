@@ -40,7 +40,7 @@ export class PickMenu {
    * @param {(i:number, item:PickItem)=>void} cfg.onPick     – Zeile geklickt (auch die markierte)
    * @param {(i:number, item:PickItem)=>void} [cfg.onUpdate] – ✎ in der Zeile
    * @param {(i:number, item:PickItem)=>void} [cfg.onDelete] – 🗑 in der Zeile
-   * @param {[string,string,Function][]} [cfg.foot]          – Fußzeile: [glyph+text, title, fn]
+   * @param {[string,string,string,Function][]} [cfg.foot]  – Fußzeile: [icon-Name (js/ui/icons.js), Text, title, fn]
    * @param {string} [cfg.title]        – Tooltip des Knopfes
    */
   constructor(cfg) {
@@ -59,6 +59,11 @@ export class PickMenu {
     const caret = document.createElement('span'); caret.className = 'pm-caret'; caret.appendChild(icon('caret'));
     btn.appendChild(this._name); btn.appendChild(caret);
     btn.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(); });
+    // Rechtsklick öffnet ebenfalls (@dpa 20260716_174111: „Skala Speicher: rechte Mouse
+    // click"). Ohne das schlug der Rechtsklick auf dem Knopf zur GRUPPE durch und brachte
+    // deren Settings – auf einem Speicher-Knopf ist das nie das Gemeinte. Er hat selbst
+    // keine Settings, also ist die rechte Taste hier frei für „geh auf".
+    btn.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); this.open(); });
     // Pfeiltasten/Enter am Knopf: Menü öffnen – der Knopf ist ein normales Bedienelement
     // in der Tab-Kette und darf nicht nur mit der Maus aufgehen.
     btn.addEventListener('keydown', (e) => {
@@ -92,7 +97,13 @@ export class PickMenu {
     if (this._cfg.foot && this._cfg.foot.length) {
       const foot = document.createElement('div'); foot.className = 'pm-foot';
       this._cfg.foot.forEach(([ico, label, title, fn]) => {
-        const b = document.createElement('button'); b.className = 'pm-foot-btn'; b.type = 'button';
+        // Die Aktions-Klasse trägt den Icon-Namen (pb-ic-plus/-export/-import/…): sie gibt
+        // dem Knopf seine Aktionsfarbe und ist zugleich das, woran ein Test ihn findet –
+        // test/fileio.py sucht genau `.pm-foot-btn:has(.pb-ic-import)`. Beim Umbau auf
+        // dieses Widget fiel sie weg; der Wächter lief seitdem in einen Timeout, statt zu
+        // melden, dass er ins Leere greift.
+        const b = document.createElement('button');
+        b.className = 'pm-foot-btn pb-ic-' + ico; b.type = 'button';
         b.appendChild(icon(ico));
         b.appendChild(document.createTextNode(label));
         hint(b, title);
@@ -171,6 +182,16 @@ export class PickMenu {
       top = (r.top - pr.height - 4 >= 8) ? r.top - pr.height - 4 : Math.max(8, window.innerHeight - pr.height - 8);
     }
     pop.style.left = left + 'px'; pop.style.top = top + 'px';
+  }
+
+  /** Gehört `node` zu diesem Menü (Knopf ODER aufgeklappte Liste)?
+   *  Das Popup hängt an <body> – es MUSS aus einem Panel herausragen können, ohne von
+   *  dessen overflow abgeschnitten zu werden. Wer einen Außenklick-Handler hat, kann es
+   *  deshalb nicht per `panel.contains()` finden und würde das Panel zumachen, sobald man
+   *  eine Zeile anklickt (@dpa 20260716_174111: „Farbe nicht speicherbar (Menu öffnet
+   *  nicht)"). Diese Frage beantwortet das Menü ab jetzt selbst. */
+  contains(node) {
+    return this.element.contains(node) || !!(this._pop && this._pop.contains(node));
   }
 
   mount(parent) { parent.appendChild(this.element); return this.element; }

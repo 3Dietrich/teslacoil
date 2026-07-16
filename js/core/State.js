@@ -152,9 +152,13 @@ export const DEFAULTS = Object.freeze({
     revPreDelay: 0,      // Pre-Delay der Reflections (ms)
     revSeed: 1,          // fester Random-Seed der Hall-Wolke (gleiche Zahl = gleiche Wolke)
     revView: 'Beide',    // Reflections-Anzeige: 'L' | 'R' | 'Beide'
-    // Reflections-Anzeige (Optik): Größe + Kanalfarben, eigene Settings.
+    // Reflections-Anzeige (Optik): Größe + Hintergrund + Kanalfarben, eigene Settings.
+    // Die Kanalfarben tragen ihre Deckkraft selbst (rgba, @dpa 20260716_174111: „die Farben
+    // mit alpha (wie bei step sequ)") – vorher stand hier Hex und die 0.30 klebte fest im
+    // Zeichencode. Alte Snapshots mit '#rrggbb' liest reflCol() weiter (s. app.js).
     reflW: 334, reflH: 60,
-    reflColL: '#5ad1ff', reflColR: '#ff9f5a',
+    reflBg: '#0e1116',
+    reflColL: 'rgba(90,209,255,0.3)', reflColR: 'rgba(255,159,90,0.3)',
     // Metronom (eigener getakteter Klick, umgeht die FX-Kette)
     metroEnabled: false,   // 'aktiv'-Haken
     metroDivision: '1/4',  // DEPRECATED (ersetzt durch metroL/metroM): alte feste Teilung
@@ -225,11 +229,33 @@ export const DEFAULTS = Object.freeze({
     scopeOn: true, specOn: true, scopeSync: true, scopeRange: 0.35, specGain: 1,
     // Gemerkte Menü-Auswahlen (Optik): Name der zuletzt gewählten Einträge je Liste,
     // damit die Dropdowns nach Reset/Recall nicht auf dem Platzhalter stehen.
-    scaleSel: '', snapSel: '', layoutSel: '', comboSel: '', knobColorSel: '', p2Sel: '',
+    scaleSel: '', snapSel: '', layoutSel: '', knobColorSel: '', p2Sel: '',
+    // comboSel: DEPRECATED seit 20260716_174111 – die Combo-Anzeige gehört zur Gruppe, nicht
+    // zum ganzen Synth (s. groupComboSel). Bleibt als Feld stehen, damit alte Backups laden;
+    // die Farben selbst lagen ohnehin nie hier, sondern in groupStyles.
+    comboSel: '',
     // Gemerkte Gruppen-Snapshot-Auswahl je Gruppe (Optik): { Gruppenname: SnapName }.
     // Damit das Snapshot-Menü in den Gruppen-Settings beim nächsten Öffnen auf dem
     // zuletzt geladenen/gespeicherten Snapshot steht (statt auf dem Platzhalter).
     groupSnapSel: {},
+    // Dasselbe für die Farb-Combos: { Gruppenname: ComboName } (@dpa 20260716_174111).
+    // Die Combo-LISTE bleibt global (groupStylePresets) – nur wer welchen trägt, ist
+    // Sache der einzelnen Gruppe.
+    groupComboSel: {},
+    // ── Beschriftung, GLOBAL (@dpa 20260716_204921: „Da sie m.M.nach alle die gleiche
+    // Farbe haben sollten muss man sie irgendwie global vorgeben") – Optik-Ebene.
+    // '' bzw. 0 heißt „nichts vorgegeben": dann gilt der Wert aus dem Stylesheet, und ein
+    // unangetastetes Instrument sieht aus wie immer. Deshalb kein Farb-Default hier.
+    labelColor: '',      // Schriftfarbe ALLER Beschriftungen
+    valueBg: '',         // Hintergrund hinter den Werte-Anzeigen
+    labelSize: 0,        // Schriftgröße der Beschriftungen (6–12 px, 0 = wie ausgeliefert)
+    // ── Hilfe-Blasen (@dpa 20260716_174111) – Optik-Ebene, also im Backup, nie im Sound ──
+    hintsOn: true,       // global an/aus („falls das aufpopen der hints stört")
+    hintDelay: 600,      // ms bis die Blase erscheint
+    // EIGENE Hilfetexte je Control-Kennung: { 'k:bpm': 'mein Text' }. Was hier NICHT
+    // steht, kommt aus der Auslieferung (js/data/hints.js) – ein Eintrag löschen ist
+    // deshalb immer der Rückweg zum Original.
+    hintText: {},
     // Panel-Gruppen: Reihenfolge, Stil (Name/Farben/Collapse), Farb-Combos.
     groupOrder: [],          // leer = Default-Reihenfolge (nur noch fürs initiale Einfließen)
     groupPos: {},            // name → { x, y } feste Panel-Position (Optik); leer = autoFlow

@@ -3,6 +3,9 @@
  * Lauf: node test/logic.test.mjs   (oder: npm test)
  */
 import assert from 'node:assert/strict';
+import { HINTS, HINT_IDS, factoryHint } from '../js/data/hints.js';
+import { normalizeFxOrder } from '../js/core/fxChain.js';
+import { DEFAULTS as STATE_DEFAULTS } from '../js/core/State.js';
 
 import { triggerInterval, DIVISIONS } from '../js/core/TriggerDivider.js';
 import { ScaleModel, rotateMask } from '../js/pitch/ScaleModel.js';
@@ -994,6 +997,76 @@ t('i18n: nach setLang(en) kommt Englisch, Unbekanntes bleibt deutsch', () => {
     assert.equal(tr('völlig unübersetzt'), 'völlig unübersetzt');
     setLang('de');   // Zustand für die anderen Tests zurückgeben
     assert.equal(tr('Einstellungen'), 'Einstellungen');
+});
+
+/* ── Hilfe-Hints (@dpa 20260716_174111: „Bitte erzeuge für alle (alle) Controls
+ * helphints") ───────────────────────────────────────────────────────────────────
+ * Der Wächter dazu: JEDES Control, das app.js definiert, braucht einen Auslieferungs-Hint.
+ * Er liest die Definitionen aus dem Quelltext (KNOBS/SELECTS/…), damit ein neu angelegtes
+ * Control hier auffällt, statt still ohne Hilfe zu bleiben. Und die Gegenrichtung: kein
+ * Hint für eine Kennung, die es nicht mehr gibt. */
+function definedCtrlIds() {
+    const src = readFileSync('js/app.js', 'utf8');
+    const pre = { KNOBS: 'k', SELECTS: 's', TOGGLES: 't', TEXTS: 'x', NOTES: 'n', BUTTONS: 'b' };
+    const ids = [];
+    for (const [name, p] of Object.entries(pre)) {
+        const m = src.match(new RegExp('const ' + name + ' = \\{([\\s\\S]*?)\\n\\};'));
+        if (!m) continue;
+        for (const k of m[1].matchAll(/^ {4}(\w+):/gm)) ids.push(p + ':' + k[1]);
+    }
+    return ids;
+}
+t('Hints: jedes definierte Control hat einen Auslieferungs-Hint', () => {
+    const missing = definedCtrlIds().filter((id) => !HINTS[id]);
+    assert.deepEqual(missing, [], 'ohne Hilfetext (die Blase bliebe leer):\n  - ' + missing.join('\n  - '));
+});
+t('Hints: keine Hilfetexte für Controls, die es nicht mehr gibt', () => {
+    const known = new Set(definedCtrlIds());
+    // 'u:'-Kennungen (Keyboard, Seq, Graph …) sind keine Definitionen in app.js – sie
+    // entstehen beim Bauen und dürfen deshalb nicht gegen die Liste geprüft werden.
+    const dead = HINT_IDS.filter((id) => !known.has(id) && !id.startsWith('u:'));
+    assert.deepEqual(dead, [], 'Hilfetext ohne Control:\n  - ' + dead.join('\n  - '));
+});
+t('Hints: jeder Hilfetext hat DE und EN', () => {
+    const bad = HINT_IDS.filter((id) => !HINTS[id].de || !HINTS[id].en);
+    assert.deepEqual(bad, [], 'unvollständig:\n  - ' + bad.join('\n  - '));
+});
+t('Hints: factoryHint fällt auf Deutsch zurück, statt leer zu bleiben', () => {
+    assert.equal(factoryHint('k:bpm', 'de'), HINTS['k:bpm'].de);
+    assert.equal(factoryHint('k:bpm', 'en'), HINTS['k:bpm'].en);
+    assert.equal(factoryHint('gibt:es:nicht', 'de'), '');
+});
+
+/* ── FX-Kette (@dpa 20260716_232709: „Metronom fehlt in der Kette! Die kette und ihre
+ * Verknüpfungen sind sehr wichtig!") ────────────────────────────────────────────────
+ * fxOrder steckt im Sound-Snapshot; die Metronom-Migration lief nur beim Booten. Ältere
+ * Snapshots (43 von 51 in @dpas eigener Werkseinstellung) trugen deshalb eine Kette OHNE
+ * Metronom und warfen den Knoten beim Recall still aus Ansicht und Verdrahtung. */
+const FX_KNOWN = ['Filter', 'Distortion', 'Reverb', 'Metronom'];
+t('fxChain: ein alter Snapshot ohne Metronom bekommt es zurück', () => {
+    assert.deepEqual(normalizeFxOrder(['Filter', 'Distortion', 'Reverb'], FX_KNOWN),
+        ['Filter', 'Distortion', 'Reverb', 'Metronom']);
+});
+t('fxChain: die gespeicherte REIHENFOLGE bleibt erhalten', () => {
+    assert.deepEqual(normalizeFxOrder(['Reverb', 'Metronom', 'Filter', 'Distortion'], FX_KNOWN),
+        ['Reverb', 'Metronom', 'Filter', 'Distortion']);
+});
+t('fxChain: fehlendes/leeres fxOrder ergibt die volle Kette', () => {
+    assert.deepEqual(normalizeFxOrder(undefined, FX_KNOWN), FX_KNOWN);
+    assert.deepEqual(normalizeFxOrder([], FX_KNOWN), FX_KNOWN);
+});
+t('fxChain: unbekannte Knoten und Doppelte fliegen raus', () => {
+    assert.deepEqual(normalizeFxOrder(['Filter', 'Chorus', 'Filter', 'Reverb'], FX_KNOWN),
+        ['Filter', 'Reverb', 'Distortion', 'Metronom']);
+});
+t('fxChain: eine vollständige Kette bleibt unangetastet', () => {
+    assert.deepEqual(normalizeFxOrder(FX_KNOWN, FX_KNOWN), FX_KNOWN);
+});
+t('fxChain: die Default-Kette ist selbst vollständig', () => {
+    // Gegen den echten State, nicht gegen eine Kopie der Liste: fällt hier ein Knoten aus
+    // DEFAULTS.fxOrder heraus oder kommt einer dazu, muss es auffallen.
+    assert.deepEqual(normalizeFxOrder(STATE_DEFAULTS.fxOrder, STATE_DEFAULTS.fxOrder), STATE_DEFAULTS.fxOrder);
+    assert.ok(STATE_DEFAULTS.fxOrder.includes('Metronom'), 'Metronom gehört in die Kette');
 });
 
 await Promise.all(asyncTests);   // sonst wäre der Zähler unten fertig, bevor sie es sind

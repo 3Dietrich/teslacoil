@@ -11,3 +11,8 @@ dd.md
 CLAUDE.md
 # Die Screenshots, die in dd.md-Prompts hängen (frühere lagen lose im Root herum).
 _notes_img/
+# Die IDE legt eingefügte Screenshots als image.png / image-N.png im Root ab – sie gehören
+# zu den Prompts in dd.md und damit NICHT ins öffentliche Repo. Nur der Root, damit ein
+# echtes Bild in einem Unterordner (anleitung_img/ …) davon unberührt bleibt.
+/image.png
+/image-*.png
