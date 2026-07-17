@@ -230,7 +230,14 @@ body {
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
 .play-btn, .sync-btn, .panic-btn { display: inline-flex; align-items: center; gap: 6px; --ico: 17px; }
 .play-btn { font-weight: 600; min-width: 84px; }
-.play-btn.on { background: #3a2630; border-color: var(--accent2); color: #ffd9bf; }
+/* Läuft = AN. Die `animation: none` ist der Punkt (@dpa 20260717: „Start zeigt keinen
+   AN Zustand"): eine laufende CSS-Animation schlägt JEDE normale background-Regel, der
+   atmende Hinweis hat den AN-Zustand also einfach überpinselt – und zwar genau in den
+   ersten beiden Malen, in denen man ihn zum ersten Mal sehen würde. Wer drückt, hat den
+   Knopf gefunden; ab da zählt nur noch, ob er läuft. */
+.play-btn.on {
+  animation: none; background: #3a2630; border-color: var(--accent2); color: #ffd9bf;
+}
 /* Sync-Schalter neben Start/Stop (aktiv = grün). Das Wort bleibt so groß wie „Start"
    (@dpa 20260714), das Icon davor ist ein SVG mit eigenem Rahmen (@dpa 20260716_164359 –
    die frühere font-size:18px auf dem ⟲-Glyph war trotzdem „zu klein"). */

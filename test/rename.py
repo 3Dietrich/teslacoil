@@ -190,6 +190,17 @@ def main():
         check("Hinweis bleibt auch nach dem Neuladen weg",
               not breathes(".presetbar .pickmenu") and not breathes(".presetbar .play-btn"))
 
+        # ── 6. Der AN-Zustand schlägt den Hinweis ──
+        # Headless lässt sich der Transport nicht fahren (LadderFilter.load() löst im
+        # Chromium nie auf → engine.running bleibt false, s. CLAUDE.md), also wird die
+        # Klasse direkt gesetzt: geprüft wird die CSS-Regel, nicht die Audio-Kette.
+        pg.eval_on_selector(".presetbar .play-btn", "el => el.classList.add('on', 'breathe')")
+        pg.wait_for_timeout(300)
+        an = pg.eval_on_selector(".presetbar .play-btn",
+                                 "el => getComputedStyle(el).backgroundColor + ' | ' + getComputedStyle(el).animationName")
+        check("Läuft = AN: der Hinweis pinselt den AN-Zustand nicht mehr zu",
+              an.startswith("rgb(58, 38, 48)") and an.endswith("none"), an)
+
         check("keine JS-Fehler", not errors, str(errors[:2]))
         br.close()
     srv.shutdown()
