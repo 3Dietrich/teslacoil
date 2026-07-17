@@ -27,6 +27,12 @@ export class PresetBar {
         hint(this._playBtn, 'Leertaste = Start/Stop');
         this._paintPlayBtn();
         this.element.appendChild(this._playBtn);
+        // Der Knopf gleicht sich mit dem ECHTEN Transport ab, statt sich auf sein Gedächtnis
+        // zu verlassen: ein Snapshot-Recall stoppt und startet die Engine selbst
+        // (PresetManager.recallSnapshot), und ein `start()` kann unterwegs auch scheitern –
+        // in beiden Fällen kommt hier niemand vorbei. `_paintPlayBtn` steigt bei
+        // unverändertem Zustand sofort aus, das kostet also nichts.
+        setInterval(() => this._paintPlayBtn(), 250);
 
         // Sync: bei aktivem Schalter beginnen bei jedem Start alle Sequenzer bei Step 1.
         this._syncBtn = this._btn('', () => this._toggleSync(), 'sync-btn');
@@ -168,17 +174,26 @@ export class PresetBar {
      *  SVG-Icon darf hier kein textContent mehr gesetzt werden – das löschte das Icon. */
     _paintPlayBtn() {
         const on = this.engine.running;
+        if (on === this._painted) return;   // unverändert → das SVG nicht sinnlos neu bauen
+        this._painted = on;
         this._playBtn.textContent = '';
         this._playBtn.appendChild(icon(on ? 'stop' : 'play'));
         this._playBtn.appendChild(document.createTextNode(on ? ' Stop' : ' Start'));
         this._playBtn.classList.toggle('on', on);
     }
 
-    toggle() {
+    /** Start/Stop. **Muss async sein:** `engine.start()` wartet auf `ctx.resume()` und die
+     *  Worklets – `running` (= clock.running) steht erst NACH dem await fest. Ohne das
+     *  await zeichnete sich der Knopf neu, während die Clock noch stand, und blieb deshalb
+     *  bei JEDEM Start auf „▶ Start" (@dpa 20260717: „Auch beim zehnten Mal starten, sehe
+     *  ich kein Stop"). Der zweite Klick stoppte dann tatsächlich – der Knopf log also
+     *  nicht nur, er zeigte das genaue Gegenteil dessen an, was der Synth tat. */
+    async toggle() {
         // Hier zählen, nicht im Klick-Handler: die Leertaste ruft dieselbe Stelle
         // (app.js) – wer mit Space startet, hat den Knopf genauso verstanden.
         this._countUse('playUsed');
-        if (this.engine.running) this.engine.stop(); else this.engine.start();
+        if (this.engine.running) this.engine.stop();
+        else await this.engine.start();
         this._paintPlayBtn();
     }
 
