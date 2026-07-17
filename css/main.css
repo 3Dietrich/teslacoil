@@ -152,17 +152,24 @@ body {
    – der Render-Loop behält seine 60 FPS.
 
    Die Klasse sitzt am Knopf selbst (Play) ODER an einem Wrapper, dessen Knopf atmen soll
-   (PickMenu: `.pm-btn` steckt im `.pickmenu`). */
+   (PickMenu: `.pm-btn` steckt im `.pickmenu`).
+
+   Die Amplitude ist GEMESSEN, nicht geschätzt: die erste Fassung ging von rgb(23,26,32)
+   auf rgb(38,44,55) – rechnerisch ein Atem, auf fast schwarzem Grund aber unsichtbar
+   (@dpa: „da ist keinerlei Farbänderung, ehrlich!"). Auf dunklen Tönen ist die
+   wahrgenommene Differenz viel kleiner als die numerische – dreimal so weit war dann
+   „ich sehe es jetzt. aber das ist noch zu wenig", also nochmal 2,5× (jetzt bis #5f7696).
+   Lehre: auf diesem Grund braucht ein Hinweis MEHR Hub, als am Farbwert plausibel wirkt. */
 @keyframes breathe {
-  0%   { background-color: #171a20; }
-  12.5%{ background-color: #191d23; }
-  25%  { background-color: #1e232c; }
-  37.5%{ background-color: #242934; }
-  50%  { background-color: #262c37; }
-  62.5%{ background-color: #242934; }
-  75%  { background-color: #1e232c; }
-  87.5%{ background-color: #191d23; }
-  100% { background-color: #171a20; }
+  0%   { background-color: #12151b; }
+  12.5%{ background-color: #1d232d; }
+  25%  { background-color: #394659; }
+  37.5%{ background-color: #546884; }
+  50%  { background-color: #5f7696; }
+  62.5%{ background-color: #546884; }
+  75%  { background-color: #394659; }
+  87.5%{ background-color: #1d232d; }
+  100% { background-color: #12151b; }
 }
 .breathe, .pickmenu.breathe .pm-btn { animation: breathe 5s linear infinite; }
 .pickmenu.breathe { animation: none; }   /* der Wrapper nicht, nur sein Knopf */
@@ -170,7 +177,7 @@ body {
    der Knopf soll auffallen, das Atmen ist nur das Mittel. */
 @media (prefers-reduced-motion: reduce) {
   .breathe, .pickmenu.breathe .pm-btn {
-    animation: none; background: #262c37; border-color: rgba(90,209,255,.45);
+    animation: none; background: #3f4d63; border-color: rgba(90,209,255,.45);
   }
 }
 .pm-name { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -151,6 +151,20 @@ def main():
               pg.eval_on_selector(".presetbar .play-btn",
                                   "el => getComputedStyle(el).animationDuration") == "5s")
 
+        # Und er ist AUCH ZU SEHEN. Genau das hat die erste Fassung nicht geprüft: Klasse
+        # da, animationDuration 5s – „da ist keinerlei Farbänderung, ehrlich!" (@dpa). Eine
+        # laufende Animation ist noch kein sichtbarer Hinweis. Gemessen wird der Abstand
+        # zwischen hellstem und dunkelstem Moment; 40 Stufen sind das Minimum, unter dem es
+        # auf dem dunklen Grund wieder unsichtbar wird.
+        seen = []
+        for _ in range(11):
+            c = pg.eval_on_selector(".presetbar .play-btn", "el => getComputedStyle(el).backgroundColor")
+            seen.append([int(x) for x in c[c.find("(") + 1:c.find(")")].split(",")[:3]])
+            pg.wait_for_timeout(500)
+        spread = max(sum(c) for c in seen) - min(sum(c) for c in seen)
+        check("Der Puls ist auch SICHTBAR (hell↔dunkel weit genug auseinander)",
+              spread >= 40 * 3, f"Summe RGB-Hub={spread} (Minimum 120)")
+
         pg.click(".presetbar .pm-btn")   # 1. Mal
         pg.wait_for_timeout(200)
         pg.keyboard.press("Escape")
