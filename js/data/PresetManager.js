@@ -74,6 +74,44 @@ export class PresetManager {
         return true;
     }
 
+    /* ── Umbenennen ──
+     * Der NAME IST DER SCHLÜSSEL dieser Listen (überall Upsert bei Namensgleichheit) –
+     * ein Umbenennen auf einen schon vergebenen Namen würde also stillschweigend zwei
+     * Einträge zu einem verschmelzen und einen Snapshot vernichten. Deshalb wird hier
+     * abgelehnt statt zusammengeführt. Rein (nur Liste rein, Meldung raus) → headless
+     * getestet; die Aufrufer legen darüber nur noch das Schreiben und das Nachziehen
+     * ihres gemerkten Namens (snapSel/groupSnapSel/…).
+     * @returns {string} '' = umbenannt, sonst die Meldung für den Menschen.
+     */
+    static renameIn(list, index, name) {
+        const nm = String(name == null ? '' : name).trim();
+        if (!list[index]) return 'Diesen Eintrag gibt es nicht mehr.';
+        if (!nm) return 'Der Name darf nicht leer sein.';
+        if (nm === list[index].name) return '';                       // nichts zu tun
+        if (list.some((it, i) => i !== index && it.name === nm)) return 'Es gibt schon einen Eintrag „' + nm + '".';
+        list[index] = { ...list[index], name: nm };
+        return '';
+    }
+
+    /** Umbenennen in einer der localStorage-Listen (Snapshot/Skala/P2/Layout). */
+    _renameIn(key, index, name) {
+        const list = this._read(key);
+        const err = PresetManager.renameIn(list, index, name);
+        if (!err) this._write(key, list);
+        return err;
+    }
+    renameSnapshot(index, name) { return this._renameIn(this.snapKey, index, name); }
+    renameScale(index, name) { return this._renameIn(this.scaleKey, index, name); }
+    renameP2(index, name) { return this._renameIn(this.p2Key, index, name); }
+    renameLayout(index, name) { return this._renameIn(this.layoutKey, index, name); }
+    renameGroupSnap(group, index, name) {
+        const all = this._readGroupSnaps();
+        const list = all[group] || [];
+        const err = PresetManager.renameIn(list, index, name);
+        if (!err) { all[group] = list; this._writeGroupSnaps(all); }
+        return err;
+    }
+
     /* ── Dirty-Messung: wie stark weicht der aktuelle Zustand vom gespeicherten
      * Snapshot ab? → { changed, total, frac }. Für die '*'/'‼'-Markierung im Menü. */
     _eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
@@ -104,6 +142,7 @@ export class PresetManager {
         'reflW', 'reflH', 'reflBg', 'reflColL', 'reflColR',
         'scopeOn', 'specOn', 'scopeSync', 'scopeRange', 'specGain',
         'scaleSel', 'snapSel', 'layoutSel', 'comboSel', 'groupComboSel', 'knobColorSel', 'groupSnapSel', 'p2Sel',
+        'snapOpened', 'playUsed',
         'seqStyles',
         // Hilfe-Blasen: Schalter, Verzögerung und @dpas eigene Texte (@dpa 20260716_174111).
         // Optik, kein Klang – ein Snapshot-Recall darf niemandem die Hilfe umschreiben.

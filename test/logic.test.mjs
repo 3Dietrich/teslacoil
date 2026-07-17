@@ -23,7 +23,7 @@ import { keytrackCutoff, envPeakMult } from '../js/dsp/filterMod.js';
 import { thinBackups, captureState, restoreState, pushBackup, readBackups, BACKED_UP_KEYS, serializeBackup, parseBackupFile, FILE_KIND } from '../js/data/Backup.js';
 import { PresetManager } from '../js/data/PresetManager.js';
 import { safeFilename, fileStamp } from '../js/core/fileIO.js';
-import { hasUserState, fetchFactory } from '../js/data/factory.js';
+import { hasUserState, fetchFactory, withFreshHints } from '../js/data/factory.js';
 import { targetKind, globalKeyOk, arrowKeyOk } from '../js/core/keyRoute.js';
 import { slidePlan, slideFreqAt, SLIDE_L } from '../js/dsp/holdSlide.js';
 import { DebugPanel } from '../js/ui/DebugPanel.js';
@@ -730,6 +730,40 @@ t('Optik-Snapshot-Datei mit NUR Optik-Keys → leerer Sound-State, klare Absage'
     assert.throws(() => PresetManager.parseSnapshotFile(JSON.stringify({ name: 'NurOptik', state: { groupOrder: ['a'] } })), /leer/);
 });
 
+console.log('Umbenennen (@dpa 20260717)');
+t('benennt um und lässt den Rest des Eintrags in Ruhe', () => {
+    const list = [{ name: 'A', state: { bpm: 90 } }, { name: 'B', state: { bpm: 120 } }];
+    assert.equal(PresetManager.renameIn(list, 1, 'Bumms'), '');
+    assert.deepEqual(list[1], { name: 'Bumms', state: { bpm: 120 } });
+    assert.equal(list[0].name, 'A');
+});
+t('Name ist der Schlüssel: schon vergeben → Absage statt stiller Verschmelzung', () => {
+    // Ohne diese Regel würde der Upsert beim nächsten Speichern zwei Einträge zu einem
+    // machen – ein Snapshot wäre weg, ohne dass jemand danach gefragt wurde.
+    const list = [{ name: 'A' }, { name: 'B' }];
+    assert.match(PresetManager.renameIn(list, 1, 'A'), /schon einen Eintrag/);
+    assert.equal(list[1].name, 'B');
+});
+t('leerer Name / nur Leerzeichen → Absage', () => {
+    const list = [{ name: 'A' }];
+    assert.match(PresetManager.renameIn(list, 0, '   '), /nicht leer/);
+    assert.equal(list[0].name, 'A');
+});
+t('gleicher Name = nichts zu tun (kein Fehler)', () => {
+    const list = [{ name: 'A' }];
+    assert.equal(PresetManager.renameIn(list, 0, 'A'), '');
+});
+t('trimmt den neuen Namen (Tippfehler beim Abtippen)', () => {
+    const list = [{ name: 'A' }];
+    assert.equal(PresetManager.renameIn(list, 0, '  Neu  '), '');
+    assert.equal(list[0].name, 'Neu');
+});
+t('unbekannter Index → Absage, Liste unverändert', () => {
+    const list = [{ name: 'A' }];
+    assert.match(PresetManager.renameIn(list, 7, 'X'), /gibt es nicht mehr/);
+    assert.equal(list.length, 1);
+});
+
 console.log('Werkseinstellung (@dpa 20260715)');
 t('hasUserState: leerer Speicher = Erstbesuch', () => {
     assert.equal(hasUserState(fakeStorage()), false);
@@ -754,6 +788,29 @@ ta('fetchFactory: Netzfehler → null', async () => {
 });
 ta('fetchFactory: kaputte Datei → null (kein halber Zustand)', async () => {
     assert.equal(await fetchFactory('x.json', async () => ({ ok: true, text: async () => '{kaputt' })), null);
+});
+
+console.log('Atmende Hinweise: frisch in der Werkseinstellung (@dpa 20260717)');
+t('withFreshHints: die Zähler fliegen aus dem Boot-Zustand', () => {
+    // Der Sinn der Übung: @dpas Export kennt Snapshot und Play längst – ein NEUER
+    // Besucher soll den Hinweis trotzdem bekommen. Ohne das hätte niemand ihn je gesehen
+    // außer dem, der ihn gebaut hat.
+    const data = { teslacoil_live: JSON.stringify({ bpm: 120, snapOpened: 2, playUsed: 2 }) };
+    const live = JSON.parse(withFreshHints(data).teslacoil_live);
+    assert.equal(live.snapOpened, undefined);
+    assert.equal(live.playUsed, undefined);
+    assert.equal(live.bpm, 120);              // alles andere bleibt, wie es war
+});
+t('withFreshHints: rührt die Werkseinstellung nicht an (rein)', () => {
+    const data = { teslacoil_live: JSON.stringify({ snapOpened: 2 }) };
+    const before = data.teslacoil_live;
+    withFreshHints(data);
+    assert.equal(data.teslacoil_live, before);
+});
+t('withFreshHints: fehlender/kaputter Boot-Zustand → unverändert, kein Wurf', () => {
+    assert.deepEqual(withFreshHints({}), {});
+    assert.deepEqual(withFreshHints({ teslacoil_live: '{kaputt' }), { teslacoil_live: '{kaputt' });
+    assert.deepEqual(withFreshHints(null), null);
 });
 
 console.log('fileIO (Namens-Helfer)');

@@ -63,8 +63,17 @@ Tasten (0–10 px). Beide Bretter teilen sich Optik und Einstellungen.
 Snapshot, Skala, P2, Combo, Gruppen-Snapshot und die Regler-Farben benutzen alle dasselbe
 Widget ([PickMenu.js](../js/ui/PickMenu.js)) und werden dadurch gleich bedient: der
 geladene Eintrag steht auf dem Knopf und ist in der Liste markiert (die beim Öffnen zu ihm
-scrollt), ein Klick lädt ihn – auch der Klick auf den bereits geladenen. ✎/🗑 hängen an
+scrollt), ein Klick lädt ihn – auch der Klick auf den bereits geladenen. ✎/🏷/🗑 hängen an
 ihrer Zeile, ＋ Neu (und beim Snapshot Export/Import) in der Fußzeile.
+
+**Umbenennen** (🏷, `cfg.onRename`): den neuen Namen fragt das Menü selbst ab und reicht
+ihn durch; der Aufrufer gibt eine Fehlermeldung zurück ('' = ging), die das Menü zeigt.
+Die Namensregel steht EINMAL in `PresetManager.renameIn` (leer/vergeben → Absage, denn der
+Name ist der Schlüssel dieser Listen) – der Aufrufer legt nur das Schreiben und das
+**Nachziehen seines gemerkten Namens** darüber (`snapSel`, `scaleSel`, `p2Sel`,
+`groupSnapSel`, `groupComboSel`, `knobColorSel`). Ohne dieses Nachziehen zeigt der Knopf
+nach dem Umbenennen ins Leere („— kein Snapshot —"), obwohl derselbe Eintrag geladen ist.
+Wächter: `test/rename.py`.
 
 ## Ein neues Control einbauen
 

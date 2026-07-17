@@ -68,7 +68,18 @@ export class PresetBar {
                 this.presets.recallSnapshot(i);              // …dann laden (Recall behält snapSel)
                 this.refreshSnapshots();
             },
+            onOpen: () => this._countUse('snapOpened'),
             onUpdate: (i) => { this.presets.updateSnapshot(i); this._updateSnapMark(); },
+            // Umbenennen zieht `snapSel` nach: der gemerkte Name IST die Anzeige (Knopf,
+            // Markierung, Dirty-Marker). Ohne das Nachziehen zeigte der Knopf nach dem
+            // Umbenennen auf einen Namen, den es nicht mehr gibt → „— kein Snapshot —",
+            // obwohl derselbe Snapshot noch geladen ist.
+            onRename: (i, it, nm) => {
+                const err = this.presets.renameSnapshot(i, nm);
+                if (!err && this.engine.state.get('snapSel') === it.name) this.engine.state.set('snapSel', nm);
+                this.refreshSnapshots();
+                return err;
+            },
             onDelete: (i, it) => {
                 if (!confirm('Snapshot „' + it.name + '" löschen?')) return;
                 this.presets.deleteSnapshot(i);
@@ -103,6 +114,10 @@ export class PresetBar {
             ],
         });
         this.element.appendChild(this._snapMenu.element);
+        this._paintHints();
+        this.engine.state.subscribe((key) => {
+            if (key === '*' || key === 'snapOpened' || key === 'playUsed') this._paintHints();
+        });
         // Live-Dirty-Marker: '*' sobald der aktuelle Zustand vom gewählten Snapshot
         // abweicht, '‼' bei >60 % Abweichung. rAF-entprellt (perf: nicht pro Event).
         this._snapMark = document.createElement('span'); this._snapMark.className = 'snap-dirty';
@@ -113,6 +128,25 @@ export class PresetBar {
         });
 
         this.refreshSnapshots();
+    }
+
+    /** Wie oft man einen Knopf benutzen darf, bevor sein atmender Hinweis geht. Zwei, weil
+     *  einmal auch ein Verklicken sein kann (@dpa 20260717). */
+    static HINT_USES = 2;
+
+    /** Benutzen zählen – bis zur Grenze, dann bleibt der Zähler stehen. Kein Weiterzählen:
+     *  der Wert ist ein Hinweis-Schalter, kein Protokoll darüber, was jemand wie oft tut. */
+    _countUse(key) {
+        const n = this.engine.state.get(key) || 0;
+        if (n < PresetBar.HINT_USES) this.engine.state.set(key, n + 1);
+    }
+
+    /** Wer atmet noch? (s. `.breathe` in css/main.css) Beide Hinweise hängen an Optik-Keys
+     *  → ein Backup/Optik-Recall kann sie mitbringen und auch wieder anschalten. */
+    _paintHints() {
+        const known = (key) => (this.engine.state.get(key) || 0) >= PresetBar.HINT_USES;
+        if (this._playBtn) this._playBtn.classList.toggle('breathe', !known('playUsed'));
+        if (this._snapMenu) this._snapMenu.element.classList.toggle('breathe', !known('snapOpened'));
     }
 
     _scheduleSnapMark() {
@@ -141,6 +175,9 @@ export class PresetBar {
     }
 
     toggle() {
+        // Hier zählen, nicht im Klick-Handler: die Leertaste ruft dieselbe Stelle
+        // (app.js) – wer mit Space startet, hat den Knopf genauso verstanden.
+        this._countUse('playUsed');
         if (this.engine.running) this.engine.stop(); else this.engine.start();
         this._paintPlayBtn();
     }

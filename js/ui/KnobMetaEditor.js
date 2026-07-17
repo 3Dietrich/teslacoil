@@ -12,6 +12,7 @@
 import { Knob } from './Knob.js';   // nur für Knob.migrateShape (alte Gestalt-Namen)
 import { makeDraggable } from './dragPanel.js';
 import { PickMenu } from './PickMenu.js';
+import { PresetManager } from '../data/PresetManager.js';   // nur die Namensregel (renameIn)
 import { colorPickerBusy } from './colorPick.js';
 import { factoryHint } from '../data/hints.js';
 import { lang } from '../core/i18n.js';
@@ -214,6 +215,14 @@ export class KnobMetaEditor {
         const list = this._colorPresets().slice();
         list[i] = { ...list[i], ...this._curColors() };
         if (this._state) this._state.set('knobColorPresets', list);
+      },
+      onRename: (i, p, nm) => {
+        const list = this._colorPresets().slice();
+        const err = PresetManager.renameIn(list, i, nm);
+        if (err || !this._state) return err;
+        this._state.set('knobColorPresets', list);
+        if (this._state.get('knobColorSel') === p.name) this._state.set('knobColorSel', nm);
+        return '';
       },
       onDelete: (i, p) => {
         if (!confirm('Farb-Preset „' + p.name + '" löschen?')) return;

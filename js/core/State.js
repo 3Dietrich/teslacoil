@@ -230,6 +230,11 @@ export const DEFAULTS = Object.freeze({
     // Gemerkte Menü-Auswahlen (Optik): Name der zuletzt gewählten Einträge je Liste,
     // damit die Dropdowns nach Reset/Recall nicht auf dem Platzhalter stehen.
     scaleSel: '', snapSel: '', layoutSel: '', knobColorSel: '', p2Sel: '',
+    // Wie oft Snapshot-Menü bzw. Start/Stop schon benutzt wurden (Optik). Nur dafür da,
+    // den atmenden Hinweis auf diesen Knöpfen abzuschalten, sobald man sie gefunden hat
+    // (@dpa 20260717: „Wenn man Snapshot zweimal aufgerufen hat, ist der Hinweis weg").
+    // Zählen bis PresetBar.HINT_USES und bleiben dann stehen – kein Nutzungs-Protokoll.
+    snapOpened: 0, playUsed: 0,
     // comboSel: DEPRECATED seit 20260716_174111 – die Combo-Anzeige gehört zur Gruppe, nicht
     // zum ganzen Synth (s. groupComboSel). Bleibt als Feld stehen, damit alte Backups laden;
     // die Farben selbst lagen ohnehin nie hier, sondern in groupStyles.

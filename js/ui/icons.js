@@ -50,6 +50,11 @@ const PATHS = {
     load: '<path d="M3.4 12a8.6 8.6 0 1 1 2.52 6.08"/><path d="M3.4 5.6v6h6"/>',
     // ✎ Überschreiben/Umbenennen – Stift.
     edit: '<path d="M16.4 2.9l4.7 4.7L8.3 20.4l-5.7 1 1-5.7z"/><path d="M14.2 5.1l4.7 4.7"/>',
+    // 🏷 Umbenennen – Namensschild. Bewusst NICHT noch ein Stift: der Stift (`edit`) steht
+    // in derselben Zeile schon für „mit dem aktuellen Zustand überschreiben"; zwei Stifte
+    // nebeneinander wären zwei Aktionen mit demselben Zeichen.
+    tag: '<path d="M12.4 2.6h9v9L11 22 2.6 13.6z"/>'
+        + '<circle cx="17.2" cy="6.8" r="1.4" fill="currentColor" stroke="none"/>',
     // ＋ Neu
     plus: '<path d="M12 2.6v18.8M2.6 12h18.8"/>',
     // ⤓ Export (Datei sichern) – Pfeil auf die Grundlinie.

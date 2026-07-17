@@ -138,6 +138,41 @@ body {
   border-radius: 4px; padding: 4px 6px 4px 9px; font-size: 11px; cursor: pointer;
 }
 .pm-btn:hover, .pm-btn:focus { outline: none; border-color: var(--accent); }
+/* ── „Atmen" = der Hinweis, der sich selbst abschafft (@dpa 20260717) ────────────────
+   Ein Knopf, den man noch nicht gefunden hat, atmet: Hintergrund im Sinus zwischen etwas
+   dunkler und etwas heller. Sobald man ihn zweimal benutzt hat, hört er auf und ist ein
+   Knopf wie jeder andere („auffälliger, aber eigentlich nur bei den ersten malen … Wenn
+   man Snapshot zweimal aufgerufen hat, ist der Hinweis weg"). Keine Dauerfärbung, die ab
+   dem dritten Tag nur noch Deko wäre.
+
+   0,2 Hz = 5 s pro Runde. Die Stützstellen sind eine ABGETASTETE Kosinus-Halbwelle
+   (0.5·(1−cos 2πt)) bei linearem Timing – NICHT ease-in-out mit zwei Stops: das ist eine
+   Bézier-Kurve, die an den Umkehrpunkten steht und dazwischen durchschießt; das sieht man
+   als Blinken, nicht als Atmen. Animiert wird nur `background-color` (Paint, kein Layout)
+   – der Render-Loop behält seine 60 FPS.
+
+   Die Klasse sitzt am Knopf selbst (Play) ODER an einem Wrapper, dessen Knopf atmen soll
+   (PickMenu: `.pm-btn` steckt im `.pickmenu`). */
+@keyframes breathe {
+  0%   { background-color: #171a20; }
+  12.5%{ background-color: #191d23; }
+  25%  { background-color: #1e232c; }
+  37.5%{ background-color: #242934; }
+  50%  { background-color: #262c37; }
+  62.5%{ background-color: #242934; }
+  75%  { background-color: #1e232c; }
+  87.5%{ background-color: #191d23; }
+  100% { background-color: #171a20; }
+}
+.breathe, .pickmenu.breathe .pm-btn { animation: breathe 5s linear infinite; }
+.pickmenu.breathe { animation: none; }   /* der Wrapper nicht, nur sein Knopf */
+/* Wer Bewegung abbestellt hat, bekommt denselben Hinweis als ruhigen hellen Grund –
+   der Knopf soll auffallen, das Atmen ist nur das Mittel. */
+@media (prefers-reduced-motion: reduce) {
+  .breathe, .pickmenu.breathe .pm-btn {
+    animation: none; background: #262c37; border-color: rgba(90,209,255,.45);
+  }
+}
 .pm-name { flex: 1 1 auto; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-name.pm-none { color: var(--muted); }   /* nichts geladen */
 .pm-caret { flex: 0 0 auto; color: var(--muted); display: flex; --ico: 11px; }
@@ -171,6 +206,7 @@ body {
 .pm-item:hover .pm-act, .pm-item.pm-current .pm-act { visibility: visible; }
 .pm-act:hover { opacity: 1; background: rgba(255,255,255,.10); }
 .pm-act.pm-ic-save { color: #ffcf7a; }
+.pm-act.pm-ic-ren  { color: #8fd3ff; }
 .pm-act.pm-ic-del  { color: #ff7a7a; }
 .pm-empty { color: var(--muted); font-size: 11px; padding: 8px 10px; }
 /* Fußzeile = was die LISTE betrifft (Neu/Import/Export), nicht einen einzelnen Eintrag. */

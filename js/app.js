@@ -33,7 +33,7 @@ import { factoryHint } from './data/hints.js';
 import { PresetManager } from './data/PresetManager.js';
 import { pushBackup, readBackups, restoreState, serializeBackup, parseBackupFile } from './data/Backup.js';
 import { downloadJSON, pickTextFile, fileStamp } from './core/fileIO.js';
-import { hasUserState, fetchFactory } from './data/factory.js';
+import { hasUserState, fetchFactory, withFreshHints } from './data/factory.js';
 import { DIVISION_LABELS } from './core/TriggerDivider.js';
 import { PITCH_WAVEFORMS } from './pitch/PitchOsc.js';
 import { NOTE_NAMES } from './pitch/ScaleModel.js';
@@ -248,7 +248,9 @@ async function installFactoryIfFirstVisit() {
         if (hasUserState(localStorage)) return false;
         const f = await fetchFactory();
         if (!f) return false;            // fehlt/offline/kaputt → Code-Defaults, kein Drama
-        restoreState(localStorage, f.data);
+        // Frische Hinweis-Zähler: ein Erstbesucher soll den atmenden Snapshot-/Play-Knopf
+        // sehen, auch wenn @dpa sie in seinem Export längst „kennt" (s. withFreshHints).
+        restoreState(localStorage, withFreshHints(f.data));
         return true;
     } catch { return false; }            // z.B. Storage gesperrt (Privatmodus)
 }
@@ -731,6 +733,11 @@ async function boot() {
             current: () => state.get('scaleSel') || '',
             onPick: (i, it) => { state.set('scaleSel', it.name); presets.recallScale(i); },
             onUpdate: (i) => presets.updateScale(i),
+            onRename: (i, it, nm) => {
+                const err = presets.renameScale(i, nm);
+                if (!err && state.get('scaleSel') === it.name) state.set('scaleSel', nm);
+                return err;
+            },
             onDelete: (i, it) => {
                 if (!confirm('Skala „' + it.name + '" löschen?')) return;
                 presets.deleteScale(i);
@@ -760,6 +767,11 @@ async function boot() {
             current: () => state.get('p2Sel') || '',
             onPick: (i, it) => { state.set('p2Sel', it.name); presets.recallP2(i); },
             onUpdate: (i) => presets.updateP2(i),
+            onRename: (i, it, nm) => {
+                const err = presets.renameP2(i, nm);
+                if (!err && state.get('p2Sel') === it.name) state.set('p2Sel', nm);
+                return err;
+            },
             onDelete: (i, it) => {
                 if (!confirm('P2 „' + it.name + '" löschen?')) return;
                 presets.deleteP2(i);
@@ -1294,7 +1306,9 @@ async function boot() {
             try { pushBackup(localStorage, Date.now(), 'vor Werkseinstellung'); } catch { /* Quota */ }
             const f = await fetchFactory();
             if (f) {
-                restoreState(localStorage, f.data);
+                // Wie beim Erstbesuch: Zurücksetzen meint den Auslieferungszustand, dazu
+                // gehören auch die Hinweise (kosten zwei Klicks, dann sind sie wieder weg).
+                restoreState(localStorage, withFreshHints(f.data));
                 location.reload();      // sauberer Boot aus der Werkseinstellung
                 return;
             }
@@ -2082,6 +2096,19 @@ async function boot() {
                 hCol.value = parseHex(p.headColor, '#8a93a3'); hA.value = parseA(p.headColor, 1);
             },
             onUpdate: (i) => { const list = state.get('groupStylePresets').slice(); list[i] = { ...list[i], ...curColors() }; state.set('groupStylePresets', list); },
+            // Combos leben im State (nicht im localStorage) – dieselbe Namensregel gilt
+            // trotzdem, also über PresetManager.renameIn. Der Name steht danach in JEDER
+            // Gruppe neu, die diesen Combo geladen hat (groupComboSel ist pro Gruppe).
+            onRename: (i, p, nm) => {
+                const list = state.get('groupStylePresets').slice();
+                const err = PresetManager.renameIn(list, i, nm);
+                if (err) return err;
+                state.set('groupStylePresets', list);
+                const sel = { ...state.get('groupComboSel') };
+                for (const g of Object.keys(sel)) if (sel[g] === p.name) sel[g] = nm;
+                state.set('groupComboSel', sel);
+                return '';
+            },
             onDelete: (i, p) => {
                 if (!confirm('Combo „' + p.name + '" löschen?')) return;
                 const list = state.get('groupStylePresets').slice(); list.splice(i, 1);
@@ -2126,6 +2153,12 @@ async function boot() {
                 current: remembered,
                 onPick: (i, it) => { remember(it.name); presets.recallGroupSnap(name, i); updMark(); },
                 onUpdate: (i) => { presets.updateGroupSnap(name, i, keys(), metaKeys()); updMark(); },
+                onRename: (i, it, nm) => {
+                    const err = presets.renameGroupSnap(name, i, nm);
+                    if (!err && remembered() === it.name) remember(nm);
+                    updMark();
+                    return err;
+                },
                 onDelete: (i, it) => {
                     if (!confirm('Gruppen-Snapshot „' + it.name + '" löschen?')) return;
                     presets.deleteGroupSnap(name, i);

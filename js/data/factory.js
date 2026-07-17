@@ -35,6 +35,32 @@ export function hasUserState(storage) {
 }
 
 /**
+ * Die Zähler der atmenden Hinweise (@dpa 20260717) – s. PresetBar._paintHints.
+ * Sie gehören NICHT in eine Werkseinstellung: die Datei ist @dpas eigener Export, und in
+ * seinem Stand sind Snapshot und Play längst zweimal benutzt. Ohne dieses Ausnullen hätte
+ * jeder neue Besucher den Hinweis verloren, den @dpa selbst nie zu Gesicht bekommt – ein
+ * Fehler, den man beim Testen im eigenen Browser nie bemerkt.
+ */
+export const HINT_KEYS = ['snapOpened', 'playUsed'];
+
+/**
+ * Werkseinstellungs-Daten mit frischen Hinweis-Zählern (rein → headless getestet).
+ * Angefasst wird nur der Boot-Zustand `teslacoil_live`; ein kaputter/fehlender Eintrag
+ * bleibt, wie er ist – die Werkseinstellung ist ein Geschenk, sie darf nie werfen.
+ * @param {Object} data – die `data`-Sektion einer Backup-/Werksdatei
+ */
+export function withFreshHints(data) {
+    const live = data && data.teslacoil_live;
+    if (typeof live !== 'string') return data;
+    try {
+        const obj = JSON.parse(live);
+        if (!obj || typeof obj !== 'object') return data;
+        for (const k of HINT_KEYS) delete obj[k];
+        return { ...data, teslacoil_live: JSON.stringify(obj) };
+    } catch { return data; }
+}
+
+/**
  * Werkseinstellung holen und prüfen.
  * @returns {Promise<{ts:number,label:string,data:Object}|null>} null = nicht verfügbar
  */

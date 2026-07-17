@@ -39,7 +39,14 @@ export class PickMenu {
    * @param {()=>string} cfg.current    – Name des geladenen Eintrags ('' = keiner)
    * @param {(i:number, item:PickItem)=>void} cfg.onPick     – Zeile geklickt (auch die markierte)
    * @param {(i:number, item:PickItem)=>void} [cfg.onUpdate] – ✎ in der Zeile
+   * @param {(i:number, item:PickItem, name:string)=>string} [cfg.onRename] – 🏷 in der Zeile;
+   *        bekommt den NEUEN Namen fertig abgefragt und gibt eine Fehlermeldung zurück
+   *        ('' = ging). Den Namen fragt das Menü selbst ab – ein Umbenennen ohne neuen
+   *        Namen gibt es nicht, und so sieht/klingt es an allen sechs Menüs gleich.
    * @param {(i:number, item:PickItem)=>void} [cfg.onDelete] – 🗑 in der Zeile
+   * @param {()=>void} [cfg.onOpen]     – das Menü ging auf (egal ob per Maus, Rechtsklick
+   *        oder Taste). Für Dinge, die vom Aufmachen abhängen – z.B. den Erstbenutzer-
+   *        Hinweis auf dem Snapshot-Knopf, der sich nach zweimal Aufmachen abschaltet.
    * @param {[string,string,string,Function][]} [cfg.foot]  – Fußzeile: [icon-Name (js/ui/icons.js), Text, title, fn]
    * @param {string} [cfg.title]        – Tooltip des Knopfes
    */
@@ -90,6 +97,7 @@ export class PickMenu {
 
   open() {
     this.close();
+    if (this._cfg.onOpen) this._cfg.onOpen();
     const pop = document.createElement('div'); pop.className = 'pm-pop';
     const list = document.createElement('div'); list.className = 'pm-list';
     pop.appendChild(list);
@@ -161,12 +169,24 @@ export class PickMenu {
         row.appendChild(b);
       };
       if (this._cfg.onUpdate) act('edit', `„${it.name}" mit dem aktuellen Zustand überschreiben`, this._cfg.onUpdate, 'save');
+      if (this._cfg.onRename) act('tag', `„${it.name}" umbenennen`, (idx, item) => this._rename(idx, item), 'ren');
       if (this._cfg.onDelete) act('trash', `„${it.name}" löschen`, this._cfg.onDelete, 'del');
       list.appendChild(row);
     });
     // „Wenn die Liste groß ist, soll sie gescrollt werden, damit der markierte Snapshot
     // sofort zu sehen ist" (@dpa). 'nearest' scrollt NUR, wenn er wirklich außer Sicht ist.
     if (curRow) requestAnimationFrame(() => curRow.scrollIntoView({ block: 'nearest' }));
+  }
+
+  /** Neuen Namen abfragen und den Aufrufer umbenennen lassen. Abbruch (ESC) und „gleicher
+   *  Name" sind beide ein Nichts-tun, kein Fehler. Was der Aufrufer zurückgibt, ist eine
+   *  Meldung für den Menschen (z.B. „Name schon vergeben") – die zeigen wir hier, damit
+   *  jedes Menü sie gleich behandelt. */
+  _rename(i, it) {
+    const nm = prompt('Neuer Name für „' + it.name + '"?', it.name);
+    if (nm === null || nm.trim() === it.name) return;
+    const err = this._cfg.onRename(i, it, nm.trim());
+    if (err) alert(err);
   }
 
   /** Unter dem Knopf, aber im Bild halten (die Liste kann lang werden). */

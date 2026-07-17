@@ -439,7 +439,10 @@ sie beim Öffnen direkt zu ihm.
 - **Klick auf einen Eintrag lädt ihn.** Auch auf den markierten: Verschraubt? Nochmal
   anklicken → alles wieder wie gespeichert.
 - **In der Zeile** liegen die Aktionen, die genau diesen Eintrag meinen: **✎**
-  überschreiben (mit dem aktuellen Zustand) · **🗑** löschen.
+  überschreiben (mit dem aktuellen Zustand) · **🏷** umbenennen · **🗑** löschen.
+- **Umbenennen** fragt nach dem neuen Namen. Ein Name, den es in der Liste schon gibt,
+  wird abgelehnt – der Name ist der Schlüssel, sonst würden zwei Einträge zu einem
+  verschmelzen. Der Knopf zeigt danach den neuen Namen, ohne dass man neu laden muss.
 - **In der Fußzeile** liegt, was die ganze Liste betrifft: **＋ Neu…** speichern (gleicher
   Name = überschreiben, und es springt direkt auf den neuen Eintrag), beim Snapshot
   zusätzlich **⤓ Export** / **⤒ Import** als Datei.
