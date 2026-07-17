@@ -447,16 +447,35 @@ export class TeslaEngine {
     async start() {
         if (this.ctx.state === 'suspended') await this.ctx.resume();
         await this._ensureFx();
-        // Sync: bei aktivem 'syncOnStart' alle Sequenzen reproduzierbar von vorne –
-        // Step-Sequenzer (amp/filter) UND die Modulatoren (Skaler-Rate/Gate-Phase +
-        // Seed-Zufallsfolge). So starten mehrfache Starts identisch.
-        if (this.state.get('syncOnStart')) {
-            this.resetSeq('amp'); this.resetSeq('filter');
-            this.pitch.seed = this.state.get('pitchRandSeed');
-            this.pitch.reset(); this.gate.reset();
-        }
+        // Jeder Start beginnt von vorne – Step-Sequenzer (amp/filter) UND die Modulatoren
+        // (Skaler-Rate/Gate-Phase + Seed-Zufallsfolge). Mehrfache Starts klingen dadurch
+        // identisch. Bis 20260717 hing das am Schalter 'syncOnStart'; der ist weg (@dpa:
+        // „der Sync kommt weg"), weil ein Start, der irgendwo mittendrin weiterläuft,
+        // niemandem nützt – das Live-Bedürfnis danach decken jetzt ! und !! ab.
+        this._rewind();
         this.clock.start();
         this.metroClock.start();
+    }
+
+    /** Alles auf Anfang stellen (ohne die Uhr anzufassen). */
+    _rewind() {
+        this.resetSeq('amp'); this.resetSeq('filter');
+        this.pitch.seed = this.state.get('pitchRandSeed');
+        this.pitch.reset(); this.gate.reset();
+    }
+
+    /**
+     * Im laufenden Betrieb auf die 1 zurück (@dpa 20260717 – ersetzt den Sync-Schalter).
+     * @param {boolean} hard  false („!") = der NÄCHSTE Trigger wird zur 1, der Takt läuft
+     *                        unbeirrt weiter. true („!!") = zusätzlich fällt dieser Trigger
+     *                        sofort, die Phase beginnt hier.
+     * Ohne laufende Uhr passiert nichts: gestoppt gibt es keine Phase, auf die man syncen
+     * könnte – und der nächste Start stellt ohnehin alles auf Anfang.
+     */
+    resync(hard = false) {
+        if (!this.running) return;
+        this._rewind();
+        if (hard) { this.clock.resync(); this.metroClock.resync(); }
     }
     /** Stop hält nur den Takt an – es wird NICHTS abgewürgt (@dpa 20260715): keine neuen
      *  Trigger, laufende Hüllkurven gehen zu Ende, alles klingt aus. Jede Voice hat ihr

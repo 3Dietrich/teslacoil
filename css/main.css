@@ -228,7 +228,7 @@ body {
 /* Dirty-Marker: geladener Snapshot wurde verändert (* leicht, ‼ >60% anders). */
 .snap-dirty, .gs-dirty { color: var(--accent2); font-weight: 700; min-width: 10px; font-size: 13px; }
 .pb-cluster .pb-select { padding: 4px 6px; font-size: 11px; }
-.play-btn, .sync-btn, .panic-btn { display: inline-flex; align-items: center; gap: 6px; --ico: 17px; }
+.play-btn, .panic-btn { display: inline-flex; align-items: center; gap: 6px; --ico: 17px; }
 .play-btn { font-weight: 600; min-width: 84px; }
 /* Läuft = AN. Die `animation: none` ist der Punkt (@dpa 20260717: „Start zeigt keinen
    AN Zustand"): eine laufende CSS-Animation schlägt JEDE normale background-Regel, der
@@ -238,14 +238,22 @@ body {
 .play-btn.on {
   animation: none; background: #3a2630; border-color: var(--accent2); color: #ffd9bf;
 }
-/* Sync-Schalter neben Start/Stop (aktiv = grün). Das Wort bleibt so groß wie „Start"
-   (@dpa 20260714), das Icon davor ist ein SVG mit eigenem Rahmen (@dpa 20260716_164359 –
-   die frühere font-size:18px auf dem ⟲-Glyph war trotzdem „zu klein"). */
+/* Start/Stop + ! + !! sind EIN Block (@dpa 20260717: die Sync-Knöpfe sind „an startstop
+   angebracht"). Zusammengeschoben und außen gerundet – sie gehören sichtbar zusammen,
+   und die beiden schmalen Knöpfe verlieren so ihren Einzelrahmen. */
+.pb-transport { display: inline-flex; align-items: stretch; }
+.pb-transport > .pb-btn { border-radius: 0; margin-left: -1px; }
+.pb-transport > .pb-btn:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.pb-transport > .pb-btn:last-child { border-radius: 0 4px 4px 0; }
+/* Der laufende Takt liegt auf dem Start-Knopf – ! und !! bleiben schmal und ruhig. */
+.bang-btn { font-weight: 700; padding: 6px 8px; color: var(--muted); }
+.bang-btn:hover:not(:disabled) { color: var(--accent2); }
+/* Gestoppt gibt es keine Phase zum Syncen (s. TeslaEngine.resync) – nicht anbieten. */
+.bang-btn:disabled { opacity: .35; cursor: default; border-color: var(--line); }
+
 /* Panik/Reset: dezent, aber als Not-Aus erkennbar (@dpa 20260715). */
 .panic-btn { border-color: #6a2b2b; color: #ff9a9a; }
 .panic-btn:hover { background: #3a1e1e; border-color: #ff5a5a; }
-
-.sync-btn.on { background: #223528; border-color: var(--on); color: var(--on); }
 .pb-sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
 .pb-field { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 10px; }
 .pb-select {

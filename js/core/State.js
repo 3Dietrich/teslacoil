@@ -27,7 +27,10 @@ export const DEFAULTS = Object.freeze({
     // Takt
     bpm: 120,
     division: '1/8',
-    syncOnStart: false,  // Transport: bei jedem Start alle Sequenzer wieder bei Step 0 beginnen
+    // DEPRECATED (@dpa 20260717, „der Sync kommt weg"): der Schalter ist raus, jeder Start
+    // beginnt jetzt IMMER auf der 1 (TeslaEngine._rewind). Der Key bleibt, damit ältere
+    // Snapshots/Backups weiter laden, ohne dass ihn noch jemand liest.
+    syncOnStart: false,
     // Gate (rhythmische Gebilde)
     gateEnabled: false,
     gateRate: 0.5,

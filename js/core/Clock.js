@@ -34,6 +34,16 @@ export class Clock {
 
     get running() { return !!this._timer; }
 
+    /** Phase auf JETZT ziehen (@dpa 20260717, „!!"): der nächste Trigger fällt sofort,
+     *  nicht erst am Ende des laufenden Intervalls. Was schon im Vorausfenster geplant
+     *  ist, klingt aus – geplant wird ab hier neu. Ohne Wirkung, wenn die Uhr steht:
+     *  ein `_next` in der Vergangenheit ließe `start()` sonst einen Burst nachholen. */
+    resync() {
+        if (!this._timer) return;
+        this._next = this.ctx.currentTime;
+        this._schedule();
+    }
+
     _schedule() {
         const horizon = this.ctx.currentTime + LOOKAHEAD;
         // Schutz gegen Endlosschleife bei winzigen Intervallen

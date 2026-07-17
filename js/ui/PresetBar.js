@@ -20,13 +20,16 @@ export class PresetBar {
     }
 
     _build() {
-        // Transport
+        // Transport: Start/Stop und die beiden Sync-Knöpfe sitzen in EINEM Block – sie
+        // gehören zusammen (@dpa 20260717: „durch die an startstop angebrachten ! und !!").
+        const tp = document.createElement('span'); tp.className = 'pb-transport';
+        this.element.appendChild(tp);
         this._playBtn = this._btn('', () => this.toggle(), 'play-btn');
         // War als eigener Hint im Header untergebracht – zog dort nur unnötig Platz,
         // gehört inhaltlich sowieso zum Start-Button (@dpa 20260713).
         hint(this._playBtn, 'Leertaste = Start/Stop');
         this._paintPlayBtn();
-        this.element.appendChild(this._playBtn);
+        tp.appendChild(this._playBtn);
         // Der Knopf gleicht sich mit dem ECHTEN Transport ab, statt sich auf sein Gedächtnis
         // zu verlassen: ein Snapshot-Recall stoppt und startet die Engine selbst
         // (PresetManager.recallSnapshot), und ein `start()` kann unterwegs auch scheitern –
@@ -34,17 +37,20 @@ export class PresetBar {
         // unverändertem Zustand sofort aus, das kostet also nichts.
         setInterval(() => this._paintPlayBtn(), 250);
 
-        // Sync: bei aktivem Schalter beginnen bei jedem Start alle Sequenzer bei Step 1.
-        this._syncBtn = this._btn('', () => this._toggleSync(), 'sync-btn');
-        // Icon + Wort (@dpa 20260714: die Schrift „Sync" bleibt so groß wie „Start", nur das
-        // Zeichen davor darf groß sein). Seit 20260716_164359 ist es ein SVG – der alte
-        // ⟲-Glyph war trotz font-size:18px „zu klein", weil er seine em-Box kaum füllte.
-        this._syncBtn.appendChild(icon('sync'));
-        this._syncBtn.appendChild(document.createTextNode(' Sync'));
-        hint(this._syncBtn, 'Sync: bei jedem Start alle Sequenzer wieder bei Step 1 beginnen');
-        this.element.appendChild(this._syncBtn);
-        this._updateSyncBtn();
-        this.engine.state.subscribe((key) => { if (key === '*' || key === 'syncOnStart') this._updateSyncBtn(); });
+        // ! und !! statt des früheren Sync-Schalters (@dpa 20260717). Der Unterschied ist
+        // die Phase: „!" lässt den Takt in Ruhe und schiebt nur die 1 auf den nächsten
+        // Trigger; „!!" zieht den Trigger sofort hierher. Beide wirken nur im Lauf – ein
+        // Start beginnt ohnehin immer auf der 1, dafür braucht es keinen Knopf mehr.
+        this._bang1 = this._btn('!', () => this.engine.resync(false), 'bang-btn');
+        hint(this._bang1, 'Sync: der nächste Trigger wird zur 1 – der Takt läuft unbeirrt weiter');
+        tp.appendChild(this._bang1);
+        this._bang2 = this._btn('!!', () => this.engine.resync(true), 'bang-btn');
+        hint(this._bang2, 'Sofort-Sync: die 1 fällt jetzt – der Takt beginnt hier neu');
+        tp.appendChild(this._bang2);
+        // Gestoppt gibt es keine Phase, auf die man syncen könnte → ausgegraut (die Engine
+        // sagt selbst nein, der Knopf soll es nur nicht anbieten). Läuft im selben Takt wie
+        // `_paintPlayBtn`, damit ein Start/Stop von woanders (Snapshot-Recall) nicht lügt.
+        this._paintBangs();
 
         // Panik/Reset (@dpa 20260715): Der normale Stop lässt alles sauber ausklingen –
         // dieser Knopf ist für den Ausnahmefall, dass doch mal etwas hängt. Er räumt hart
@@ -180,6 +186,14 @@ export class PresetBar {
         this._playBtn.appendChild(icon(on ? 'stop' : 'play'));
         this._playBtn.appendChild(document.createTextNode(on ? ' Stop' : ' Start'));
         this._playBtn.classList.toggle('on', on);
+        this._paintBangs();
+    }
+
+    /** ! und !! wirken nur im Lauf (s. `TeslaEngine.resync`). */
+    _paintBangs() {
+        const on = this.engine.running;
+        if (this._bang1) this._bang1.disabled = !on;
+        if (this._bang2) this._bang2.disabled = !on;
     }
 
     /** Start/Stop. **Muss async sein:** `engine.start()` wartet auf `ctx.resume()` und die
@@ -196,9 +210,6 @@ export class PresetBar {
         else await this.engine.start();
         this._paintPlayBtn();
     }
-
-    _toggleSync() { const st = this.engine.state; st.set('syncOnStart', !st.get('syncOnStart')); }
-    _updateSyncBtn() { this._syncBtn.classList.toggle('on', !!this.engine.state.get('syncOnStart')); }
 
     refreshSnapshots() {
         if (this._snapMenu) this._snapMenu.refresh();

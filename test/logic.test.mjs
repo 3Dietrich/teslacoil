@@ -8,6 +8,7 @@ import { normalizeFxOrder } from '../js/core/fxChain.js';
 import { DEFAULTS as STATE_DEFAULTS } from '../js/core/State.js';
 
 import { triggerInterval, DIVISIONS } from '../js/core/TriggerDivider.js';
+import { Clock } from '../js/core/Clock.js';
 import { ScaleModel, rotateMask } from '../js/pitch/ScaleModel.js';
 import { quantizeToScale, activeMidis, semitoneToHz, harmonicSnap, freqToMidi, midiToFreq, midiToName, foldToBand } from '../js/pitch/Scaler.js';
 import { PitchOsc, PITCH_WAVEFORMS } from '../js/pitch/PitchOsc.js';
@@ -58,6 +59,28 @@ t('120 BPM, 1/4 = 0.5 s', () => assert.ok(approx(triggerInterval(120, '1/4'), 0.
 t('120 BPM, 1/16 = 0.125 s', () => assert.ok(approx(triggerInterval(120, '1/16'), 0.125)));
 t('60 BPM, 1/1 = 4 s', () => assert.ok(approx(triggerInterval(60, '1/1'), 4)));
 t('alle Divisions definiert', () => assert.equal(Object.keys(DIVISIONS).length, 5));
+
+// Die Uhr braucht vom ctx nur `currentTime` → mit einer Attrappe headless fahrbar.
+console.log('Clock (Phase / !!)');
+const fakeCtx = (time = 0) => ({ currentTime: time });
+t('!!: der nächste Trigger fällt sofort, nicht erst am Intervall-Ende', () => {
+    const ctx = fakeCtx(0), fired = [];
+    const c = new Clock(ctx, (time) => fired.push(time));
+    c.intervalFn = () => 1;
+    c.start();                       // _next = 0.06 → feuert im Vorausfenster (0.1 s)
+    assert.deepEqual(fired, [0.06]);
+    ctx.currentTime = 0.5;           // mitten im Intervall: nächster Trigger stünde bei 1.06
+    c.resync();
+    c.stop();
+    assert.deepEqual(fired, [0.06, 0.5], 'resync muss JETZT triggern');
+});
+t('!!: eine stehende Uhr hat keine Phase – resync tut nichts', () => {
+    const fired = [];
+    const c = new Clock(fakeCtx(5), (time) => fired.push(time));
+    c.resync();
+    assert.deepEqual(fired, [], 'gestoppt darf kein Trigger fallen');
+    assert.equal(c.running, false, 'resync startet die Uhr nicht');
+});
 
 console.log('ScaleModel');
 t('major quantisiert 1 → 0 oder 2 (kein C#)', () => {

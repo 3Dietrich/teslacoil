@@ -30,8 +30,10 @@ export const LANGS = ['de', 'en'];
 const EN = {
     // ── Transport ──
     'Leertaste = Start/Stop': 'Spacebar = start/stop',
-    'Sync: bei jedem Start alle Sequenzer wieder bei Step 1 beginnen':
-        'Sync: restart every sequencer at step 1 on each start',
+    'Sync: der nächste Trigger wird zur 1 – der Takt läuft unbeirrt weiter':
+        'Sync: the next trigger becomes the 1 – the clock keeps running undisturbed',
+    'Sofort-Sync: die 1 fällt jetzt – der Takt beginnt hier neu':
+        'Instant sync: the 1 lands now – the clock restarts here',
     'Audio-Panik: alle Töne, Filter- und Hall-Fahnen sofort abwürgen (nur nötig, wenn nach dem Stop etwas hängt – knackt hörbar)':
         'Audio panic: kill all notes, filter and reverb tails at once (only needed if something hangs after stop – clicks audibly)',
     'Start': 'Start', 'Stop': 'Stop', 'Sync': 'Sync', 'Reset': 'Reset',
